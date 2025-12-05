@@ -43,4 +43,5 @@ class VulkanApplication
     vk::raii::Instance instance_{nullptr};
     vk::raii::PhysicalDevice physicalDevice_{nullptr};
     vk::raii::Device device_{nullptr};
+    vk::raii::Queue graphicsQueue_{nullptr};
 };

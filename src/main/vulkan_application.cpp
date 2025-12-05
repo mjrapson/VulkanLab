@@ -201,11 +201,25 @@ void VulkanApplication::createLogicalDevice()
     const auto graphicsQueueFamilyIndex = getGraphicsQueueFamilyIndex(physicalDevice_);
 
     auto queuePriority = 0.5f;
-    auto deviceCreateInfo = vk::DeviceQueueCreateInfo{.queueFamilyIndex = graphicsQueueFamilyIndex,
-                                                      .queueCount = 1,
-                                                      .pQueuePriorities = &queuePriority};
+    const auto deviceQueueCreateInfo =
+        vk::DeviceQueueCreateInfo{.queueFamilyIndex = graphicsQueueFamilyIndex,
+                                  .queueCount = 1,
+                                  .pQueuePriorities = &queuePriority};
 
-    auto deviceFeatres = vk::PhysicalDeviceFeatures{};
+    const auto featureChain =
+        vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features,
+                           vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>{
+            {}, {.dynamicRendering = true}, {.extendedDynamicState = true}};
+
+    const auto deviceCreateInfo = vk::DeviceCreateInfo{
+        .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
+        .queueCreateInfoCount = 1,
+        .pQueueCreateInfos = &deviceQueueCreateInfo,
+        .enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size()),
+        .ppEnabledExtensionNames = deviceExtensions.data()};
+
+    device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
+    graphicsQueue_ = vk::raii::Queue(device_, graphicsQueueFamilyIndex, 0);
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const
