@@ -238,11 +238,17 @@ void VulkanApplication::createLogicalDevice()
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const
 {
-    auto extensionCount = uint32_t{0};
-    auto extensions = glfwGetRequiredInstanceExtensions(&extensionCount);
+    auto glfwExtensionCount = uint32_t{0};
+    auto glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+    auto extensions = std::vector<const char*>{glfwExtensions, glfwExtensions + glfwExtensionCount};
+    if (validationLayersEnabled())
+    {
+        extensions.push_back(vk::EXTDebugUtilsExtensionName);
+    }
 
     auto extensionProperties = context_.enumerateInstanceExtensionProperties();
-    for (uint32_t i = 0; i < extensionCount; ++i)
+    for (size_t i = 0; i < extensions.size(); ++i)
     {
         if (std::ranges::none_of(
                 extensionProperties, [extension = extensions[i]](auto const& extensionProperty)
@@ -253,7 +259,7 @@ std::vector<char const*> VulkanApplication::getRequiredExtensions() const
         }
     }
 
-    return std::vector<char const*>{extensions, extensions + extensionCount};
+    return extensions;
 }
 
 std::vector<char const*> VulkanApplication::getRequiredLayers() const
