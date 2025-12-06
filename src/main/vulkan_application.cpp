@@ -141,6 +141,9 @@ void VulkanApplication::initVulkan()
     spdlog::info("Creating Vulkan instance");
     createVulkanInstance();
 
+    spdlog::info("Creating window surface");
+    createSurface();
+
     spdlog::info("Finding physical GPU device");
     pickPhysicalDevice();
 
@@ -167,6 +170,17 @@ void VulkanApplication::createVulkanInstance()
         .ppEnabledExtensionNames = requiredExtensions.data()};
 
     instance_ = vk::raii::Instance(context_, createInfo);
+}
+
+void VulkanApplication::createSurface()
+{
+    auto surface = VkSurfaceKHR{VK_NULL_HANDLE};
+    if (glfwCreateWindowSurface(*instance_, window_, nullptr, &surface) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create window surface");
+    }
+
+    surface_ = vk::raii::SurfaceKHR(instance_, surface);
 }
 
 void VulkanApplication::pickPhysicalDevice()
