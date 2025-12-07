@@ -37,26 +37,38 @@ bool supportsSurfacePresentation(uint32_t index, const vk::raii::PhysicalDevice&
     return (device.getSurfaceSupportKHR(index, surface) == VK_TRUE);
 }
 
-uint32_t getGraphicsQueueFamilyIndex(const vk::raii::PhysicalDevice& device,
-                                     const vk::raii::SurfaceKHR& surface)
+uint32_t getGraphicsQueueFamilyIndex(const vk::raii::PhysicalDevice& device)
 {
     const auto& queueFamilyProperties = device.getQueueFamilyProperties();
 
-    const auto itr =
-        std::ranges::find_if(queueFamilyProperties,
-                             [&device, &surface, idx = size_t{0}](const auto& property) mutable
-                             {
-                                 const auto validQueueFamilyProperty =
-                                     supportsGraphicsQueue(property) &&
-                                     supportsSurfacePresentation(idx, device, surface);
-
-                                 ++idx;
-                                 return validQueueFamilyProperty;
-                             });
+    const auto itr = std::ranges::find_if(queueFamilyProperties, supportsGraphicsQueue);
 
     if (itr == queueFamilyProperties.end())
     {
         throw std::runtime_error("Device does not support graphics queue family");
+    }
+
+    return static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), itr));
+}
+
+uint32_t getSurfacePresentationQueueFamilyIndex(const vk::raii::PhysicalDevice& device,
+                                                const vk::raii::SurfaceKHR& surface)
+{
+    const auto& queueFamilyProperties = device.getQueueFamilyProperties();
+
+    const auto itr = std::ranges::find_if(queueFamilyProperties,
+                                          [&device, &surface, idx = size_t{0}](const auto&) mutable
+                                          {
+                                              const auto validQueueFamilyProperty =
+                                                  supportsSurfacePresentation(idx, device, surface);
+
+                                              ++idx;
+                                              return validQueueFamilyProperty;
+                                          });
+
+    if (itr == queueFamilyProperties.end())
+    {
+        throw std::runtime_error("Device does not support surface presentation queue family");
     }
 
     return static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), itr));
@@ -265,7 +277,10 @@ void VulkanApplication::pickPhysicalDevice()
 
 void VulkanApplication::createLogicalDevice()
 {
-    const auto graphicsQueueFamilyIndex = getGraphicsQueueFamilyIndex(physicalDevice_, surface_);
+    const auto graphicsQueueFamilyIndex = getGraphicsQueueFamilyIndex(physicalDevice_);
+
+    const auto surfacePresentationQueueFamilyIndex =
+        getSurfacePresentationQueueFamilyIndex(physicalDevice_, surface_);
 
     auto queuePriority = 0.5f;
     const auto deviceQueueCreateInfo =
