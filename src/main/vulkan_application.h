@@ -26,6 +26,7 @@ class VulkanApplication
     void initVulkan();
 
     void createVulkanInstance();
+    void setupDebugMessenger();
     void createSurface();
     void pickPhysicalDevice();
     void createLogicalDevice();
@@ -42,6 +43,7 @@ class VulkanApplication
 
     vk::raii::Context context_;
     vk::raii::Instance instance_{nullptr};
+    vk::raii::DebugUtilsMessengerEXT debugMessenger_{nullptr};
     vk::raii::SurfaceKHR surface_{nullptr};
     vk::raii::PhysicalDevice physicalDevice_{nullptr};
     vk::raii::Device device_{nullptr};

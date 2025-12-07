@@ -51,6 +51,18 @@ const auto deviceExtensions = std::vector<const char*>{
     vk::KHRSwapchainExtensionName, vk::KHRSpirv14ExtensionName,
     vk::KHRSynchronization2ExtensionName, vk::KHRCreateRenderpass2ExtensionName};
 
+static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
+    vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type,
+    const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*)
+{
+    if (severity < vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning)
+    {
+        return VK_FALSE;
+    }
+
+    spdlog::error("{} {}", to_string(type), pCallbackData->pMessage);
+}
+
 VulkanApplication::VulkanApplication() {}
 
 VulkanApplication::~VulkanApplication()
@@ -141,6 +153,12 @@ void VulkanApplication::initVulkan()
     spdlog::info("Creating Vulkan instance");
     createVulkanInstance();
 
+    if (validationLayersEnabled())
+    {
+        spdlog::info("Setting up Vulkan debug messaging");
+        setupDebugMessenger();
+    }
+
     spdlog::info("Creating window surface");
     createSurface();
 
@@ -170,6 +188,23 @@ void VulkanApplication::createVulkanInstance()
         .ppEnabledExtensionNames = requiredExtensions.data()};
 
     instance_ = vk::raii::Instance(context_, createInfo);
+}
+
+void VulkanApplication::setupDebugMessenger()
+{
+    const auto severityFlags = (vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+                                vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+                                vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+    const auto messageTypeFlags = (vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                                   vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+                                   vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+
+    const auto debugUtilsMessengerCreateInfoEXT =
+        vk::DebugUtilsMessengerCreateInfoEXT{.messageSeverity = severityFlags,
+                                             .messageType = messageTypeFlags,
+                                             .pfnUserCallback = &debugCallback};
+
+    debugMessenger_ = instance_.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
 }
 
 void VulkanApplication::createSurface()
