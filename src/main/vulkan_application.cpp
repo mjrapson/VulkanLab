@@ -31,12 +31,28 @@ bool supportsGraphicsQueue(const vk::QueueFamilyProperties& properties)
     return (properties.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0);
 }
 
-uint32_t getGraphicsQueueFamilyIndex(const vk::raii::PhysicalDevice& device)
+bool supportsSurfacePresentation(uint32_t index, const vk::raii::PhysicalDevice& device,
+                                 const vk::raii::SurfaceKHR& surface)
 {
-    const auto queueFamilyProperties = device.getQueueFamilyProperties();
+    return (device.getSurfaceSupportKHR(index, surface) == VK_TRUE);
+}
 
-    const auto itr = std::find_if(queueFamilyProperties.begin(), queueFamilyProperties.end(),
-                                  supportsGraphicsQueue);
+uint32_t getGraphicsQueueFamilyIndex(const vk::raii::PhysicalDevice& device,
+                                     const vk::raii::SurfaceKHR& surface)
+{
+    const auto& queueFamilyProperties = device.getQueueFamilyProperties();
+
+    const auto itr =
+        std::ranges::find_if(queueFamilyProperties,
+                             [&device, &surface, idx = size_t{0}](const auto& property) mutable
+                             {
+                                 const auto validQueueFamilyProperty =
+                                     supportsGraphicsQueue(property) &&
+                                     supportsSurfacePresentation(idx, device, surface);
+
+                                 ++idx;
+                                 return validQueueFamilyProperty;
+                             });
 
     if (itr == queueFamilyProperties.end())
     {
@@ -247,7 +263,7 @@ void VulkanApplication::pickPhysicalDevice()
 
 void VulkanApplication::createLogicalDevice()
 {
-    const auto graphicsQueueFamilyIndex = getGraphicsQueueFamilyIndex(physicalDevice_);
+    const auto graphicsQueueFamilyIndex = getGraphicsQueueFamilyIndex(physicalDevice_, surface_);
 
     auto queuePriority = 0.5f;
     const auto deviceQueueCreateInfo =
