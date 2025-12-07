@@ -77,6 +77,8 @@ static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
     }
 
     spdlog::error("{} {}", to_string(type), pCallbackData->pMessage);
+
+    return VK_TRUE;
 }
 
 VulkanApplication::VulkanApplication() {}
