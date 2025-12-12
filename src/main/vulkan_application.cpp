@@ -302,6 +302,7 @@ void VulkanApplication::createLogicalDevice()
 
     device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
     graphicsQueue_ = vk::raii::Queue(device_, graphicsQueueFamilyIndex, 0);
+    presentQueue_ = vk::raii::Queue(device_, surfacePresentationQueueFamilyIndex, 0);
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const

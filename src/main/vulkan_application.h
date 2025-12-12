@@ -48,4 +48,5 @@ class VulkanApplication
     vk::raii::PhysicalDevice physicalDevice_{nullptr};
     vk::raii::Device device_{nullptr};
     vk::raii::Queue graphicsQueue_{nullptr};
+    vk::raii::Queue presentQueue_{nullptr};
 };
