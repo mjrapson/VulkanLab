@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.28)
 
 project(VulkanDemo
     VERSION 0.1.0
@@ -9,7 +9,7 @@ project(VulkanDemo
 # -------------------------
 # Global C++ settings
 # -------------------------
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -23,9 +23,9 @@ endif()
 # -------------------------
 # Warning policy
 # -------------------------
-if(MSVC)
+if(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
     add_compile_options(/W4 /permissive-)
-else()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES GNU)
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow -Wconversion)
 endif()
 
