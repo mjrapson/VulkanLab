@@ -35,6 +35,7 @@ class VulkanApplication
     void createGraphicsPipeline();
     void createCommandPool();
     void createCommandBuffer();
+    void createSyncObjects();
 
     std::vector<char const*> getRequiredExtensions() const;
     std::vector<char const*> getRequiredLayers() const;
@@ -59,6 +60,9 @@ class VulkanApplication
     vk::raii::Pipeline graphicsPipeline_{nullptr};
     vk::raii::CommandPool commandPool_{nullptr};
     vk::raii::CommandBuffer commandBuffer_{nullptr};
+    vk::raii::Semaphore presentCompleteSemaphore_{nullptr};
+    vk::raii::Semaphore renderFinishedSemaphore_{nullptr};
+    vk::raii::Fence drawFence_{nullptr};
     uint32_t graphicsQueueFamilyIndex_;
     vk::Extent2D swapchainExtent_;
     vk::SurfaceFormatKHR surfaceFormat_;

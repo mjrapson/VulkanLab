@@ -295,6 +295,9 @@ void VulkanApplication::initVulkan()
 
     spdlog::info("Creating command buffer");
     createCommandBuffer();
+
+    spdlog::info("Creating sync objects");
+    createSyncObjects();
 }
 
 void VulkanApplication::createVulkanInstance()
@@ -392,7 +395,7 @@ void VulkanApplication::createLogicalDevice()
                            vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>{
             {},
             {.shaderDrawParameters = true},
-            {.dynamicRendering = true},
+            {.synchronization2 = true, .dynamicRendering = true},
             {.extendedDynamicState = true}};
 
     const auto deviceCreateInfo = vk::DeviceCreateInfo{
@@ -549,6 +552,13 @@ void VulkanApplication::createCommandBuffer()
                                                          .commandBufferCount = 1};
 
     commandBuffer_ = std::move(vk::raii::CommandBuffers(device_, allocInfo).front());
+}
+
+void VulkanApplication::createSyncObjects()
+{
+    presentCompleteSemaphore_ = vk::raii::Semaphore(device_, vk::SemaphoreCreateInfo());
+    renderFinishedSemaphore_ = vk::raii::Semaphore(device_, vk::SemaphoreCreateInfo());
+    drawFence_ = vk::raii::Fence(device_, {.flags = vk::FenceCreateFlagBits::eSignaled});
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const
