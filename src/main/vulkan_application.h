@@ -34,11 +34,11 @@ class VulkanApplication
     void createImageViews();
     void createGraphicsPipeline();
     void createCommandPool();
-    void createCommandBuffer();
+    void createCommandBuffers();
     void createSyncObjects();
 
     void drawFrame();
-    void recordCommands(uint32_t imageIndex);
+    void recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer);
 
     std::vector<char const*> getRequiredExtensions() const;
     std::vector<char const*> getRequiredLayers() const;
@@ -62,13 +62,14 @@ class VulkanApplication
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline graphicsPipeline_{nullptr};
     vk::raii::CommandPool commandPool_{nullptr};
-    vk::raii::CommandBuffer commandBuffer_{nullptr};
-    vk::raii::Semaphore presentCompleteSemaphore_{nullptr};
-    vk::raii::Semaphore renderFinishedSemaphore_{nullptr};
-    vk::raii::Fence drawFence_{nullptr};
+    std::vector<vk::raii::CommandBuffer> commandBuffers_;
+    std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
+    std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
+    std::vector<vk::raii::Fence> drawFences_;
     uint32_t graphicsQueueFamilyIndex_;
     vk::Extent2D swapchainExtent_;
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;
     std::vector<vk::raii::ImageView> swapchainImageViews_;
+    uint32_t currentFrameIndex_{0};
 };

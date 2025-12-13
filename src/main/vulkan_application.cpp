@@ -24,6 +24,8 @@ constexpr bool validationLayersEnabled()
 #endif
 }
 
+constexpr auto maxFramesInFlight = 2;
+
 bool isDiscreteGpu(const vk::raii::PhysicalDevice& device)
 {
     return device.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
@@ -324,8 +326,8 @@ void VulkanApplication::initVulkan()
     spdlog::info("Creating command pool");
     createCommandPool();
 
-    spdlog::info("Creating command buffer");
-    createCommandBuffer();
+    spdlog::info("Creating command buffers");
+    createCommandBuffers();
 
     spdlog::info("Creating sync objects");
     createSyncObjects();
@@ -576,54 +578,68 @@ void VulkanApplication::createCommandPool()
     commandPool_ = vk::raii::CommandPool(device_, poolInfo);
 }
 
-void VulkanApplication::createCommandBuffer()
+void VulkanApplication::createCommandBuffers()
 {
     const auto allocInfo = vk::CommandBufferAllocateInfo{.commandPool = commandPool_,
                                                          .level = vk::CommandBufferLevel::ePrimary,
-                                                         .commandBufferCount = 1};
+                                                         .commandBufferCount = maxFramesInFlight};
 
-    commandBuffer_ = std::move(vk::raii::CommandBuffers(device_, allocInfo).front());
+    commandBuffers_ = vk::raii::CommandBuffers(device_, allocInfo);
 }
 
 void VulkanApplication::createSyncObjects()
 {
-    presentCompleteSemaphore_ = vk::raii::Semaphore(device_, vk::SemaphoreCreateInfo());
-    renderFinishedSemaphore_ = vk::raii::Semaphore(device_, vk::SemaphoreCreateInfo());
-    drawFence_ = vk::raii::Fence(device_, {.flags = vk::FenceCreateFlagBits::eSignaled});
+    for ([[maybe_unused]] auto _ : std::views::repeat(0, swapchainImages_.size()))
+    {
+        renderFinishedSemaphores_.emplace_back(device_, vk::SemaphoreCreateInfo{});
+    }
+
+    for ([[maybe_unused]] auto _ : std::views::repeat(0, maxFramesInFlight))
+    {
+        presentCompleteSemaphores_.emplace_back(device_, vk::SemaphoreCreateInfo{});
+        drawFences_.emplace_back(device_,
+                                 vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
+    }
 }
 
 void VulkanApplication::drawFrame()
 {
-    graphicsQueue_.waitIdle();
+    while (vk::Result::eTimeout ==
+           device_.waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX))
+    {
+        ;
+    }
 
-    auto [result, imageIndex] =
-        swapchain_.acquireNextImage(UINT64_MAX, *presentCompleteSemaphore_, nullptr);
+    device_.resetFences(*drawFences_.at(currentFrameIndex_));
 
-    recordCommands(imageIndex);
+    auto [result, imageIndex] = swapchain_.acquireNextImage(
+        UINT64_MAX, *presentCompleteSemaphores_.at(currentFrameIndex_), nullptr);
 
-    device_.resetFences(*drawFence_);
+    auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
+    commandBuffer.reset();
+
+    recordCommands(imageIndex, commandBuffer);
 
     const auto waitDestinationStageMask =
         vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
-    const auto submitInfo = vk::SubmitInfo{.waitSemaphoreCount = 1,
-                                           .pWaitSemaphores = &*presentCompleteSemaphore_,
-                                           .pWaitDstStageMask = &waitDestinationStageMask,
-                                           .commandBufferCount = 1,
-                                           .pCommandBuffers = &*commandBuffer_,
-                                           .signalSemaphoreCount = 1,
-                                           .pSignalSemaphores = &*renderFinishedSemaphore_};
+    const auto submitInfo =
+        vk::SubmitInfo{.waitSemaphoreCount = 1,
+                       .pWaitSemaphores = &*presentCompleteSemaphores_.at(currentFrameIndex_),
+                       .pWaitDstStageMask = &waitDestinationStageMask,
+                       .commandBufferCount = 1,
+                       .pCommandBuffers = &*commandBuffer,
+                       .signalSemaphoreCount = 1,
+                       .pSignalSemaphores = &*renderFinishedSemaphores_.at(imageIndex)};
 
-    graphicsQueue_.submit(submitInfo, *drawFence_);
+    graphicsQueue_.submit(submitInfo, *drawFences_.at(currentFrameIndex_));
 
-    while (vk::Result::eTimeout == device_.waitForFences(*drawFence_, vk::True, UINT64_MAX))
-        ;
-
-    const auto presentInfoKHR = vk::PresentInfoKHR{.waitSemaphoreCount = 1,
-                                                   .pWaitSemaphores = &*renderFinishedSemaphore_,
-                                                   .swapchainCount = 1,
-                                                   .pSwapchains = &*swapchain_,
-                                                   .pImageIndices = &imageIndex};
+    const auto presentInfoKHR =
+        vk::PresentInfoKHR{.waitSemaphoreCount = 1,
+                           .pWaitSemaphores = &*renderFinishedSemaphores_.at(imageIndex),
+                           .swapchainCount = 1,
+                           .pSwapchains = &*swapchain_,
+                           .pImageIndices = &imageIndex};
 
     result = presentQueue_.presentKHR(presentInfoKHR);
     switch (result)
@@ -636,13 +652,16 @@ void VulkanApplication::drawFrame()
         default:
             break; // an unexpected result is returned!
     }
+
+    currentFrameIndex_ = (currentFrameIndex_ + 1) & maxFramesInFlight;
 }
 
-void VulkanApplication::recordCommands(uint32_t imageIndex)
+void VulkanApplication::recordCommands(uint32_t imageIndex,
+                                       const vk::raii::CommandBuffer& commandBuffer)
 {
-    commandBuffer_.begin({});
+    commandBuffer.begin({});
 
-    transitionImageLayout(swapchainImages_.at(imageIndex), commandBuffer_,
+    transitionImageLayout(swapchainImages_.at(imageIndex), commandBuffer,
                           vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
                           {}, // srcAccessMask (no need to wait for previous operations)
                           vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
@@ -664,19 +683,19 @@ void VulkanApplication::recordCommands(uint32_t imageIndex)
                           .colorAttachmentCount = 1,
                           .pColorAttachments = &attachmentInfo};
 
-    commandBuffer_.beginRendering(renderingInfo);
-    commandBuffer_.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline_);
+    commandBuffer.beginRendering(renderingInfo);
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline_);
 
-    commandBuffer_.setViewport(
+    commandBuffer.setViewport(
         0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchainExtent_.width),
                         static_cast<float>(swapchainExtent_.height), 0.0f, 1.0f));
-    commandBuffer_.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
+    commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
 
-    commandBuffer_.draw(3, 1, 0, 0);
+    commandBuffer.draw(3, 1, 0, 0);
 
-    commandBuffer_.endRendering();
+    commandBuffer.endRendering();
 
-    transitionImageLayout(swapchainImages_.at(imageIndex), commandBuffer_,
+    transitionImageLayout(swapchainImages_.at(imageIndex), commandBuffer,
                           vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
                           vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
                           {},                                                 // dstAccessMask
@@ -684,7 +703,7 @@ void VulkanApplication::recordCommands(uint32_t imageIndex)
                           vk::PipelineStageFlagBits2::eBottomOfPipe           // dstStage
     );
 
-    commandBuffer_.end();
+    commandBuffer.end();
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const
