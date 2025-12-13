@@ -32,6 +32,7 @@ class VulkanApplication
     void createLogicalDevice();
     void createSwapchain();
     void createImageViews();
+    void createGraphicsPipeline();
 
     std::vector<char const*> getRequiredExtensions() const;
     std::vector<char const*> getRequiredLayers() const;

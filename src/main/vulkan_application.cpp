@@ -3,11 +3,14 @@
 
 #include "vulkan_application.h"
 
+#include <core/file_system.h>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <spdlog/spdlog.h>
 
+#include <fstream>
 #include <ranges>
 #include <stdexcept>
 #include <vector>
@@ -124,6 +127,34 @@ vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, 
                                  capabilities.maxImageExtent.width),
             std::clamp<uint32_t>(height, capabilities.minImageExtent.height,
                                  capabilities.maxImageExtent.height)};
+}
+
+std::vector<char> readFile(const std::string& filename)
+{
+    auto file = std::ifstream(filename, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open())
+    {
+        throw std::runtime_error("failed to open file!");
+    }
+
+    std::vector<char> buffer(file.tellg());
+    file.seekg(0, std::ios::beg);
+    file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+
+    file.close();
+
+    return buffer;
+}
+
+[[nodiscard]] vk::raii::ShaderModule createShaderModule(const vk::raii::Device& device,
+                                                        const std::vector<char>& code)
+{
+    vk::ShaderModuleCreateInfo createInfo{.codeSize = code.size() * sizeof(char),
+                                          .pCode = reinterpret_cast<const uint32_t*>(code.data())};
+
+    vk::raii::ShaderModule shaderModule{device, createInfo};
+    return shaderModule;
 }
 
 const auto validationLayers = std::vector<char const*>{"VK_LAYER_KHRONOS_validation"};
@@ -255,6 +286,9 @@ void VulkanApplication::initVulkan()
 
     spdlog::info("Creating swapchain image views");
     createImageViews();
+
+    spdlog::info("Creating graphics pipeline");
+    createGraphicsPipeline();
 }
 
 void VulkanApplication::createVulkanInstance()
@@ -347,9 +381,13 @@ void VulkanApplication::createLogicalDevice()
                                   .pQueuePriorities = &queuePriority};
 
     const auto featureChain =
-        vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features,
+        vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
+                           vk::PhysicalDeviceVulkan13Features,
                            vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>{
-            {}, {.dynamicRendering = true}, {.extendedDynamicState = true}};
+            {},
+            {.shaderDrawParameters = true},
+            {.dynamicRendering = true},
+            {.extendedDynamicState = true}};
 
     const auto deviceCreateInfo = vk::DeviceCreateInfo{
         .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
@@ -401,6 +439,26 @@ void VulkanApplication::createImageViews()
         imageViewCreateInfo.image = image;
         swapchainImageViews_.emplace_back(device_, imageViewCreateInfo);
     }
+}
+
+void VulkanApplication::createGraphicsPipeline()
+{
+    auto vertexShaderModule =
+        createShaderModule(device_, readFile(GetShaderDir() / "basic.vert.spv"));
+
+    auto fragmentShaderModule =
+        createShaderModule(device_, readFile(GetShaderDir() / "basic.frag.spv"));
+
+    vk::PipelineShaderStageCreateInfo vertShaderStageInfo{.stage = vk::ShaderStageFlagBits::eVertex,
+                                                          .module = vertexShaderModule,
+                                                          .pName = "vertMain"};
+
+    vk::PipelineShaderStageCreateInfo fragShaderStageInfo{.stage =
+                                                              vk::ShaderStageFlagBits::eFragment,
+                                                          .module = fragmentShaderModule,
+                                                          .pName = "fragMain"};
+
+    vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const

@@ -44,8 +44,13 @@ add_subdirectory(third_party/glm)
 add_subdirectory(third_party/spdlog)
 
 find_package(Vulkan REQUIRED)
+find_program(SLANGC_EXECUTABLE
+    NAMES slangc
+    REQUIRED
+)
 
 # -------------------------
 # Project modules
 # -------------------------
+add_subdirectory(src/core)
 add_subdirectory(src/main)
