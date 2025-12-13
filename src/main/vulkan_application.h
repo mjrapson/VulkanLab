@@ -37,6 +37,9 @@ class VulkanApplication
     void createCommandBuffer();
     void createSyncObjects();
 
+    void drawFrame();
+    void recordCommands(uint32_t imageIndex);
+
     std::vector<char const*> getRequiredExtensions() const;
     std::vector<char const*> getRequiredLayers() const;
     bool isDeviceSuitable(vk::raii::PhysicalDevice device) const;

@@ -157,6 +157,33 @@ std::vector<char> readFile(const std::string& filename)
     return shaderModule;
 }
 
+void transitionImageLayout(const vk::Image& image, const vk::raii::CommandBuffer& commandBuffer,
+                           vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+                           vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask,
+                           vk::PipelineStageFlags2 srcStageMask,
+                           vk::PipelineStageFlags2 dstStageMask)
+{
+    const auto barrier =
+        vk::ImageMemoryBarrier2{.srcStageMask = srcStageMask,
+                                .srcAccessMask = srcAccessMask,
+                                .dstStageMask = dstStageMask,
+                                .dstAccessMask = dstAccessMask,
+                                .oldLayout = oldLayout,
+                                .newLayout = newLayout,
+                                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                .image = image,
+                                .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+                                                     .baseMipLevel = 0,
+                                                     .levelCount = 1,
+                                                     .baseArrayLayer = 0,
+                                                     .layerCount = 1}};
+    const auto dependencyInfo = vk::DependencyInfo{
+        .dependencyFlags = {}, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier};
+
+    commandBuffer.pipelineBarrier2(dependencyInfo);
+}
+
 const auto validationLayers = std::vector<char const*>{"VK_LAYER_KHRONOS_validation"};
 const auto deviceExtensions = std::vector<const char*>{
     vk::KHRSwapchainExtensionName, vk::KHRSpirv14ExtensionName,
@@ -213,7 +240,11 @@ void VulkanApplication::run()
     while (!glfwWindowShouldClose(window_))
     {
         glfwPollEvents();
+
+        drawFrame();
     }
+
+    device_.waitIdle();
 }
 
 void VulkanApplication::initGlfw()
@@ -559,6 +590,101 @@ void VulkanApplication::createSyncObjects()
     presentCompleteSemaphore_ = vk::raii::Semaphore(device_, vk::SemaphoreCreateInfo());
     renderFinishedSemaphore_ = vk::raii::Semaphore(device_, vk::SemaphoreCreateInfo());
     drawFence_ = vk::raii::Fence(device_, {.flags = vk::FenceCreateFlagBits::eSignaled});
+}
+
+void VulkanApplication::drawFrame()
+{
+    graphicsQueue_.waitIdle();
+
+    auto [result, imageIndex] =
+        swapchain_.acquireNextImage(UINT64_MAX, *presentCompleteSemaphore_, nullptr);
+
+    recordCommands(imageIndex);
+
+    device_.resetFences(*drawFence_);
+
+    const auto waitDestinationStageMask =
+        vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+
+    const auto submitInfo = vk::SubmitInfo{.waitSemaphoreCount = 1,
+                                           .pWaitSemaphores = &*presentCompleteSemaphore_,
+                                           .pWaitDstStageMask = &waitDestinationStageMask,
+                                           .commandBufferCount = 1,
+                                           .pCommandBuffers = &*commandBuffer_,
+                                           .signalSemaphoreCount = 1,
+                                           .pSignalSemaphores = &*renderFinishedSemaphore_};
+
+    graphicsQueue_.submit(submitInfo, *drawFence_);
+
+    while (vk::Result::eTimeout == device_.waitForFences(*drawFence_, vk::True, UINT64_MAX))
+        ;
+
+    const auto presentInfoKHR = vk::PresentInfoKHR{.waitSemaphoreCount = 1,
+                                                   .pWaitSemaphores = &*renderFinishedSemaphore_,
+                                                   .swapchainCount = 1,
+                                                   .pSwapchains = &*swapchain_,
+                                                   .pImageIndices = &imageIndex};
+
+    result = presentQueue_.presentKHR(presentInfoKHR);
+    switch (result)
+    {
+        case vk::Result::eSuccess:
+            break;
+        case vk::Result::eSuboptimalKHR:
+            // std::cout << "vk::Queue::presentKHR returned vk::Result::eSuboptimalKHR !\n";
+            break;
+        default:
+            break; // an unexpected result is returned!
+    }
+}
+
+void VulkanApplication::recordCommands(uint32_t imageIndex)
+{
+    commandBuffer_.begin({});
+
+    transitionImageLayout(swapchainImages_.at(imageIndex), commandBuffer_,
+                          vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+                          {}, // srcAccessMask (no need to wait for previous operations)
+                          vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput  // dstStage
+    );
+
+    const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
+    const auto attachmentInfo =
+        vk::RenderingAttachmentInfo{.imageView = swapchainImageViews_.at(imageIndex),
+                                    .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+                                    .loadOp = vk::AttachmentLoadOp::eClear,
+                                    .storeOp = vk::AttachmentStoreOp::eStore,
+                                    .clearValue = clearColor};
+
+    const auto renderingInfo =
+        vk::RenderingInfo{.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_},
+                          .layerCount = 1,
+                          .colorAttachmentCount = 1,
+                          .pColorAttachments = &attachmentInfo};
+
+    commandBuffer_.beginRendering(renderingInfo);
+    commandBuffer_.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline_);
+
+    commandBuffer_.setViewport(
+        0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchainExtent_.width),
+                        static_cast<float>(swapchainExtent_.height), 0.0f, 1.0f));
+    commandBuffer_.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
+
+    commandBuffer_.draw(3, 1, 0, 0);
+
+    commandBuffer_.endRendering();
+
+    transitionImageLayout(swapchainImages_.at(imageIndex), commandBuffer_,
+                          vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
+                          vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
+                          {},                                                 // dstAccessMask
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
+                          vk::PipelineStageFlagBits2::eBottomOfPipe           // dstStage
+    );
+
+    commandBuffer_.end();
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const
