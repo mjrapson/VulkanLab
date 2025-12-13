@@ -33,6 +33,8 @@ class VulkanApplication
     void createSwapchain();
     void createImageViews();
     void createGraphicsPipeline();
+    void createCommandPool();
+    void createCommandBuffer();
 
     std::vector<char const*> getRequiredExtensions() const;
     std::vector<char const*> getRequiredLayers() const;
@@ -55,6 +57,9 @@ class VulkanApplication
     vk::raii::SwapchainKHR swapchain_{nullptr};
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline graphicsPipeline_{nullptr};
+    vk::raii::CommandPool commandPool_{nullptr};
+    vk::raii::CommandBuffer commandBuffer_{nullptr};
+    uint32_t graphicsQueueFamilyIndex_;
     vk::Extent2D swapchainExtent_;
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;

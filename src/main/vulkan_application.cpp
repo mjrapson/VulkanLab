@@ -281,7 +281,7 @@ void VulkanApplication::initVulkan()
     spdlog::info("Creating logical GPU device");
     createLogicalDevice();
 
-    spdlog::info("Creating Swapchain");
+    spdlog::info("Creating swapchain");
     createSwapchain();
 
     spdlog::info("Creating swapchain image views");
@@ -289,6 +289,12 @@ void VulkanApplication::initVulkan()
 
     spdlog::info("Creating graphics pipeline");
     createGraphicsPipeline();
+
+    spdlog::info("Creating command pool");
+    createCommandPool();
+
+    spdlog::info("Creating command buffer");
+    createCommandBuffer();
 }
 
 void VulkanApplication::createVulkanInstance()
@@ -369,14 +375,14 @@ void VulkanApplication::pickPhysicalDevice()
 
 void VulkanApplication::createLogicalDevice()
 {
-    const auto graphicsQueueFamilyIndex = getGraphicsQueueFamilyIndex(physicalDevice_);
+    graphicsQueueFamilyIndex_ = getGraphicsQueueFamilyIndex(physicalDevice_);
 
     const auto surfacePresentationQueueFamilyIndex =
         getSurfacePresentationQueueFamilyIndex(physicalDevice_, surface_);
 
     auto queuePriority = 0.5f;
     const auto deviceQueueCreateInfo =
-        vk::DeviceQueueCreateInfo{.queueFamilyIndex = graphicsQueueFamilyIndex,
+        vk::DeviceQueueCreateInfo{.queueFamilyIndex = graphicsQueueFamilyIndex_,
                                   .queueCount = 1,
                                   .pQueuePriorities = &queuePriority};
 
@@ -397,7 +403,7 @@ void VulkanApplication::createLogicalDevice()
         .ppEnabledExtensionNames = deviceExtensions.data()};
 
     device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
-    graphicsQueue_ = vk::raii::Queue(device_, graphicsQueueFamilyIndex, 0);
+    graphicsQueue_ = vk::raii::Queue(device_, graphicsQueueFamilyIndex_, 0);
     presentQueue_ = vk::raii::Queue(device_, surfacePresentationQueueFamilyIndex, 0);
 }
 
@@ -525,6 +531,24 @@ void VulkanApplication::createGraphicsPipeline()
                                                              .renderPass = nullptr};
 
     graphicsPipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
+}
+
+void VulkanApplication::createCommandPool()
+{
+    const auto poolInfo =
+        vk::CommandPoolCreateInfo{.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+                                  .queueFamilyIndex = graphicsQueueFamilyIndex_};
+
+    commandPool_ = vk::raii::CommandPool(device_, poolInfo);
+}
+
+void VulkanApplication::createCommandBuffer()
+{
+    const auto allocInfo = vk::CommandBufferAllocateInfo{.commandPool = commandPool_,
+                                                         .level = vk::CommandBufferLevel::ePrimary,
+                                                         .commandBufferCount = 1};
+
+    commandBuffer_ = std::move(vk::raii::CommandBuffers(device_, allocInfo).front());
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const
