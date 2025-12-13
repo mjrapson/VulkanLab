@@ -53,6 +53,8 @@ class VulkanApplication
     vk::raii::Queue graphicsQueue_{nullptr};
     vk::raii::Queue presentQueue_{nullptr};
     vk::raii::SwapchainKHR swapchain_{nullptr};
+    vk::raii::PipelineLayout pipelineLayout_{nullptr};
+    vk::raii::Pipeline graphicsPipeline_{nullptr};
     vk::Extent2D swapchainExtent_;
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;

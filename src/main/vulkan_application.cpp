@@ -443,22 +443,88 @@ void VulkanApplication::createImageViews()
 
 void VulkanApplication::createGraphicsPipeline()
 {
+    // Shader-progammable stages
     auto vertexShaderModule =
         createShaderModule(device_, readFile(GetShaderDir() / "basic.vert.spv"));
 
     auto fragmentShaderModule =
         createShaderModule(device_, readFile(GetShaderDir() / "basic.frag.spv"));
 
-    vk::PipelineShaderStageCreateInfo vertShaderStageInfo{.stage = vk::ShaderStageFlagBits::eVertex,
-                                                          .module = vertexShaderModule,
-                                                          .pName = "vertMain"};
+    const auto vertShaderStageInfo =
+        vk::PipelineShaderStageCreateInfo{.stage = vk::ShaderStageFlagBits::eVertex,
+                                          .module = vertexShaderModule,
+                                          .pName = "vertMain"};
 
-    vk::PipelineShaderStageCreateInfo fragShaderStageInfo{.stage =
-                                                              vk::ShaderStageFlagBits::eFragment,
-                                                          .module = fragmentShaderModule,
-                                                          .pName = "fragMain"};
+    const auto fragShaderStageInfo =
+        vk::PipelineShaderStageCreateInfo{.stage = vk::ShaderStageFlagBits::eFragment,
+                                          .module = fragmentShaderModule,
+                                          .pName = "fragMain"};
 
     vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+    // Fixed function stages
+    const auto vertexInputInfo = vk::PipelineVertexInputStateCreateInfo{};
+
+    const auto inputAssembly =
+        vk::PipelineInputAssemblyStateCreateInfo{.topology = vk::PrimitiveTopology::eTriangleList};
+
+    const auto dynamicStates =
+        std::vector<vk::DynamicState>{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+
+    const auto dynamicState = vk::PipelineDynamicStateCreateInfo{
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()};
+
+    const auto viewportState =
+        vk::PipelineViewportStateCreateInfo{.viewportCount = 1, .scissorCount = 1};
+
+    const auto rasterizer =
+        vk::PipelineRasterizationStateCreateInfo{.depthClampEnable = vk::False,
+                                                 .rasterizerDiscardEnable = vk::False,
+                                                 .polygonMode = vk::PolygonMode::eFill,
+                                                 .cullMode = vk::CullModeFlagBits::eBack,
+                                                 .frontFace = vk::FrontFace::eClockwise,
+                                                 .depthBiasEnable = vk::False,
+                                                 .depthBiasSlopeFactor = 1.0f,
+                                                 .lineWidth = 1.0f};
+
+    const auto multisampling = vk::PipelineMultisampleStateCreateInfo{
+        .rasterizationSamples = vk::SampleCountFlagBits::e1, .sampleShadingEnable = vk::False};
+
+    const auto colorBlendAttachment = vk::PipelineColorBlendAttachmentState{
+        .blendEnable = vk::False,
+        .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+                          vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+
+    const auto colorBlending =
+        vk::PipelineColorBlendStateCreateInfo{.logicOpEnable = vk::False,
+                                              .logicOp = vk::LogicOp::eCopy,
+                                              .attachmentCount = 1,
+                                              .pAttachments = &colorBlendAttachment};
+
+    const auto pipelineLayoutInfo =
+        vk::PipelineLayoutCreateInfo{.setLayoutCount = 0, .pushConstantRangeCount = 0};
+
+    pipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
+
+    // Render passes (dynamic rendering)
+    const auto pipelineRenderingCreateInfo = vk::PipelineRenderingCreateInfo{
+        .colorAttachmentCount = 1, .pColorAttachmentFormats = &surfaceFormat_.format};
+
+    const auto pipelineInfo = vk::GraphicsPipelineCreateInfo{.pNext = &pipelineRenderingCreateInfo,
+                                                             .stageCount = 2,
+                                                             .pStages = shaderStages,
+                                                             .pVertexInputState = &vertexInputInfo,
+                                                             .pInputAssemblyState = &inputAssembly,
+                                                             .pViewportState = &viewportState,
+                                                             .pRasterizationState = &rasterizer,
+                                                             .pMultisampleState = &multisampling,
+                                                             .pColorBlendState = &colorBlending,
+                                                             .pDynamicState = &dynamicState,
+                                                             .layout = pipelineLayout_,
+                                                             .renderPass = nullptr};
+
+    graphicsPipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const
