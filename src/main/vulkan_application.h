@@ -37,6 +37,8 @@ class VulkanApplication
     void createCommandBuffers();
     void createSyncObjects();
 
+    void recreateSwapChain();
+
     void drawFrame();
     void recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer);
 

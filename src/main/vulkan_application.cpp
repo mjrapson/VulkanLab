@@ -15,6 +15,13 @@
 #include <stdexcept>
 #include <vector>
 
+static auto framebufferResized = false;
+
+static void framebufferResizeCallback(GLFWwindow*, int, int)
+{
+    framebufferResized = true;
+}
+
 constexpr bool validationLayersEnabled()
 {
 #ifdef NDEBUG
@@ -273,6 +280,8 @@ void VulkanApplication::initWindow(int windowWidth, int windowHeight,
     {
         throw std::runtime_error("Failed to create GLFW window");
     }
+
+    glfwSetFramebufferSizeCallback(window_, framebufferResizeCallback);
 }
 
 void VulkanApplication::initVulkan()
@@ -602,18 +611,46 @@ void VulkanApplication::createSyncObjects()
     }
 }
 
-void VulkanApplication::drawFrame()
+void VulkanApplication::recreateSwapChain()
 {
-    while (vk::Result::eTimeout ==
-           device_.waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX))
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window_, &width, &height);
+    while (width == 0 || height == 0)
     {
-        ;
+        glfwGetFramebufferSize(window_, &width, &height);
+        glfwWaitEvents();
     }
 
-    device_.resetFences(*drawFences_.at(currentFrameIndex_));
+    device_.waitIdle();
 
-    auto [result, imageIndex] = swapchain_.acquireNextImage(
-        UINT64_MAX, *presentCompleteSemaphores_.at(currentFrameIndex_), nullptr);
+    swapchainImageViews_.clear();
+    swapchain_ = nullptr;
+
+    createSwapchain();
+    createImageViews();
+}
+
+void VulkanApplication::drawFrame()
+{
+    if (device_.waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX) !=
+        vk::Result::eSuccess)
+    {
+        throw std::runtime_error("Device unable to wait for fence to signal");
+    }
+
+    auto result = vk::Result{};
+    auto imageIndex = uint32_t{};
+
+    try
+    {
+        std::tie(result, imageIndex) = swapchain_.acquireNextImage(
+            UINT64_MAX, *presentCompleteSemaphores_.at(currentFrameIndex_), nullptr);
+    }
+    catch (const vk::OutOfDateKHRError&)
+    {
+        recreateSwapChain();
+        return;
+    }
 
     auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
     commandBuffer.reset();
@@ -632,6 +669,7 @@ void VulkanApplication::drawFrame()
                        .signalSemaphoreCount = 1,
                        .pSignalSemaphores = &*renderFinishedSemaphores_.at(imageIndex)};
 
+    device_.resetFences(*drawFences_.at(currentFrameIndex_));
     graphicsQueue_.submit(submitInfo, *drawFences_.at(currentFrameIndex_));
 
     const auto presentInfoKHR =
@@ -641,16 +679,20 @@ void VulkanApplication::drawFrame()
                            .pSwapchains = &*swapchain_,
                            .pImageIndices = &imageIndex};
 
-    result = presentQueue_.presentKHR(presentInfoKHR);
-    switch (result)
+    try
     {
-        case vk::Result::eSuccess:
-            break;
-        case vk::Result::eSuboptimalKHR:
-            // std::cout << "vk::Queue::presentKHR returned vk::Result::eSuboptimalKHR !\n";
-            break;
-        default:
-            break; // an unexpected result is returned!
+        result = presentQueue_.presentKHR(presentInfoKHR);
+    }
+    catch (const vk::OutOfDateKHRError&)
+    {
+        recreateSwapChain();
+        return;
+    }
+
+    if (result == vk::Result::eSuboptimalKHR || framebufferResized)
+    {
+        framebufferResized = false;
+        recreateSwapChain();
     }
 
     currentFrameIndex_ = (currentFrameIndex_ + 1) & maxFramesInFlight;
