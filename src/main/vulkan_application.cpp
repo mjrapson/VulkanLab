@@ -252,6 +252,9 @@ void VulkanApplication::initVulkan()
 
     spdlog::info("Creating Swapchain");
     createSwapchain();
+
+    spdlog::info("Creating swapchain image views");
+    createImageViews();
 }
 
 void VulkanApplication::createVulkanInstance()
@@ -382,6 +385,22 @@ void VulkanApplication::createSwapchain()
 
     swapchain_ = vk::raii::SwapchainKHR(device_, swapChainCreateInfo);
     swapchainImages_ = swapchain_.getImages();
+}
+
+void VulkanApplication::createImageViews()
+{
+    swapchainImageViews_.clear();
+
+    auto imageViewCreateInfo =
+        vk::ImageViewCreateInfo{.viewType = vk::ImageViewType::e2D,
+                                .format = surfaceFormat_.format,
+                                .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+
+    for (const auto& image : swapchainImages_)
+    {
+        imageViewCreateInfo.image = image;
+        swapchainImageViews_.emplace_back(device_, imageViewCreateInfo);
+    }
 }
 
 std::vector<char const*> VulkanApplication::getRequiredExtensions() const

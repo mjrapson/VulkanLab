@@ -31,6 +31,7 @@ class VulkanApplication
     void pickPhysicalDevice();
     void createLogicalDevice();
     void createSwapchain();
+    void createImageViews();
 
     std::vector<char const*> getRequiredExtensions() const;
     std::vector<char const*> getRequiredLayers() const;
@@ -54,4 +55,5 @@ class VulkanApplication
     vk::Extent2D swapchainExtent_;
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;
+    std::vector<vk::raii::ImageView> swapchainImageViews_;
 };
