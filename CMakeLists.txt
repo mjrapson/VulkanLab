@@ -53,4 +53,5 @@ find_program(SLANGC_EXECUTABLE
 # Project modules
 # -------------------------
 add_subdirectory(src/core)
+add_subdirectory(src/renderer)
 add_subdirectory(src/main)

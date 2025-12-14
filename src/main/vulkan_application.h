@@ -9,6 +9,8 @@
 #include <memory>
 #include <string>
 
+class GpuDevice;
+
 struct GLFWwindow;
 
 class VulkanApplication
@@ -25,11 +27,9 @@ class VulkanApplication
     void initWindow(int windowWidth, int windowHeight, const std::string& windowTitle);
     void initVulkan();
 
-    void createVulkanInstance();
-    void setupDebugMessenger();
+    void createInstance();
+    void createDebugMessenger();
     void createSurface();
-    void pickPhysicalDevice();
-    void createLogicalDevice();
     void createSwapchain();
     void createImageViews();
     void createGraphicsPipeline();
@@ -42,12 +42,6 @@ class VulkanApplication
     void drawFrame();
     void recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer);
 
-    std::vector<char const*> getRequiredExtensions() const;
-    std::vector<char const*> getRequiredLayers() const;
-    bool isDeviceSuitable(vk::raii::PhysicalDevice device) const;
-    vk::raii::PhysicalDevice
-    selecteBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices) const;
-
   private:
     bool glfwInitialised_{false};
     GLFWwindow* window_{nullptr};
@@ -55,11 +49,10 @@ class VulkanApplication
     vk::raii::Context context_;
     vk::raii::Instance instance_{nullptr};
     vk::raii::DebugUtilsMessengerEXT debugMessenger_{nullptr};
+
+    std::unique_ptr<GpuDevice> gpuDevice_{nullptr};
+
     vk::raii::SurfaceKHR surface_{nullptr};
-    vk::raii::PhysicalDevice physicalDevice_{nullptr};
-    vk::raii::Device device_{nullptr};
-    vk::raii::Queue graphicsQueue_{nullptr};
-    vk::raii::Queue presentQueue_{nullptr};
     vk::raii::SwapchainKHR swapchain_{nullptr};
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline graphicsPipeline_{nullptr};
@@ -68,7 +61,6 @@ class VulkanApplication
     std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
     std::vector<vk::raii::Fence> drawFences_;
-    uint32_t graphicsQueueFamilyIndex_;
     vk::Extent2D swapchainExtent_;
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;
