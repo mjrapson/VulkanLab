@@ -49,10 +49,10 @@ class VulkanApplication
     vk::raii::Context context_;
     vk::raii::Instance instance_{nullptr};
     vk::raii::DebugUtilsMessengerEXT debugMessenger_{nullptr};
+    vk::raii::SurfaceKHR surface_{nullptr};
 
     std::unique_ptr<GpuDevice> gpuDevice_{nullptr};
 
-    vk::raii::SurfaceKHR surface_{nullptr};
     vk::raii::SwapchainKHR swapchain_{nullptr};
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline graphicsPipeline_{nullptr};
