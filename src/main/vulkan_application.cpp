@@ -11,7 +11,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include <fstream>
 #include <ranges>
 #include <stdexcept>
 #include <vector>
@@ -145,24 +144,6 @@ vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, 
                                  capabilities.maxImageExtent.width),
             std::clamp<uint32_t>(height, capabilities.minImageExtent.height,
                                  capabilities.maxImageExtent.height)};
-}
-
-std::vector<char> readFile(const std::string& filename)
-{
-    auto file = std::ifstream(filename, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open())
-    {
-        throw std::runtime_error("failed to open file!");
-    }
-
-    std::vector<char> buffer(file.tellg());
-    file.seekg(0, std::ios::beg);
-    file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-
-    file.close();
-
-    return buffer;
 }
 
 [[nodiscard]] vk::raii::ShaderModule createShaderModule(const vk::raii::Device& device,
@@ -425,11 +406,11 @@ void VulkanApplication::createImageViews()
 void VulkanApplication::createGraphicsPipeline()
 {
     // Shader-progammable stages
-    auto vertexShaderModule =
-        createShaderModule(gpuDevice_->device(), readFile(GetShaderDir() / "basic.vert.spv"));
+    auto vertexShaderModule = createShaderModule(
+        gpuDevice_->device(), core::readBinaryFile(core::getShaderDir() / "basic.vert.spv"));
 
-    auto fragmentShaderModule =
-        createShaderModule(gpuDevice_->device(), readFile(GetShaderDir() / "basic.frag.spv"));
+    auto fragmentShaderModule = createShaderModule(
+        gpuDevice_->device(), core::readBinaryFile(core::getShaderDir() / "basic.frag.spv"));
 
     const auto vertShaderStageInfo =
         vk::PipelineShaderStageCreateInfo{.stage = vk::ShaderStageFlagBits::eVertex,

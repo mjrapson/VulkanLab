@@ -4,6 +4,13 @@
 #pragma once
 
 #include <filesystem>
+#include <vector>
 
-std::filesystem::path GetRootDir();
-std::filesystem::path GetShaderDir();
+namespace core
+{
+std::filesystem::path getRootDir();
+std::filesystem::path getShaderDir();
+
+[[nodiscard]]
+std::vector<char> readBinaryFile(const std::filesystem::path& filepath);
+}

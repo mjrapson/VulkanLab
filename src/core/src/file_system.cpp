@@ -10,9 +10,11 @@
 #include <unistd.h>
 #endif
 
-#include <vector>
+#include <fstream>
 
-std::filesystem::path GetRootDir()
+namespace core
+{
+std::filesystem::path getRootDir()
 {
 #ifdef _WIN32
     HMODULE hModule = GetModuleHandleW(NULL);
@@ -38,7 +40,26 @@ std::filesystem::path GetRootDir()
 #endif
 }
 
-std::filesystem::path GetShaderDir()
+std::filesystem::path getShaderDir()
 {
-    return GetRootDir() / "shaders";
+    return getRootDir() / "shaders";
+}
+
+std::vector<char> readBinaryFile(const std::filesystem::path& filepath)
+{
+    auto file = std::ifstream(filepath, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open())
+    {
+        throw std::runtime_error("failed to open file!");
+    }
+
+    std::vector<char> buffer(file.tellg());
+    file.seekg(0, std::ios::beg);
+    file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+
+    file.close();
+
+    return buffer;
+}
 }
