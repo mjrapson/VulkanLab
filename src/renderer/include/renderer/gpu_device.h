@@ -6,6 +6,8 @@
 #define VULKAN_HPP_NO_CONSTRUCTORS
 #include <vulkan/vulkan_raii.hpp>
 
+namespace renderer
+{
 class GpuDevice
 {
   public:
@@ -38,3 +40,4 @@ class GpuDevice
     vk::raii::Queue presentQueue_{nullptr};
     uint32_t graphicsQueueFamilyIndex_;
 };
+}

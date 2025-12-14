@@ -7,6 +7,8 @@
 
 #include <ranges>
 
+namespace renderer
+{
 const auto deviceExtensions = std::vector<const char*>{
     vk::KHRSwapchainExtensionName, vk::KHRSpirv14ExtensionName,
     vk::KHRSynchronization2ExtensionName, vk::KHRCreateRenderpass2ExtensionName};
@@ -219,4 +221,5 @@ GpuDevice::selectBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices
     }
 
     return devices.at(0);
+}
 }

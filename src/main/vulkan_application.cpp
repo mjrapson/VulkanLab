@@ -188,11 +188,11 @@ void VulkanApplication::initVulkan(int windowWidth, int windowHeight)
     createSurface();
 
     spdlog::info("Creating GPU device");
-    gpuDevice_ = std::make_unique<GpuDevice>(instance_, surface_);
+    gpuDevice_ = std::make_unique<renderer::GpuDevice>(instance_, surface_);
 
     spdlog::info("Creating renderer");
-    renderer_ =
-        std::make_unique<Renderer>(instance_, surface_, *gpuDevice_, windowWidth, windowHeight);
+    renderer_ = std::make_unique<renderer::Renderer>(instance_, surface_, *gpuDevice_, windowWidth,
+                                                     windowHeight);
 }
 
 void VulkanApplication::createInstance()

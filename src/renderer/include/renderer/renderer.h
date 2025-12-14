@@ -6,6 +6,8 @@
 #define VULKAN_HPP_NO_CONSTRUCTORS
 #include <vulkan/vulkan_raii.hpp>
 
+namespace renderer
+{
 class GpuDevice;
 
 class Renderer
@@ -58,3 +60,4 @@ class Renderer
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
 };
+}

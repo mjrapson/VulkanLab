@@ -9,8 +9,11 @@
 #include <memory>
 #include <string>
 
+namespace renderer
+{
 class GpuDevice;
 class Renderer;
+} // namespace renderer
 
 struct GLFWwindow;
 
@@ -43,6 +46,6 @@ class VulkanApplication
     vk::raii::DebugUtilsMessengerEXT debugMessenger_{nullptr};
     vk::raii::SurfaceKHR surface_{nullptr};
 
-    std::unique_ptr<GpuDevice> gpuDevice_{nullptr};
-    std::unique_ptr<Renderer> renderer_{nullptr};
+    std::unique_ptr<renderer::GpuDevice> gpuDevice_{nullptr};
+    std::unique_ptr<renderer::Renderer> renderer_{nullptr};
 };

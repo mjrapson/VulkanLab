@@ -8,6 +8,8 @@
 
 #include <ranges>
 
+namespace renderer
+{
 constexpr auto maxFramesInFlight = 2;
 
 vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth,
@@ -429,4 +431,5 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
     );
 
     commandBuffer.end();
+}
 }
