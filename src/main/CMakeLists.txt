@@ -21,7 +21,7 @@ target_link_libraries(VulkanDemo
     Vulkan::Vulkan
 )
 
-set(SHADER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+set(SHADER_SRC_DIR ${CMAKE_SOURCE_DIR}/assets/shaders)
 set(SHADER_OUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders)
 
 file(MAKE_DIRECTORY ${SHADER_OUT_DIR})

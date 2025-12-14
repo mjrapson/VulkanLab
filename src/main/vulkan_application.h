@@ -10,6 +10,7 @@
 #include <string>
 
 class GpuDevice;
+class Renderer;
 
 struct GLFWwindow;
 
@@ -22,25 +23,16 @@ class VulkanApplication
     void init(int windowWidth, int windowHeight, const std::string& windowTitle);
     void run();
 
+    void windowResized(int width, int height);
+
   private:
     void initGlfw();
     void initWindow(int windowWidth, int windowHeight, const std::string& windowTitle);
-    void initVulkan();
+    void initVulkan(int windowWidth, int windowHeight);
 
     void createInstance();
     void createDebugMessenger();
     void createSurface();
-    void createSwapchain();
-    void createImageViews();
-    void createGraphicsPipeline();
-    void createCommandPool();
-    void createCommandBuffers();
-    void createSyncObjects();
-
-    void recreateSwapChain();
-
-    void drawFrame();
-    void recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer);
 
   private:
     bool glfwInitialised_{false};
@@ -52,18 +44,5 @@ class VulkanApplication
     vk::raii::SurfaceKHR surface_{nullptr};
 
     std::unique_ptr<GpuDevice> gpuDevice_{nullptr};
-
-    vk::raii::SwapchainKHR swapchain_{nullptr};
-    vk::raii::PipelineLayout pipelineLayout_{nullptr};
-    vk::raii::Pipeline graphicsPipeline_{nullptr};
-    vk::raii::CommandPool commandPool_{nullptr};
-    std::vector<vk::raii::CommandBuffer> commandBuffers_;
-    std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
-    std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
-    std::vector<vk::raii::Fence> drawFences_;
-    vk::Extent2D swapchainExtent_;
-    vk::SurfaceFormatKHR surfaceFormat_;
-    std::vector<vk::Image> swapchainImages_;
-    std::vector<vk::raii::ImageView> swapchainImageViews_;
-    uint32_t currentFrameIndex_{0};
+    std::unique_ptr<Renderer> renderer_{nullptr};
 };
