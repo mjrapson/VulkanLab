@@ -7,17 +7,6 @@
 
 #include <stdexcept>
 
-extern "C"
-{
-#ifdef _WIN32
-    __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
-    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-#else
-    __attribute__((visibility("default"))) unsigned long NvOptimusEnablement = 0x00000001;
-    __attribute__((visibility("default"))) int AmdPowerXpressRequestHighPerformance = 1;
-#endif
-}
-
 constexpr auto windowWidth = 1200;
 constexpr auto windowHeight = 900;
 constexpr auto windowTitle = "Vulkan Demo";
