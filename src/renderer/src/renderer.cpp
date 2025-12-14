@@ -1,6 +1,7 @@
 #include "renderer/renderer.h"
 
 #include "renderer/gpu_device.h"
+#include "renderer/vertex.h"
 
 #include <core/file_system.h>
 
@@ -11,6 +12,10 @@
 namespace renderer
 {
 constexpr auto maxFramesInFlight = 2;
+
+const auto vertices = std::vector<renderer::Vertex>{{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                                    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+                                                    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
 
 vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth,
                                 int windowHeight)
@@ -99,6 +104,34 @@ void transitionImageLayout(const vk::Image& image, const vk::raii::CommandBuffer
     commandBuffer.pipelineBarrier2(dependencyInfo);
 }
 
+[[nodiscard]]
+bool matchingMemoryIndex(uint32_t memoryIndex, uint32_t filter)
+{
+    return (filter & (1 << memoryIndex));
+}
+
+[[nodiscard]]
+uint32_t findMemoryType(const vk::PhysicalDevice& device, uint32_t typeFilter,
+                        vk::MemoryPropertyFlags properties)
+{
+
+    const auto memoryProperties = device.getMemoryProperties();
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
+    {
+        if (!matchingMemoryIndex(i, typeFilter))
+        {
+            continue;
+        }
+
+        if ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("No suitable memory type found");
+}
+
 Renderer::Renderer(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface,
                    const GpuDevice& gpuDevice, int windowWidth, int windowHeight)
     : instance_{instance}, surface_{surface}, gpuDevice_{gpuDevice}, windowWidth_{windowWidth},
@@ -115,6 +148,9 @@ Renderer::Renderer(const vk::raii::Instance& instance, const vk::raii::SurfaceKH
 
     spdlog::info("Creating command pool");
     createCommandPool();
+
+    spdlog::info("Creating vertex buffers");
+    createVertexBuffer();
 
     spdlog::info("Creating command buffers");
     createCommandBuffers();
@@ -271,7 +307,13 @@ void Renderer::createGraphicsPipeline()
     vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
     // Fixed function stages
-    const auto vertexInputInfo = vk::PipelineVertexInputStateCreateInfo{};
+    const auto bindingDescriptions = Vertex::bindingDescription();
+    const auto attributeDescriptions = Vertex::attributeDescriptions();
+    const auto vertexInputInfo = vk::PipelineVertexInputStateCreateInfo{
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &bindingDescriptions,
+        .vertexAttributeDescriptionCount = attributeDescriptions.size(),
+        .pVertexAttributeDescriptions = attributeDescriptions.data()};
 
     const auto inputAssembly =
         vk::PipelineInputAssemblyStateCreateInfo{.topology = vk::PrimitiveTopology::eTriangleList};
@@ -344,6 +386,31 @@ void Renderer::createCommandPool()
     commandPool_ = vk::raii::CommandPool(gpuDevice_.device(), poolInfo);
 }
 
+void Renderer::createVertexBuffer()
+{
+    const auto bufferInfo = vk::BufferCreateInfo{.size = sizeof(vertices[0]) * vertices.size(),
+                                                 .usage = vk::BufferUsageFlagBits::eVertexBuffer,
+                                                 .sharingMode = vk::SharingMode::eExclusive};
+
+    vertexBuffer_ = vk::raii::Buffer(gpuDevice_.device(), bufferInfo);
+
+    const auto memoryRequirements = vertexBuffer_.getMemoryRequirements();
+    const auto memoryTypeIndex = findMemoryType(
+        gpuDevice_.physicalDevice(), memoryRequirements.memoryTypeBits,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    const auto memoryAllocateInfo = vk::MemoryAllocateInfo{
+        .allocationSize = memoryRequirements.size, .memoryTypeIndex = memoryTypeIndex};
+
+    vertexBufferMemory_ = vk::raii::DeviceMemory(gpuDevice_.device(), memoryAllocateInfo);
+
+    vertexBuffer_.bindMemory(*vertexBufferMemory_, 0);
+
+    void* data = vertexBufferMemory_.mapMemory(0, bufferInfo.size);
+    memcpy(data, vertices.data(), bufferInfo.size);
+    vertexBufferMemory_.unmapMemory();
+}
+
 void Renderer::createCommandBuffers()
 {
     const auto allocInfo = vk::CommandBufferAllocateInfo{.commandPool = commandPool_,
@@ -412,13 +479,14 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
 
     commandBuffer.beginRendering(renderingInfo);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline_);
+    commandBuffer.bindVertexBuffers(0, *vertexBuffer_, {0});
 
     commandBuffer.setViewport(
         0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchainExtent_.width),
                         static_cast<float>(swapchainExtent_.height), 0.0f, 1.0f));
     commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
 
-    commandBuffer.draw(3, 1, 0, 0);
+    commandBuffer.draw(vertices.size(), 1, 0, 0);
 
     commandBuffer.endRendering();
 
@@ -432,4 +500,4 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
 
     commandBuffer.end();
 }
-}
+} // namespace renderer

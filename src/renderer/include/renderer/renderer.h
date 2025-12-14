@@ -30,6 +30,7 @@ class Renderer
     void createSwapchainImageViews();
     void createGraphicsPipeline();
     void createCommandPool();
+    void createVertexBuffer();
     void createCommandBuffers();
     void createSyncObjects();
 
@@ -59,5 +60,8 @@ class Renderer
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
+
+    vk::raii::Buffer vertexBuffer_{nullptr};
+    vk::raii::DeviceMemory vertexBufferMemory_{nullptr};
 };
 }

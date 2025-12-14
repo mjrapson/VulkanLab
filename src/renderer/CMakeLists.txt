@@ -7,6 +7,7 @@ target_sources(Renderer
     PUBLIC
         include/renderer/gpu_device.h
         include/renderer/renderer.h
+        include/renderer/vertex.h
 )
 
 target_include_directories(Renderer
