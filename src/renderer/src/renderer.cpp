@@ -1,5 +1,7 @@
 #include "renderer/renderer.h"
 
+#include "private/buffer.h"
+#include "private/memory.h"
 #include "renderer/gpu_device.h"
 #include "renderer/vertex.h"
 
@@ -102,34 +104,6 @@ void transitionImageLayout(const vk::Image& image, const vk::raii::CommandBuffer
         .dependencyFlags = {}, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier};
 
     commandBuffer.pipelineBarrier2(dependencyInfo);
-}
-
-[[nodiscard]]
-bool matchingMemoryIndex(uint32_t memoryIndex, uint32_t filter)
-{
-    return (filter & (1 << memoryIndex));
-}
-
-[[nodiscard]]
-uint32_t findMemoryType(const vk::PhysicalDevice& device, uint32_t typeFilter,
-                        vk::MemoryPropertyFlags properties)
-{
-
-    const auto memoryProperties = device.getMemoryProperties();
-    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
-    {
-        if (!matchingMemoryIndex(i, typeFilter))
-        {
-            continue;
-        }
-
-        if ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
-        {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("No suitable memory type found");
 }
 
 Renderer::Renderer(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface,
@@ -388,26 +362,18 @@ void Renderer::createCommandPool()
 
 void Renderer::createVertexBuffer()
 {
-    const auto bufferInfo = vk::BufferCreateInfo{.size = sizeof(vertices[0]) * vertices.size(),
-                                                 .usage = vk::BufferUsageFlagBits::eVertexBuffer,
-                                                 .sharingMode = vk::SharingMode::eExclusive};
+    const auto bufferSize = sizeof(Vertex) * vertices.size();
 
-    vertexBuffer_ = vk::raii::Buffer(gpuDevice_.device(), bufferInfo);
+    vertexBuffer_ =
+        createBuffer(gpuDevice_.device(), bufferSize, vk::BufferUsageFlagBits::eVertexBuffer,
+                     vk::SharingMode::eExclusive);
 
-    const auto memoryRequirements = vertexBuffer_.getMemoryRequirements();
-    const auto memoryTypeIndex = findMemoryType(
-        gpuDevice_.physicalDevice(), memoryRequirements.memoryTypeBits,
+    vertexBufferMemory_ = allocateBufferMemory(
+        gpuDevice_.device(), gpuDevice_.physicalDevice(), vertexBuffer_,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-    const auto memoryAllocateInfo = vk::MemoryAllocateInfo{
-        .allocationSize = memoryRequirements.size, .memoryTypeIndex = memoryTypeIndex};
-
-    vertexBufferMemory_ = vk::raii::DeviceMemory(gpuDevice_.device(), memoryAllocateInfo);
-
-    vertexBuffer_.bindMemory(*vertexBufferMemory_, 0);
-
-    void* data = vertexBufferMemory_.mapMemory(0, bufferInfo.size);
-    memcpy(data, vertices.data(), bufferInfo.size);
+    void* data = vertexBufferMemory_.mapMemory(0, bufferSize);
+    memcpy(data, vertices.data(), bufferSize);
     vertexBufferMemory_.unmapMemory();
 }
 
