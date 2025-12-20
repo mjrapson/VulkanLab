@@ -10,6 +10,8 @@ target_sources(Renderer
         src/private/buffer.h
         src/private/memory.cpp
         src/private/memory.h
+        src/private/shader.cpp
+        src/private/shader.h
         src/gpu_device.cpp
         src/renderer.cpp
 )

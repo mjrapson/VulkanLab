@@ -2,6 +2,7 @@
 
 #include "private/buffer.h"
 #include "private/memory.h"
+#include "private/shader.h"
 #include "renderer/gpu_device.h"
 #include "renderer/vertex.h"
 
@@ -69,16 +70,6 @@ vk::SurfaceFormatKHR getSurfaceFormat(const vk::PhysicalDevice& device,
     }
 
     return formats.at(0);
-}
-
-[[nodiscard]] vk::raii::ShaderModule createShaderModule(const vk::raii::Device& device,
-                                                        const std::vector<char>& code)
-{
-    vk::ShaderModuleCreateInfo createInfo{.codeSize = code.size() * sizeof(char),
-                                          .pCode = reinterpret_cast<const uint32_t*>(code.data())};
-
-    vk::raii::ShaderModule shaderModule{device, createInfo};
-    return shaderModule;
 }
 
 void transitionImageLayout(const vk::Image& image,
