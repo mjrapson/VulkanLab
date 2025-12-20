@@ -12,8 +12,8 @@ namespace renderer
 uint32_t findMemoryType(const vk::raii::PhysicalDevice& device, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties);
 
-vk::raii::DeviceMemory allocateBufferMemory(const vk::raii::Device& device,
-                                            const vk::raii::PhysicalDevice& physicalDevice,
-                                            const vk::raii::Buffer& buffer,
-                                            vk::MemoryPropertyFlags properties);
+[[nodiscard]]
+vk::raii::DeviceMemory
+allocateBufferMemory(const vk::raii::Device& device, const vk::raii::PhysicalDevice& physicalDevice,
+                     const vk::raii::Buffer& buffer, vk::MemoryPropertyFlags properties);
 } // namespace renderer
