@@ -14,7 +14,8 @@ bool matchingMemoryIndex(uint32_t memoryIndex, uint32_t filter)
 }
 
 [[nodiscard]]
-uint32_t findMemoryType(const vk::raii::PhysicalDevice& device, uint32_t typeFilter,
+uint32_t findMemoryType(const vk::raii::PhysicalDevice& device,
+                        uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties)
 {
 

@@ -9,7 +9,8 @@
 namespace renderer
 {
 [[nodiscard]]
-vk::raii::Buffer createBuffer(const vk::raii::Device& device, const vk::DeviceSize& size,
+vk::raii::Buffer createBuffer(const vk::raii::Device& device,
+                              const vk::DeviceSize& size,
                               const vk::BufferUsageFlags& usage,
                               const vk::SharingMode& sharingMode);
 }

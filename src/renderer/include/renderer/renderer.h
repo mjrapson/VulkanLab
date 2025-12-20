@@ -13,8 +13,11 @@ class GpuDevice;
 class Renderer
 {
   public:
-    Renderer(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface,
-             const GpuDevice& gpuDevice, int windowWidth, int windowHeight);
+    Renderer(const vk::raii::Instance& instance,
+             const vk::raii::SurfaceKHR& surface,
+             const GpuDevice& gpuDevice,
+             int windowWidth,
+             int windowHeight);
 
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
@@ -64,4 +67,4 @@ class Renderer
     vk::raii::Buffer vertexBuffer_{nullptr};
     vk::raii::DeviceMemory vertexBufferMemory_{nullptr};
 };
-}
+} // namespace renderer

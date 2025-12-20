@@ -4,10 +4,16 @@ TabWidth: 4
 UseTab: Never
 ColumnLimit: 100
 
+AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Empty
 
+BinPackArguments: false
+BinPackParameters: false
+BreakAfterOpenBracketBracedList: true
+BreakAfterOpenBracketFunction: true
+BreakBeforeBinaryOperators: NonAssignment
 BreakBeforeBraces: Allman
 BraceWrapping:
   AfterClass: true
@@ -19,6 +25,7 @@ BraceWrapping:
   SplitEmptyRecord: false
   SplitEmptyNamespace: false
 
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
 IndentCaseLabels: true
 SortIncludes: true
 PointerAlignment: Left

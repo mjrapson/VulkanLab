@@ -19,7 +19,8 @@ const auto vertices = std::vector<renderer::Vertex>{{{0.0f, -0.5f}, {1.0f, 0.0f,
                                                     {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
                                                     {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
 
-vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth,
+vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities,
+                                int windowWidth,
                                 int windowHeight)
 {
     if (capabilities.currentExtent.width != 0xFFFFFFFF)
@@ -27,9 +28,10 @@ vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, 
         return capabilities.currentExtent;
     }
 
-    return {std::clamp<uint32_t>(windowWidth, capabilities.minImageExtent.width,
-                                 capabilities.maxImageExtent.width),
-            std::clamp<uint32_t>(windowHeight, capabilities.minImageExtent.height,
+    return {std::clamp<uint32_t>(
+                windowWidth, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+            std::clamp<uint32_t>(windowHeight,
+                                 capabilities.minImageExtent.height,
                                  capabilities.maxImageExtent.height)};
 }
 
@@ -47,8 +49,8 @@ uint32_t getSurfaceMinImageCount(const vk::SurfaceCapabilitiesKHR& surfaceCapabi
 
 bool isPreferredSurfaceFormat(const vk::SurfaceFormatKHR& format)
 {
-    return format.format == vk::Format::eB8G8R8A8Srgb &&
-           format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+    return format.format == vk::Format::eB8G8R8A8Srgb
+           && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
 }
 
 vk::SurfaceFormatKHR getSurfaceFormat(const vk::PhysicalDevice& device,
@@ -79,9 +81,12 @@ vk::SurfaceFormatKHR getSurfaceFormat(const vk::PhysicalDevice& device,
     return shaderModule;
 }
 
-void transitionImageLayout(const vk::Image& image, const vk::raii::CommandBuffer& commandBuffer,
-                           vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
-                           vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask,
+void transitionImageLayout(const vk::Image& image,
+                           const vk::raii::CommandBuffer& commandBuffer,
+                           vk::ImageLayout oldLayout,
+                           vk::ImageLayout newLayout,
+                           vk::AccessFlags2 srcAccessMask,
+                           vk::AccessFlags2 dstAccessMask,
                            vk::PipelineStageFlags2 srcStageMask,
                            vk::PipelineStageFlags2 dstStageMask)
 {
@@ -101,14 +106,23 @@ void transitionImageLayout(const vk::Image& image, const vk::raii::CommandBuffer
                                                      .baseArrayLayer = 0,
                                                      .layerCount = 1}};
     const auto dependencyInfo = vk::DependencyInfo{
-        .dependencyFlags = {}, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier};
+        .dependencyFlags = {},
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &barrier,
+    };
 
     commandBuffer.pipelineBarrier2(dependencyInfo);
 }
 
-Renderer::Renderer(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface,
-                   const GpuDevice& gpuDevice, int windowWidth, int windowHeight)
-    : instance_{instance}, surface_{surface}, gpuDevice_{gpuDevice}, windowWidth_{windowWidth},
+Renderer::Renderer(const vk::raii::Instance& instance,
+                   const vk::raii::SurfaceKHR& surface,
+                   const GpuDevice& gpuDevice,
+                   int windowWidth,
+                   int windowHeight)
+    : instance_{instance},
+      surface_{surface},
+      gpuDevice_{gpuDevice},
+      windowWidth_{windowWidth},
       windowHeight_{windowHeight}
 {
     spdlog::info("Creating swapchain");
@@ -135,8 +149,8 @@ Renderer::Renderer(const vk::raii::Instance& instance, const vk::raii::SurfaceKH
 
 void Renderer::renderFrame()
 {
-    if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True,
-                                          UINT64_MAX) != vk::Result::eSuccess)
+    if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
+        != vk::Result::eSuccess)
     {
         throw std::runtime_error("Device unable to wait for fence to signal");
     }
@@ -317,8 +331,8 @@ void Renderer::createGraphicsPipeline()
 
     const auto colorBlendAttachment = vk::PipelineColorBlendAttachmentState{
         .blendEnable = vk::False,
-        .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                          vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+        .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG
+                          | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
 
     const auto colorBlending =
         vk::PipelineColorBlendStateCreateInfo{.logicOpEnable = vk::False,
@@ -364,13 +378,16 @@ void Renderer::createVertexBuffer()
 {
     const auto bufferSize = sizeof(Vertex) * vertices.size();
 
-    vertexBuffer_ =
-        createBuffer(gpuDevice_.device(), bufferSize, vk::BufferUsageFlagBits::eVertexBuffer,
-                     vk::SharingMode::eExclusive);
+    vertexBuffer_ = createBuffer(gpuDevice_.device(),
+                                 bufferSize,
+                                 vk::BufferUsageFlagBits::eVertexBuffer,
+                                 vk::SharingMode::eExclusive);
 
-    vertexBufferMemory_ = allocateBufferMemory(
-        gpuDevice_.device(), gpuDevice_.physicalDevice(), vertexBuffer_,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    vertexBufferMemory_ = allocateBufferMemory(gpuDevice_.device(),
+                                               gpuDevice_.physicalDevice(),
+                                               vertexBuffer_,
+                                               vk::MemoryPropertyFlagBits::eHostVisible
+                                                   | vk::MemoryPropertyFlagBits::eHostCoherent);
 
     void* data = vertexBufferMemory_.mapMemory(0, bufferSize);
     memcpy(data, vertices.data(), bufferSize);
@@ -421,8 +438,10 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
 {
     commandBuffer.begin({});
 
-    transitionImageLayout(swapchainImages_.at(imageIndex), commandBuffer,
-                          vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+    transitionImageLayout(swapchainImages_.at(imageIndex),
+                          commandBuffer,
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eColorAttachmentOptimal,
                           {}, // srcAccessMask (no need to wait for previous operations)
                           vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
                           vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
@@ -447,17 +466,23 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline_);
     commandBuffer.bindVertexBuffers(0, *vertexBuffer_, {0});
 
-    commandBuffer.setViewport(
-        0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchainExtent_.width),
-                        static_cast<float>(swapchainExtent_.height), 0.0f, 1.0f));
+    commandBuffer.setViewport(0,
+                              vk::Viewport(0.0f,
+                                           0.0f,
+                                           static_cast<float>(swapchainExtent_.width),
+                                           static_cast<float>(swapchainExtent_.height),
+                                           0.0f,
+                                           1.0f));
     commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
 
     commandBuffer.draw(vertices.size(), 1, 0, 0);
 
     commandBuffer.endRendering();
 
-    transitionImageLayout(swapchainImages_.at(imageIndex), commandBuffer,
-                          vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
+    transitionImageLayout(swapchainImages_.at(imageIndex),
+                          commandBuffer,
+                          vk::ImageLayout::eColorAttachmentOptimal,
+                          vk::ImageLayout::ePresentSrcKHR,
                           vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
                           {},                                                 // dstAccessMask
                           vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage

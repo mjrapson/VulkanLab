@@ -40,7 +40,8 @@ bool validateExtensions(const std::vector<const char*>& requiredExtensions,
     for (const auto requiredExtension : requiredExtensions)
     {
         if (std::ranges::none_of(
-                availableExtensions, [requiredExtension](const auto& extensionProperty)
+                availableExtensions,
+                [requiredExtension](const auto& extensionProperty)
                 { return strcmp(extensionProperty.extensionName, requiredExtension) == 0; }))
         {
             allExtensionsValid = false;
@@ -60,7 +61,8 @@ bool validateLayers(const std::vector<const char*>& requiredLayers,
     const auto availableLayers = context.enumerateInstanceLayerProperties();
     for (const auto& requiredLayer : requiredLayers)
     {
-        if (std::ranges::none_of(availableLayers, [requiredLayer](const auto& layerProperty)
+        if (std::ranges::none_of(availableLayers,
+                                 [requiredLayer](const auto& layerProperty)
                                  { return strcmp(layerProperty.layerName, requiredLayer) == 0; }))
         {
             allLayersValid = false;
@@ -73,7 +75,8 @@ bool validateLayers(const std::vector<const char*>& requiredLayers,
 
 static vk::Bool32 debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
                                 vk::DebugUtilsMessageTypeFlagsEXT,
-                                const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*)
+                                const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                void*)
 {
     if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
     {
@@ -153,7 +156,8 @@ void VulkanApplication::initGlfw()
     glfwInitialised_ = true;
 }
 
-void VulkanApplication::initWindow(int windowWidth, int windowHeight,
+void VulkanApplication::initWindow(int windowWidth,
+                                   int windowHeight,
                                    const std::string& windowTitle)
 {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -172,8 +176,10 @@ void VulkanApplication::initWindow(int windowWidth, int windowHeight,
 void VulkanApplication::initVulkan(int windowWidth, int windowHeight)
 {
     const auto version = vk::enumerateInstanceVersion();
-    spdlog::info("Vulkan API version: {}.{}.{}", VK_VERSION_MAJOR(version),
-                 VK_VERSION_MINOR(version), VK_VERSION_PATCH(version));
+    spdlog::info("Vulkan API version: {}.{}.{}",
+                 VK_VERSION_MAJOR(version),
+                 VK_VERSION_MINOR(version),
+                 VK_VERSION_PATCH(version));
 
     spdlog::info("Creating Vulkan instance");
     createInstance();
@@ -191,8 +197,8 @@ void VulkanApplication::initVulkan(int windowWidth, int windowHeight)
     gpuDevice_ = std::make_unique<renderer::GpuDevice>(instance_, surface_);
 
     spdlog::info("Creating renderer");
-    renderer_ = std::make_unique<renderer::Renderer>(instance_, surface_, *gpuDevice_, windowWidth,
-                                                     windowHeight);
+    renderer_ = std::make_unique<renderer::Renderer>(
+        instance_, surface_, *gpuDevice_, windowWidth, windowHeight);
 }
 
 void VulkanApplication::createInstance()
@@ -236,12 +242,12 @@ void VulkanApplication::createInstance()
 
 void VulkanApplication::createDebugMessenger()
 {
-    const auto severityFlags = (vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
-                                vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-                                vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
-    const auto messageTypeFlags = (vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-                                   vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-                                   vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+    const auto severityFlags = (vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose
+                                | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
+                                | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+    const auto messageTypeFlags = (vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
+                                   | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
+                                   | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
 
     const auto debugUtilsMessengerCreateInfoEXT =
         vk::DebugUtilsMessengerCreateInfoEXT{.messageSeverity = severityFlags,
