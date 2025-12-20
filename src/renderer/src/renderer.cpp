@@ -369,20 +369,38 @@ void Renderer::createVertexBuffer()
 {
     const auto bufferSize = sizeof(Vertex) * vertices.size();
 
-    vertexBuffer_ = createBuffer(gpuDevice_.device(),
-                                 bufferSize,
-                                 vk::BufferUsageFlagBits::eVertexBuffer,
-                                 vk::SharingMode::eExclusive);
+    auto stagingBuffer = createBuffer(gpuDevice_.device(),
+                                      bufferSize,
+                                      vk::BufferUsageFlagBits::eTransferSrc,
+                                      vk::SharingMode::eExclusive);
+
+    auto stagingBufferMemory = allocateBufferMemory(
+        gpuDevice_.device(),
+        gpuDevice_.physicalDevice(),
+        stagingBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
+    memcpy(dataStaging, vertices.data(), bufferSize);
+    stagingBufferMemory.unmapMemory();
+
+    vertexBuffer_ =
+        createBuffer(gpuDevice_.device(),
+                     bufferSize,
+                     vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+                     vk::SharingMode::eExclusive);
 
     vertexBufferMemory_ = allocateBufferMemory(gpuDevice_.device(),
                                                gpuDevice_.physicalDevice(),
                                                vertexBuffer_,
-                                               vk::MemoryPropertyFlagBits::eHostVisible
-                                                   | vk::MemoryPropertyFlagBits::eHostCoherent);
+                                               vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    void* data = vertexBufferMemory_.mapMemory(0, bufferSize);
-    memcpy(data, vertices.data(), bufferSize);
-    vertexBufferMemory_.unmapMemory();
+    copyBuffer(gpuDevice_.device(),
+               stagingBuffer,
+               vertexBuffer_,
+               gpuDevice_.graphicsQueue(),
+               commandPool_,
+               bufferSize);
 }
 
 void Renderer::createCommandBuffers()
