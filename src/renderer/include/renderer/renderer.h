@@ -3,7 +3,6 @@
 
 #pragma once
 
-#define VULKAN_HPP_NO_CONSTRUCTORS
 #include <vulkan/vulkan_raii.hpp>
 
 namespace renderer
@@ -31,15 +30,20 @@ class Renderer
   private:
     void createSwapchain();
     void createSwapchainImageViews();
+    void createDescriptorSetLayout();
     void createGraphicsPipeline();
     void createCommandPool();
     void createVertexBuffer();
     void createIndexBuffer();
+    void createUniformBuffers();
+    void createDescriptorPool();
+    void createDescriptorSets();
     void createCommandBuffers();
     void createSyncObjects();
 
     void recreateSwapchain();
     void recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer);
+    void updateUniformBuffer(uint32_t frameIndex);
 
   private:
     const vk::raii::Instance& instance_;
@@ -56,6 +60,7 @@ class Renderer
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;
     std::vector<vk::raii::ImageView> swapchainImageViews_;
+    vk::raii::DescriptorSetLayout descriptorSetLayout_{nullptr};
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline graphicsPipeline_{nullptr};
     vk::raii::CommandPool commandPool_{nullptr};
@@ -64,10 +69,15 @@ class Renderer
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
+    vk::raii::DescriptorPool descriptorPool_{nullptr};
+    std::vector<vk::raii::DescriptorSet> descriptorSets_;
 
     vk::raii::Buffer vertexBuffer_{nullptr};
     vk::raii::DeviceMemory vertexBufferMemory_{nullptr};
     vk::raii::Buffer indexBuffer_{nullptr};
     vk::raii::DeviceMemory indexBufferMemory_{nullptr};
+    std::vector<vk::raii::Buffer> uniformBuffers_;
+    std::vector<vk::raii::DeviceMemory> uniformBuffersMemory_;
+    std::vector<void*> mappedUniformBuffers_;
 };
 } // namespace renderer

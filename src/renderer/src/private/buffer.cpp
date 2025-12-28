@@ -12,11 +12,7 @@ vk::raii::Buffer createBuffer(const vk::raii::Device& device,
                               const vk::BufferUsageFlags& usage,
                               const vk::SharingMode& sharingMode)
 {
-    const auto bufferInfo = vk::BufferCreateInfo{
-        .size = size,
-        .usage = usage,
-        .sharingMode = sharingMode,
-    };
+    const auto bufferInfo = vk::BufferCreateInfo{{}, size, usage, sharingMode};
 
     return vk::raii::Buffer(device, bufferInfo);
 }
@@ -28,18 +24,23 @@ void copyBuffer(const vk::raii::Device& device,
                 const vk::raii::CommandPool& commandPool,
                 const vk::DeviceSize& size)
 {
-    vk::CommandBufferAllocateInfo allocInfo{.commandPool = commandPool,
-                                            .level = vk::CommandBufferLevel::ePrimary,
-                                            .commandBufferCount = 1};
-    vk::raii::CommandBuffer commandCopyBuffer =
-        std::move(device.allocateCommandBuffers(allocInfo).front());
+    auto allocInfo = vk::CommandBufferAllocateInfo{};
+    allocInfo.commandPool = *commandPool;
+    allocInfo.commandBufferCount = 1;
+    allocInfo.level = vk::CommandBufferLevel::ePrimary;
 
-    commandCopyBuffer.begin(
-        vk::CommandBufferBeginInfo{.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-    commandCopyBuffer.copyBuffer(source, destination, vk::BufferCopy(0, 0, size));
+    auto commandCopyBuffer = std::move(device.allocateCommandBuffers(allocInfo).front());
+
+    auto commandBufferBeginInfo = vk::CommandBufferBeginInfo{};
+    commandBufferBeginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+    commandCopyBuffer.begin(commandBufferBeginInfo);
+    commandCopyBuffer.copyBuffer(*source, *destination, vk::BufferCopy(0, 0, size));
     commandCopyBuffer.end();
-    graphicsQueue.submit(
-        vk::SubmitInfo{.commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer}, nullptr);
+
+    auto graphicsSubmitInfo = vk::SubmitInfo{};
+    graphicsSubmitInfo.commandBufferCount = 1;
+    graphicsSubmitInfo.pCommandBuffers = &*commandCopyBuffer;
+    graphicsQueue.submit(graphicsSubmitInfo, nullptr);
     graphicsQueue.waitIdle();
 }
 } // namespace renderer

@@ -52,6 +52,12 @@ find_program(SLANGC_EXECUTABLE
 # -------------------------
 # Project modules
 # -------------------------
+add_subdirectory(pch)
+if (TARGET pch)
+    message(STATUS "pch target exists: YES")
+else()
+    message(FATAL_ERROR "pch target exists: NO")
+endif()
 add_subdirectory(src/core)
 add_subdirectory(src/renderer)
 add_subdirectory(src/main)

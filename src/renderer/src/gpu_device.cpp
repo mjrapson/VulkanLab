@@ -9,9 +9,7 @@
 
 namespace renderer
 {
-const auto deviceExtensions = std::vector<const char*>{
-    vk::KHRSwapchainExtensionName, vk::KHRSpirv14ExtensionName,
-    vk::KHRSynchronization2ExtensionName, vk::KHRCreateRenderpass2ExtensionName};
+const auto deviceExtensions = std::vector<const char*>{vk::KHRSwapchainExtensionName};
 
 bool isDiscreteGpu(const vk::raii::PhysicalDevice& device)
 {
@@ -23,10 +21,11 @@ bool supportsGraphicsQueue(const vk::QueueFamilyProperties& properties)
     return (properties.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0);
 }
 
-bool supportsSurfacePresentation(uint32_t index, const vk::raii::PhysicalDevice& device,
+bool supportsSurfacePresentation(uint32_t index,
+                                 const vk::raii::PhysicalDevice& device,
                                  const vk::raii::SurfaceKHR& surface)
 {
-    return (device.getSurfaceSupportKHR(index, surface) == VK_TRUE);
+    return (device.getSurfaceSupportKHR(index, *surface) == VK_TRUE);
 }
 
 uint32_t getGraphicsQueueFamilyIndex(const vk::raii::PhysicalDevice& device)
@@ -49,7 +48,7 @@ uint32_t getSurfacePresentationQueueFamilyIndex(const vk::raii::PhysicalDevice& 
     const auto& queueFamilyProperties = device.getQueueFamilyProperties();
 
     const auto itr = std::ranges::find_if(queueFamilyProperties,
-                                          [&device, &surface, idx = size_t{0}](const auto&) mutable
+                                          [&device, &surface, idx = uint32_t{0}](const auto&) mutable
                                           {
                                               const auto validQueueFamilyProperty =
                                                   supportsSurfacePresentation(idx, device, surface);
@@ -135,26 +134,35 @@ void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
         getSurfacePresentationQueueFamilyIndex(physicalDevice_, surface);
 
     auto queuePriority = 0.5f;
-    const auto deviceQueueCreateInfo =
-        vk::DeviceQueueCreateInfo{.queueFamilyIndex = graphicsQueueFamilyIndex_,
-                                  .queueCount = 1,
-                                  .pQueuePriorities = &queuePriority};
+    auto deviceQueueCreateInfo = vk::DeviceQueueCreateInfo{};
+    deviceQueueCreateInfo.queueFamilyIndex = graphicsQueueFamilyIndex_;
+    deviceQueueCreateInfo.queueCount = 1;
+    deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
 
-    const auto featureChain =
-        vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
-                           vk::PhysicalDeviceVulkan13Features,
-                           vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>{
-            {},
-            {.shaderDrawParameters = true},
-            {.synchronization2 = true, .dynamicRendering = true},
-            {.extendedDynamicState = true}};
+    auto deviceFeatures = vk::PhysicalDeviceFeatures2{};
 
-    const auto deviceCreateInfo = vk::DeviceCreateInfo{
-        .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
-        .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &deviceQueueCreateInfo,
-        .enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size()),
-        .ppEnabledExtensionNames = deviceExtensions.data()};
+    auto vulkan11Features = vk::PhysicalDeviceVulkan11Features{};
+    vulkan11Features.shaderDrawParameters = true;
+
+    auto vulkan13Features = vk::PhysicalDeviceVulkan13Features{};
+    vulkan13Features.synchronization2 = true;
+    vulkan13Features.dynamicRendering = true;
+
+    auto extendedDynamicStateFeatures = vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{};
+    extendedDynamicStateFeatures.extendedDynamicState = true;
+
+    auto featureChain = vk::StructureChain<vk::PhysicalDeviceFeatures2,
+                                           vk::PhysicalDeviceVulkan11Features,
+                                           vk::PhysicalDeviceVulkan13Features,
+                                           vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>{
+        deviceFeatures, vulkan11Features, vulkan13Features, extendedDynamicStateFeatures};
+
+    auto deviceCreateInfo = vk::DeviceCreateInfo{};
+    deviceCreateInfo.pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>();
+    deviceCreateInfo.queueCreateInfoCount = 1;
+    deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
+    deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+    deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
     device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
     graphicsQueue_ = vk::raii::Queue(device_, graphicsQueueFamilyIndex_, 0);
@@ -168,8 +176,8 @@ bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
 
     if (properties.apiVersion < VK_API_VERSION_1_3)
     {
-        spdlog::info("Skipping {} - Vulkan API version too low ({})", deviceName,
-                     properties.apiVersion);
+        spdlog::info(
+            "Skipping {} - Vulkan API version too low ({})", deviceName, properties.apiVersion);
         return false;
     }
 
@@ -184,11 +192,13 @@ bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
     for (const auto& requiredExtension : deviceExtensions)
     {
         if (std::ranges::none_of(
-                extensionProperties, [&requiredExtension](auto const& extension)
+                extensionProperties,
+                [&requiredExtension](auto const& extension)
                 { return strcmp(extension.extensionName, requiredExtension) == 0; }))
         {
             hasAllRequiredExtensions = false;
-            spdlog::info("Skipping {} - Does not support required device extension: {}", deviceName,
+            spdlog::info("Skipping {} - Does not support required device extension: {}",
+                         deviceName,
                          requiredExtension);
         }
     }
@@ -222,4 +232,4 @@ GpuDevice::selectBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices
 
     return devices.at(0);
 }
-}
+} // namespace renderer

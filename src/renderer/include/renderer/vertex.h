@@ -5,7 +5,6 @@
 
 #include <glm/glm.hpp>
 
-#define VULKAN_HPP_NO_CONSTRUCTORS
 #include <vulkan/vulkan_raii.hpp>
 
 #include <array>
@@ -19,27 +18,30 @@ struct Vertex
 
     static vk::VertexInputBindingDescription bindingDescription()
     {
-        return vk::VertexInputBindingDescription{
-            .binding = 0,
-            .stride = sizeof(Vertex),
-            .inputRate = vk::VertexInputRate::eVertex,
-        };
+        auto bindingDescription = vk::VertexInputBindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = vk::VertexInputRate::eVertex;
+
+        return bindingDescription;
     }
 
     static std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions()
     {
-        return {vk::VertexInputAttributeDescription{
-                    .location = 0,
-                    .binding = 0,
-                    .format = vk::Format::eR32G32Sfloat,
-                    .offset = offsetof(Vertex, position),
-                },
-                vk::VertexInputAttributeDescription{
-                    .location = 1,
-                    .binding = 0,
-                    .format = vk::Format::eR32G32B32Sfloat,
-                    .offset = offsetof(Vertex, color),
-                }};
+        auto positionAttribute = vk::VertexInputAttributeDescription{};
+        positionAttribute.location = 0;
+        positionAttribute.binding = 0;
+        positionAttribute.format = vk::Format::eR32G32Sfloat;
+        positionAttribute.offset = offsetof(Vertex, position);
+
+        auto colorAttribute = vk::VertexInputAttributeDescription{};
+        colorAttribute.location = 1;
+        colorAttribute.binding = 0;
+        colorAttribute.format = vk::Format::eR32G32B32Sfloat;
+        colorAttribute.offset = offsetof(Vertex, color);
+
+        return std::array<vk::VertexInputAttributeDescription, 2>{positionAttribute,
+                                                                  colorAttribute};
     }
 };
 } // namespace renderer

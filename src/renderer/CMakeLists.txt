@@ -26,4 +26,7 @@ target_link_libraries(Renderer
     Core
     spdlog
     Vulkan::Vulkan
+    pch
 )
+
+target_precompile_headers(Renderer REUSE_FROM pch)

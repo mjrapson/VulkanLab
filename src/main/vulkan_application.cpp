@@ -6,7 +6,6 @@
 #include <renderer/gpu_device.h>
 #include <renderer/renderer.h>
 
-#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <spdlog/spdlog.h>
@@ -214,11 +213,12 @@ void VulkanApplication::createInstance()
 
     const auto validationLayers = std::vector<char const*>{"VK_LAYER_KHRONOS_validation"};
 
-    constexpr auto appInfo = vk::ApplicationInfo{.pApplicationName = "Vulkan Demo",
-                                                 .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-                                                 .pEngineName = "Vulkan Demo Engine",
-                                                 .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-                                                 .apiVersion = vk::ApiVersion14};
+    auto appInfo = vk::ApplicationInfo{};
+    appInfo.pApplicationName = "Vulkan Demo";
+    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.pEngineName = "Vulkan Demo Engine";
+    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.apiVersion = vk::ApiVersion14;
 
     if (!validateExtensions(extensions, context_))
     {
@@ -230,12 +230,12 @@ void VulkanApplication::createInstance()
         throw std::runtime_error("Requested validation layers not available");
     }
 
-    auto createInfo =
-        vk::InstanceCreateInfo{.pApplicationInfo = &appInfo,
-                               .enabledLayerCount = static_cast<uint32_t>(validationLayers.size()),
-                               .ppEnabledLayerNames = validationLayers.data(),
-                               .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
-                               .ppEnabledExtensionNames = extensions.data()};
+    auto createInfo = vk::InstanceCreateInfo{};
+    createInfo.pApplicationInfo = &appInfo;
+    createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+    createInfo.ppEnabledLayerNames = validationLayers.data();
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    createInfo.ppEnabledExtensionNames = extensions.data();
 
     instance_ = vk::raii::Instance(context_, createInfo);
 }
@@ -249,12 +249,12 @@ void VulkanApplication::createDebugMessenger()
                                    | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
                                    | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
 
-    const auto debugUtilsMessengerCreateInfoEXT =
-        vk::DebugUtilsMessengerCreateInfoEXT{.messageSeverity = severityFlags,
-                                             .messageType = messageTypeFlags,
-                                             .pfnUserCallback = &debugCallback};
+    auto debugCreateInfo = vk::DebugUtilsMessengerCreateInfoEXT{};
+    debugCreateInfo.messageSeverity = severityFlags;
+    debugCreateInfo.messageType = messageTypeFlags;
+    debugCreateInfo.pfnUserCallback = &debugCallback;
 
-    debugMessenger_ = instance_.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
+    debugMessenger_ = instance_.createDebugUtilsMessengerEXT(debugCreateInfo);
 }
 
 void VulkanApplication::createSurface()

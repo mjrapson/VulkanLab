@@ -42,10 +42,9 @@ vk::raii::DeviceMemory allocateBufferMemory(const vk::raii::Device& device,
                                             vk::MemoryPropertyFlags properties)
 {
     const auto memoryRequirements = buffer.getMemoryRequirements();
-    const auto memoryAllocateInfo =
-        vk::MemoryAllocateInfo{.allocationSize = memoryRequirements.size,
-                               .memoryTypeIndex = findMemoryType(
-                                   physicalDevice, memoryRequirements.memoryTypeBits, properties)};
+    const auto memoryAllocateInfo = vk::MemoryAllocateInfo{
+        memoryRequirements.size,
+        findMemoryType(physicalDevice, memoryRequirements.memoryTypeBits, properties)};
 
     auto memory = vk::raii::DeviceMemory(device, memoryAllocateInfo);
     buffer.bindMemory(*memory, 0);
