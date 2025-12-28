@@ -16,9 +16,12 @@ namespace renderer
 {
 constexpr auto maxFramesInFlight = 2;
 
-const auto vertices = std::vector<renderer::Vertex>{{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                                                    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-                                                    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+const std::vector<renderer::Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                                {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+                                                {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+                                                {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+
+const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
 
 vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities,
                                 int windowWidth,
@@ -130,6 +133,9 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
     spdlog::info("Creating vertex buffers");
     createVertexBuffer();
+
+    spdlog::info("Creating index buffer");
+    createIndexBuffer();
 
     spdlog::info("Creating command buffers");
     createCommandBuffers();
@@ -403,6 +409,44 @@ void Renderer::createVertexBuffer()
                bufferSize);
 }
 
+void Renderer::createIndexBuffer()
+{
+    const auto bufferSize = sizeof(uint16_t) * indices.size();
+
+    auto stagingBuffer = createBuffer(gpuDevice_.device(),
+                                      bufferSize,
+                                      vk::BufferUsageFlagBits::eTransferSrc,
+                                      vk::SharingMode::eExclusive);
+
+    auto stagingBufferMemory = allocateBufferMemory(
+        gpuDevice_.device(),
+        gpuDevice_.physicalDevice(),
+        stagingBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
+    memcpy(dataStaging, indices.data(), bufferSize);
+    stagingBufferMemory.unmapMemory();
+
+    indexBuffer_ =
+        createBuffer(gpuDevice_.device(),
+                     bufferSize,
+                     vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+                     vk::SharingMode::eExclusive);
+
+    indexBufferMemory_ = allocateBufferMemory(gpuDevice_.device(),
+                                              gpuDevice_.physicalDevice(),
+                                              indexBuffer_,
+                                              vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+    copyBuffer(gpuDevice_.device(),
+               stagingBuffer,
+               indexBuffer_,
+               gpuDevice_.graphicsQueue(),
+               commandPool_,
+               bufferSize);
+}
+
 void Renderer::createCommandBuffers()
 {
     const auto allocInfo = vk::CommandBufferAllocateInfo{.commandPool = commandPool_,
@@ -474,6 +518,7 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
     commandBuffer.beginRendering(renderingInfo);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline_);
     commandBuffer.bindVertexBuffers(0, *vertexBuffer_, {0});
+    commandBuffer.bindIndexBuffer(*indexBuffer_, 0, vk::IndexType::eUint16);
 
     commandBuffer.setViewport(0,
                               vk::Viewport(0.0f,
@@ -484,7 +529,7 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
                                            1.0f));
     commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
 
-    commandBuffer.draw(vertices.size(), 1, 0, 0);
+    commandBuffer.drawIndexed(indices.size(), 1, 0, 0, 0);
 
     commandBuffer.endRendering();
 

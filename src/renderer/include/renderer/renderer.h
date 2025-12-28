@@ -34,6 +34,7 @@ class Renderer
     void createGraphicsPipeline();
     void createCommandPool();
     void createVertexBuffer();
+    void createIndexBuffer();
     void createCommandBuffers();
     void createSyncObjects();
 
@@ -66,5 +67,7 @@ class Renderer
 
     vk::raii::Buffer vertexBuffer_{nullptr};
     vk::raii::DeviceMemory vertexBufferMemory_{nullptr};
+    vk::raii::Buffer indexBuffer_{nullptr};
+    vk::raii::DeviceMemory indexBufferMemory_{nullptr};
 };
 } // namespace renderer
