@@ -15,6 +15,7 @@ target_include_directories(VulkanDemo
 target_link_libraries(VulkanDemo
     PRIVATE
     Core
+    Assets
     Renderer
     glfw
     spdlog

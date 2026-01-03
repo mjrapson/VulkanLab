@@ -15,6 +15,7 @@ BreakAfterOpenBracketBracedList: true
 BreakAfterOpenBracketFunction: true
 BreakBeforeBinaryOperators: NonAssignment
 BreakBeforeBraces: Allman
+BreakTemplateDeclarations: Yes
 BraceWrapping:
   AfterClass: true
   AfterEnum: true

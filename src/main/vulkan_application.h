@@ -8,6 +8,11 @@
 #include <memory>
 #include <string>
 
+namespace assets
+{
+class AssetDatabase;
+}
+
 namespace renderer
 {
 class GpuDevice;
@@ -47,4 +52,5 @@ class VulkanApplication
 
     std::unique_ptr<renderer::GpuDevice> gpuDevice_{nullptr};
     std::unique_ptr<renderer::Renderer> renderer_{nullptr};
+    std::unique_ptr<assets::AssetDatabase> assetDatabase_{nullptr};
 };

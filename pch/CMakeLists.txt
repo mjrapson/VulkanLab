@@ -24,6 +24,7 @@ target_precompile_headers(pch PUBLIC
     <ranges>
     <span>
     <stdexcept>
+    <stdint.h>
     <string>
     <tuple>
     <unordered_map>

@@ -3,6 +3,7 @@
 
 #include "vulkan_application.h"
 
+#include <assets/asset_database.h>
 #include <renderer/gpu_device.h>
 #include <renderer/renderer.h>
 
@@ -93,7 +94,9 @@ static vk::Bool32 debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severit
     return VK_TRUE;
 }
 
-VulkanApplication::VulkanApplication() {}
+VulkanApplication::VulkanApplication() : assetDatabase_{std::make_unique<assets::AssetDatabase>()}
+{
+}
 
 VulkanApplication::~VulkanApplication()
 {
