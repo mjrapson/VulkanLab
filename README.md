@@ -30,7 +30,10 @@ cmake --build build
 ./build/Release/bin/VulkanDemo
 ```
 
-# Dependencies
+## License
+This project is licensed under the MIT license (see [LICENSE](LICENSE))
+
+This project makes use of the following 3rd party libraries:
 - GLFW
 - glm
 - spdlog
