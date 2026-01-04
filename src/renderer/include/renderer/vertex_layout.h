@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <core/vertex.h>
+
 #include <glm/glm.hpp>
 
 #include <vulkan/vulkan_raii.hpp>
@@ -11,16 +13,13 @@
 
 namespace renderer
 {
-struct Vertex
+struct VertexLayout
 {
-    glm::vec2 position;
-    glm::vec3 color;
-
     static vk::VertexInputBindingDescription bindingDescription()
     {
         auto bindingDescription = vk::VertexInputBindingDescription{};
         bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.stride = sizeof(core::Vertex);
         bindingDescription.inputRate = vk::VertexInputRate::eVertex;
 
         return bindingDescription;
@@ -32,13 +31,13 @@ struct Vertex
         positionAttribute.location = 0;
         positionAttribute.binding = 0;
         positionAttribute.format = vk::Format::eR32G32Sfloat;
-        positionAttribute.offset = offsetof(Vertex, position);
+        positionAttribute.offset = offsetof(core::Vertex, position);
 
         auto colorAttribute = vk::VertexInputAttributeDescription{};
         colorAttribute.location = 1;
         colorAttribute.binding = 0;
         colorAttribute.format = vk::Format::eR32G32B32Sfloat;
-        colorAttribute.offset = offsetof(Vertex, color);
+        colorAttribute.offset = offsetof(core::Vertex, color);
 
         return std::array<vk::VertexInputAttributeDescription, 2>{positionAttribute,
                                                                   colorAttribute};

@@ -4,7 +4,7 @@ target_sources(Renderer
     PUBLIC
         include/renderer/gpu_device.h
         include/renderer/renderer.h
-        include/renderer/vertex.h
+        include/renderer/vertex_layout.h
     PRIVATE
         src/private/buffer.cpp
         src/private/buffer.h
@@ -23,10 +23,10 @@ target_include_directories(Renderer
 
 target_link_libraries(Renderer
     PRIVATE
-    Core
-    spdlog
-    Vulkan::Vulkan
-    pch
+        Core
+        spdlog
+        Vulkan::Vulkan
+        pch
 )
 
 target_precompile_headers(Renderer REUSE_FROM pch)

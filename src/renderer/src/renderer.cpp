@@ -4,7 +4,7 @@
 #include "private/memory.h"
 #include "private/shader.h"
 #include "renderer/gpu_device.h"
-#include "renderer/vertex.h"
+#include "renderer/vertex_layout.h"
 
 #include <core/file_system.h>
 
@@ -20,10 +20,10 @@ namespace renderer
 {
 constexpr auto maxFramesInFlight = 2;
 
-const std::vector<renderer::Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                                                {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-                                                {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-                                                {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+const std::vector<core::Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                            {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+                                            {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+                                            {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
 
 const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
 
@@ -340,8 +340,8 @@ void Renderer::createGraphicsPipeline()
     vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
     // Fixed function stages
-    const auto bindingDescriptions = Vertex::bindingDescription();
-    const auto attributeDescriptions = Vertex::attributeDescriptions();
+    const auto bindingDescriptions = VertexLayout::bindingDescription();
+    const auto attributeDescriptions = VertexLayout::attributeDescriptions();
     auto vertexInputInfo = vk::PipelineVertexInputStateCreateInfo{};
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescriptions;
@@ -428,7 +428,7 @@ void Renderer::createCommandPool()
 
 void Renderer::createVertexBuffer()
 {
-    const auto bufferSize = sizeof(Vertex) * vertices.size();
+    const auto bufferSize = sizeof(core::Vertex) * vertices.size();
 
     auto stagingBuffer = createBuffer(gpuDevice_.device(),
                                       bufferSize,
