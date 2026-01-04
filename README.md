@@ -38,3 +38,4 @@ This project makes use of the following 3rd party libraries:
 - glm
 - spdlog
 - stb
+- tinygltf

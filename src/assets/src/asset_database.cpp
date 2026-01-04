@@ -25,8 +25,7 @@ AssetHandle<Prefab> AssetDatabase::addPrefab(Prefab&& prefab)
     return prefabs_.add(std::move(prefab));
 }
 
-std::optional<std::reference_wrapper<const Image>>
-AssetDatabase::getImage(const AssetHandle<Image>& handle) const
+std::optional<std::reference_wrapper<const Image>> AssetDatabase::getImage(const AssetHandle<Image>& handle) const
 {
     return images_.get(handle);
 }
@@ -37,16 +36,29 @@ AssetDatabase::getMaterial(const AssetHandle<Material>& handle) const
     return materials_.get(handle);
 }
 
-std::optional<std::reference_wrapper<const Mesh>>
-AssetDatabase::getMesh(const AssetHandle<Mesh>& handle) const
+std::optional<std::reference_wrapper<const Mesh>> AssetDatabase::getMesh(const AssetHandle<Mesh>& handle) const
 {
     return meshes_.get(handle);
 }
 
-std::optional<std::reference_wrapper<const Prefab>>
-AssetDatabase::getPrefab(const AssetHandle<Prefab>& handle) const
+std::optional<std::reference_wrapper<const Prefab>> AssetDatabase::getPrefab(const AssetHandle<Prefab>& handle) const
 {
     return prefabs_.get(handle);
+}
+
+const AssetStorage<Image>& AssetDatabase::images() const
+{
+    return images_;
+}
+
+const AssetStorage<Material>& AssetDatabase::materials() const
+{
+    return materials_;
+}
+
+const AssetStorage<Mesh>& AssetDatabase::meshes() const
+{
+    return meshes_;
 }
 
 void AssetDatabase::clear()

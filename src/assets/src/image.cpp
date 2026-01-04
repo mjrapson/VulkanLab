@@ -6,7 +6,9 @@
 namespace assets
 {
 Image::Image(uint32_t width, uint32_t height, std::vector<std::byte>&& data)
-    : width_{width}, height_{height}, data_{std::move(data)}
+    : width_{width},
+      height_{height},
+      data_{std::move(data)}
 {
 }
 

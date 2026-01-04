@@ -14,9 +14,7 @@ bool matchingMemoryIndex(uint32_t memoryIndex, uint32_t filter)
 }
 
 [[nodiscard]]
-uint32_t findMemoryType(const vk::raii::PhysicalDevice& device,
-                        uint32_t typeFilter,
-                        vk::MemoryPropertyFlags properties)
+uint32_t findMemoryType(const vk::raii::PhysicalDevice& device, uint32_t typeFilter, vk::MemoryPropertyFlags properties)
 {
 
     const auto memoryProperties = device.getMemoryProperties();
@@ -50,5 +48,31 @@ vk::raii::DeviceMemory allocateBufferMemory(const vk::raii::Device& device,
     buffer.bindMemory(*memory, 0);
 
     return memory;
+}
+
+vk::raii::DeviceMemory allocateImageMemory(const vk::raii::Device& device,
+                                           const vk::raii::PhysicalDevice& physicalDevice,
+                                           const vk::raii::Image& image,
+                                           vk::MemoryPropertyFlags properties)
+{
+    const auto memRequirements = image.getMemoryRequirements();
+    const auto memoryAllocateInfo = vk::MemoryAllocateInfo{
+        memRequirements.size,
+        findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties)};
+
+    auto memory = vk::raii::DeviceMemory{device, memoryAllocateInfo};
+    image.bindMemory(*memory, 0);
+
+    return memory;
+}
+
+vk::DeviceSize alignMemory(vk::DeviceSize data, vk::DeviceSize alignment)
+{
+    if(data < alignment || data == alignment)
+    {
+        return alignment;
+    }
+
+    return data + (alignment - (data % alignment));
 }
 } // namespace renderer

@@ -23,14 +23,18 @@ class GpuDevice
     const vk::raii::Queue& graphicsQueue() const;
     const vk::raii::Queue& presentQueue() const;
     uint32_t graphicsQueueFamilyIndex() const;
+    const vk::raii::DescriptorPool& descriptorPool() const;
+    const vk::raii::CommandPool& commandPool() const;
+    int maxFramesInFlight() const;
 
   private:
     void pickPhysicalDevice(const vk::raii::Instance& instance);
     void createLogicalDevice(const vk::raii::SurfaceKHR& surface);
+    void createDescriptorPool();
+    void createCommandPool();
 
     bool isDeviceSuitable(vk::raii::PhysicalDevice device) const;
-    vk::raii::PhysicalDevice
-    selectBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices) const;
+    vk::raii::PhysicalDevice selectBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices) const;
 
   private:
     vk::raii::Device device_{nullptr};
@@ -38,5 +42,7 @@ class GpuDevice
     vk::raii::Queue graphicsQueue_{nullptr};
     vk::raii::Queue presentQueue_{nullptr};
     uint32_t graphicsQueueFamilyIndex_;
+    vk::raii::CommandPool commandPool_{nullptr};
+    vk::raii::DescriptorPool descriptorPool_{nullptr};
 };
-}
+} // namespace renderer

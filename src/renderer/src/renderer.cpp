@@ -1,9 +1,11 @@
 #include "renderer/renderer.h"
 
 #include "private/buffer.h"
+#include "private/image.h"
 #include "private/memory.h"
 #include "private/shader.h"
 #include "renderer/gpu_device.h"
+#include "renderer/gpu_material.h"
 #include "renderer/vertex_layout.h"
 
 #include <core/file_system.h>
@@ -20,13 +22,6 @@ namespace renderer
 {
 constexpr auto maxFramesInFlight = 2;
 
-const std::vector<core::Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                                            {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-                                            {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-                                            {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
-
-const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
-
 struct UniformBufferObject
 {
     glm::mat4 model;
@@ -34,20 +29,15 @@ struct UniformBufferObject
     glm::mat4 projection;
 };
 
-vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities,
-                                int windowWidth,
-                                int windowHeight)
+vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth, int windowHeight)
 {
     if (capabilities.currentExtent.width != 0xFFFFFFFF)
     {
         return capabilities.currentExtent;
     }
 
-    return {std::clamp<uint32_t>(
-                windowWidth, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-            std::clamp<uint32_t>(windowHeight,
-                                 capabilities.minImageExtent.height,
-                                 capabilities.maxImageExtent.height)};
+    return {std::clamp<uint32_t>(windowWidth, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+            std::clamp<uint32_t>(windowHeight, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)};
 }
 
 uint32_t getSurfaceMinImageCount(const vk::SurfaceCapabilitiesKHR& surfaceCapabilities)
@@ -64,12 +54,10 @@ uint32_t getSurfaceMinImageCount(const vk::SurfaceCapabilitiesKHR& surfaceCapabi
 
 bool isPreferredSurfaceFormat(const vk::SurfaceFormatKHR& format)
 {
-    return format.format == vk::Format::eB8G8R8A8Srgb
-           && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+    return format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
 }
 
-vk::SurfaceFormatKHR getSurfaceFormat(const vk::PhysicalDevice& device,
-                                      const vk::SurfaceKHR& surface)
+vk::SurfaceFormatKHR getSurfaceFormat(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface)
 {
     const auto formats = device.getSurfaceFormatsKHR(surface);
 
@@ -84,41 +72,6 @@ vk::SurfaceFormatKHR getSurfaceFormat(const vk::PhysicalDevice& device,
     }
 
     return formats.at(0);
-}
-
-void transitionImageLayout(const vk::Image& image,
-                           const vk::raii::CommandBuffer& commandBuffer,
-                           vk::ImageLayout oldLayout,
-                           vk::ImageLayout newLayout,
-                           vk::AccessFlags2 srcAccessMask,
-                           vk::AccessFlags2 dstAccessMask,
-                           vk::PipelineStageFlags2 srcStageMask,
-                           vk::PipelineStageFlags2 dstStageMask)
-{
-    auto subresourceRange = vk::ImageSubresourceRange{};
-    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = 1;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = 1;
-
-    auto barrier = vk::ImageMemoryBarrier2{};
-    barrier.srcStageMask = srcStageMask;
-    barrier.srcAccessMask = srcAccessMask;
-    barrier.dstStageMask = dstStageMask;
-    barrier.dstAccessMask = dstAccessMask;
-    barrier.oldLayout = oldLayout;
-    barrier.newLayout = newLayout;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange = subresourceRange;
-
-    auto dependencyInfo = vk::DependencyInfo{};
-    dependencyInfo.imageMemoryBarrierCount = 1;
-    dependencyInfo.pImageMemoryBarriers = &barrier;
-
-    commandBuffer.pipelineBarrier2(dependencyInfo);
 }
 
 Renderer::Renderer(const vk::raii::Instance& instance,
@@ -138,29 +91,8 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     spdlog::info("Creating swapchain image views");
     createSwapchainImageViews();
 
-    spdlog::info("Creating descriptor set layout");
-    createDescriptorSetLayout();
-
     spdlog::info("Creating graphics pipeline");
     createGraphicsPipeline();
-
-    spdlog::info("Creating command pool");
-    createCommandPool();
-
-    spdlog::info("Creating vertex buffers");
-    createVertexBuffer();
-
-    spdlog::info("Creating index buffer");
-    createIndexBuffer();
-
-    spdlog::info("Creating uniform buffers");
-    createUniformBuffers();
-
-    spdlog::info("Creating descriptor pool");
-    createDescriptorPool();
-
-    spdlog::info("Creating descriptor sets");
-    createDescriptorSets();
 
     spdlog::info("Creating command buffers");
     createCommandBuffers();
@@ -182,8 +114,9 @@ void Renderer::renderFrame()
 
     try
     {
-        std::tie(result, imageIndex) = swapchain_.acquireNextImage(
-            UINT64_MAX, *presentCompleteSemaphores_.at(currentFrameIndex_), nullptr);
+        std::tie(result, imageIndex) = swapchain_.acquireNextImage(UINT64_MAX,
+                                                                   *presentCompleteSemaphores_.at(currentFrameIndex_),
+                                                                   nullptr);
     }
     catch (const vk::OutOfDateKHRError&)
     {
@@ -196,10 +129,9 @@ void Renderer::renderFrame()
 
     recordCommands(imageIndex, commandBuffer);
 
-    updateUniformBuffer(currentFrameIndex_);
+    // updateUniformBuffer(currentFrameIndex_);
 
-    const auto waitDestinationStageMask =
-        vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    const auto waitDestinationStageMask = vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
     auto submitInfo = vk::SubmitInfo{};
     submitInfo.waitSemaphoreCount = 1;
@@ -258,8 +190,7 @@ void Renderer::windowResized(int width, int height)
 
 void Renderer::createSwapchain()
 {
-    const auto surfaceCapabilities =
-        gpuDevice_.physicalDevice().getSurfaceCapabilitiesKHR(*surface_);
+    const auto surfaceCapabilities = gpuDevice_.physicalDevice().getSurfaceCapabilitiesKHR(*surface_);
     swapchainExtent_ = getSwapchainExtent(surfaceCapabilities, windowWidth_, windowHeight_);
     surfaceFormat_ = getSurfaceFormat(*gpuDevice_.physicalDevice(), *surface_);
 
@@ -302,30 +233,16 @@ void Renderer::createSwapchainImageViews()
     }
 }
 
-void Renderer::createDescriptorSetLayout()
-{
-    auto uboLayoutBinding = vk::DescriptorSetLayoutBinding{};
-    uboLayoutBinding.binding = 0;
-    uboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-    uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
-    uboLayoutBinding.pImmutableSamplers = nullptr;
-
-    auto layoutInfo = vk::DescriptorSetLayoutCreateInfo{};
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &uboLayoutBinding;
-
-    descriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), layoutInfo);
-}
-
 void Renderer::createGraphicsPipeline()
 {
-    // Shader-progammable stages
-    auto vertexShaderModule = createShaderModule(
-        gpuDevice_.device(), core::readBinaryFile(core::getShaderDir() / "basic.vert.spv"));
+    materialDescriptorSetLayout_ = GpuMaterial::createDescriptorSetLayout(gpuDevice_.device());
 
-    auto fragmentShaderModule = createShaderModule(
-        gpuDevice_.device(), core::readBinaryFile(core::getShaderDir() / "basic.frag.spv"));
+    // Shader-progammable stages
+    auto vertexShaderModule = createShaderModule(gpuDevice_.device(),
+                                                 core::readBinaryFile(core::getShaderDir() / "basic.vert.spv"));
+
+    auto fragmentShaderModule = createShaderModule(gpuDevice_.device(),
+                                                   core::readBinaryFile(core::getShaderDir() / "basic.frag.spv"));
 
     auto vertShaderStageInfo = vk::PipelineShaderStageCreateInfo{};
     vertShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
@@ -351,8 +268,7 @@ void Renderer::createGraphicsPipeline()
     auto inputAssembly = vk::PipelineInputAssemblyStateCreateInfo{};
     inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
 
-    const auto dynamicStates =
-        std::vector<vk::DynamicState>{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+    const auto dynamicStates = std::vector<vk::DynamicState>{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
 
     auto dynamicState = vk::PipelineDynamicStateCreateInfo{};
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
@@ -378,9 +294,8 @@ void Renderer::createGraphicsPipeline()
 
     auto colorBlendAttachment = vk::PipelineColorBlendAttachmentState{};
     colorBlendAttachment.blendEnable = vk::False;
-    colorBlendAttachment.colorWriteMask =
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG
-        | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+    colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG
+                                          | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
 
     auto colorBlending = vk::PipelineColorBlendStateCreateInfo{};
     colorBlending.logicOpEnable = vk::False;
@@ -390,7 +305,7 @@ void Renderer::createGraphicsPipeline()
 
     auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo{};
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &*descriptorSetLayout_;
+    pipelineLayoutInfo.pSetLayouts = &*materialDescriptorSetLayout_;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
 
     pipelineLayout_ = vk::raii::PipelineLayout(gpuDevice_.device(), pipelineLayoutInfo);
@@ -417,170 +332,43 @@ void Renderer::createGraphicsPipeline()
     graphicsPipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
 }
 
-void Renderer::createCommandPool()
-{
-    auto poolInfo = vk::CommandPoolCreateInfo{};
-    poolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-    poolInfo.queueFamilyIndex = gpuDevice_.graphicsQueueFamilyIndex();
+// void Renderer::createDescriptorSets()
+// {
+//     descriptorSets_.clear();
 
-    commandPool_ = vk::raii::CommandPool(gpuDevice_.device(), poolInfo);
-}
+//     auto layouts = std::vector<vk::DescriptorSetLayout>(maxFramesInFlight,
+//     *descriptorSetLayout_);
 
-void Renderer::createVertexBuffer()
-{
-    const auto bufferSize = sizeof(core::Vertex) * vertices.size();
+//     auto allocInfo = vk::DescriptorSetAllocateInfo{};
+//     allocInfo.descriptorPool = descriptorPool_;
+//     allocInfo.descriptorSetCount = static_cast<uint32_t>(layouts.size());
+//     allocInfo.pSetLayouts = layouts.data();
 
-    auto stagingBuffer = createBuffer(gpuDevice_.device(),
-                                      bufferSize,
-                                      vk::BufferUsageFlagBits::eTransferSrc,
-                                      vk::SharingMode::eExclusive);
+//     descriptorSets_ = gpuDevice_.device().allocateDescriptorSets(allocInfo);
 
-    auto stagingBufferMemory = allocateBufferMemory(
-        gpuDevice_.device(),
-        gpuDevice_.physicalDevice(),
-        stagingBuffer,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+//     for ([[maybe_unused]] auto frameIndex : std::views::repeat(0, maxFramesInFlight))
+//     {
+//         auto bufferInfo = vk::DescriptorBufferInfo{};
+//         bufferInfo.buffer = uniformBuffers_.at(frameIndex);
+//         bufferInfo.offset = 0;
+//         bufferInfo.range = sizeof(UniformBufferObject);
 
-    void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
-    memcpy(dataStaging, vertices.data(), bufferSize);
-    stagingBufferMemory.unmapMemory();
+//         auto writeInfo = vk::WriteDescriptorSet{};
+//         writeInfo.dstSet = descriptorSets_.at(frameIndex);
+//         writeInfo.dstBinding = 0;
+//         writeInfo.dstArrayElement = 0;
+//         writeInfo.descriptorCount = 1;
+//         writeInfo.descriptorType = vk::DescriptorType::eUniformBuffer;
+//         writeInfo.pBufferInfo = &bufferInfo;
 
-    vertexBuffer_ =
-        createBuffer(gpuDevice_.device(),
-                     bufferSize,
-                     vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                     vk::SharingMode::eExclusive);
-
-    vertexBufferMemory_ = allocateBufferMemory(gpuDevice_.device(),
-                                               gpuDevice_.physicalDevice(),
-                                               vertexBuffer_,
-                                               vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    copyBuffer(gpuDevice_.device(),
-               stagingBuffer,
-               vertexBuffer_,
-               gpuDevice_.graphicsQueue(),
-               commandPool_,
-               bufferSize);
-}
-
-void Renderer::createIndexBuffer()
-{
-    const auto bufferSize = sizeof(uint16_t) * indices.size();
-
-    auto stagingBuffer = createBuffer(gpuDevice_.device(),
-                                      bufferSize,
-                                      vk::BufferUsageFlagBits::eTransferSrc,
-                                      vk::SharingMode::eExclusive);
-
-    auto stagingBufferMemory = allocateBufferMemory(
-        gpuDevice_.device(),
-        gpuDevice_.physicalDevice(),
-        stagingBuffer,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-    void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
-    memcpy(dataStaging, indices.data(), bufferSize);
-    stagingBufferMemory.unmapMemory();
-
-    indexBuffer_ =
-        createBuffer(gpuDevice_.device(),
-                     bufferSize,
-                     vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                     vk::SharingMode::eExclusive);
-
-    indexBufferMemory_ = allocateBufferMemory(gpuDevice_.device(),
-                                              gpuDevice_.physicalDevice(),
-                                              indexBuffer_,
-                                              vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    copyBuffer(gpuDevice_.device(),
-               stagingBuffer,
-               indexBuffer_,
-               gpuDevice_.graphicsQueue(),
-               commandPool_,
-               bufferSize);
-}
-
-void Renderer::createUniformBuffers()
-{
-    uniformBuffers_.clear();
-    uniformBuffersMemory_.clear();
-    mappedUniformBuffers_.clear();
-
-    for ([[maybe_unused]] auto _ : std::views::repeat(0, maxFramesInFlight))
-    {
-        const auto bufferSize = sizeof(UniformBufferObject);
-        auto buffer = createBuffer(gpuDevice_.device(),
-                                   bufferSize,
-                                   vk::BufferUsageFlagBits::eUniformBuffer,
-                                   vk::SharingMode::eExclusive);
-
-        auto bufferMemory = allocateBufferMemory(gpuDevice_.device(),
-                                                 gpuDevice_.physicalDevice(),
-                                                 buffer,
-                                                 vk::MemoryPropertyFlagBits::eHostVisible
-                                                     | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-        auto mappedMempory = bufferMemory.mapMemory(0, bufferSize);
-
-        uniformBuffers_.emplace_back(std::move(buffer));
-        uniformBuffersMemory_.emplace_back(std::move(bufferMemory));
-        mappedUniformBuffers_.emplace_back(std::move(mappedMempory));
-    }
-}
-
-void Renderer::createDescriptorPool()
-{
-    auto poolSize = vk::DescriptorPoolSize{};
-    poolSize.type = vk::DescriptorType::eUniformBuffer;
-    poolSize.descriptorCount = maxFramesInFlight;
-
-    auto poolInfo = vk::DescriptorPoolCreateInfo{};
-    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    poolInfo.maxSets = maxFramesInFlight;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-
-    descriptorPool_ = vk::raii::DescriptorPool(gpuDevice_.device(), poolInfo);
-}
-
-void Renderer::createDescriptorSets()
-{
-    descriptorSets_.clear();
-
-    auto layouts = std::vector<vk::DescriptorSetLayout>(maxFramesInFlight, *descriptorSetLayout_);
-
-    auto allocInfo = vk::DescriptorSetAllocateInfo{};
-    allocInfo.descriptorPool = descriptorPool_;
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(layouts.size());
-    allocInfo.pSetLayouts = layouts.data();
-
-    descriptorSets_ = gpuDevice_.device().allocateDescriptorSets(allocInfo);
-
-    for ([[maybe_unused]] auto frameIndex : std::views::repeat(0, maxFramesInFlight))
-    {
-        auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = uniformBuffers_.at(frameIndex);
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(UniformBufferObject);
-
-        auto writeInfo = vk::WriteDescriptorSet{};
-        writeInfo.dstSet = descriptorSets_.at(frameIndex);
-        writeInfo.dstBinding = 0;
-        writeInfo.dstArrayElement = 0;
-        writeInfo.descriptorCount = 1;
-        writeInfo.descriptorType = vk::DescriptorType::eUniformBuffer;
-        writeInfo.pBufferInfo = &bufferInfo;
-
-        gpuDevice_.device().updateDescriptorSets(writeInfo, {});
-    }
-}
+//         gpuDevice_.device().updateDescriptorSets(writeInfo, {});
+//     }
+// }
 
 void Renderer::createCommandBuffers()
 {
     auto allocInfo = vk::CommandBufferAllocateInfo{};
-    allocInfo.commandPool = *commandPool_;
+    allocInfo.commandPool = *gpuDevice_.commandPool();
     allocInfo.level = vk::CommandBufferLevel::ePrimary;
     allocInfo.commandBufferCount = maxFramesInFlight;
 
@@ -651,13 +439,13 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
 
     commandBuffer.beginRendering(renderingInfo);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_);
-    commandBuffer.bindVertexBuffers(0, *vertexBuffer_, {0});
-    commandBuffer.bindIndexBuffer(*indexBuffer_, 0, vk::IndexType::eUint16);
-    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                     pipelineLayout_,
-                                     0,
-                                     *descriptorSets_.at(currentFrameIndex_),
-                                     nullptr);
+    // commandBuffer.bindVertexBuffers(0, *vertexBuffer_, {0});
+    // commandBuffer.bindIndexBuffer(*indexBuffer_, 0, vk::IndexType::eUint16);
+    // commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+    //                                  pipelineLayout_,
+    //                                  0,
+    //                                  *descriptorSets_.at(currentFrameIndex_),
+    //                                  nullptr);
 
     commandBuffer.setViewport(0,
                               vk::Viewport(0.0f,
@@ -668,7 +456,7 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
                                            1.0f));
     commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
 
-    commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+    // commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
     commandBuffer.endRendering();
 
@@ -685,24 +473,24 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
     commandBuffer.end();
 }
 
-void Renderer::updateUniformBuffer(uint32_t frameIndex)
-{
-    static auto startTime = std::chrono::high_resolution_clock::now();
+// void Renderer::updateUniformBuffer(uint32_t frameIndex)
+// {
+//     static auto startTime = std::chrono::high_resolution_clock::now();
 
-    const auto currentTime = std::chrono::high_resolution_clock::now();
-    const auto time =
-        std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+//     const auto currentTime = std::chrono::high_resolution_clock::now();
+//     const auto time =
+//         std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    auto ubo = UniformBufferObject{};
-    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = lookAt(
-        glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.projection = glm::perspective(glm::radians(45.0f),
-                                      static_cast<float>(swapchainExtent_.width)
-                                          / static_cast<float>(swapchainExtent_.height),
-                                      0.1f,
-                                      10.0f);
-    ubo.projection[1][1] *= -1;
-    memcpy(mappedUniformBuffers_[frameIndex], &ubo, sizeof(ubo));
-}
+//     auto ubo = UniformBufferObject{};
+//     ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+//     ubo.view = lookAt(
+//         glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+//     ubo.projection = glm::perspective(glm::radians(45.0f),
+//                                       static_cast<float>(swapchainExtent_.width)
+//                                           / static_cast<float>(swapchainExtent_.height),
+//                                       0.1f,
+//                                       10.0f);
+//     ubo.projection[1][1] *= -1;
+//     memcpy(mappedUniformBuffers_[frameIndex], &ubo, sizeof(ubo));
+// }
 } // namespace renderer

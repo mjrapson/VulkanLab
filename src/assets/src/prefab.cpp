@@ -5,7 +5,10 @@
 
 namespace assets
 {
-Prefab::Prefab(const std::vector<AssetHandle<Mesh>>&& meshes) : meshes_{std::move(meshes)} {}
+Prefab::Prefab(const std::vector<AssetHandle<Mesh>>&& meshes)
+    : meshes_{std::move(meshes)}
+{
+}
 
 const std::vector<AssetHandle<Mesh>>& Prefab::meshes() const
 {

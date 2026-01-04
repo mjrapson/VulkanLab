@@ -19,4 +19,12 @@ void copyBuffer(const vk::raii::Device& device,
                 const vk::raii::Queue& graphicsQueue,
                 const vk::raii::CommandPool& commandPool,
                 const vk::DeviceSize& size);
+
+void copyBufferToImage(const vk::raii::Device& device,
+                       const vk::raii::Buffer& source,
+                       const vk::raii::Image& destination,
+                       const vk::raii::Queue& graphicsQueue,
+                       const vk::raii::CommandPool& commandPool,
+                       uint32_t width,
+                       uint32_t height);
 } // namespace renderer

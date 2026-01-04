@@ -3,14 +3,23 @@
 
 #include "image_loader.h"
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
+
+
 
 #include <cstring>
 
 namespace assets
 {
-Image loadImageData(const std::filesystem::path& path)
+Image createImageFromPath(const std::filesystem::path& path)
 {
     int width;
     int height;
@@ -29,6 +38,14 @@ Image loadImageData(const std::filesystem::path& path)
 
     stbi_image_free(stbiData);
 
-    return Image(width, height, std::move(data));
+    return Image{static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::move(data)};
+}
+
+Image createImageFromData(int width, int height, const std::vector<unsigned char>& data)
+{
+    auto byteData = std::vector<std::byte>(data.size());
+    std::memcpy(byteData.data(), data.data(), data.size());
+
+    return Image{static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::move(byteData)};
 }
 } // namespace assets

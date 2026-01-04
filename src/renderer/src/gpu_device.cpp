@@ -72,6 +72,12 @@ GpuDevice::GpuDevice(const vk::raii::Instance& instance, const vk::raii::Surface
 
     spdlog::info("Creating logical GPU device");
     createLogicalDevice(surface);
+
+    spdlog::info("Creating descriptor pool");
+    createDescriptorPool();
+
+    spdlog::info("Creating command pool");
+    createCommandPool();
 }
 
 const vk::raii::Device& GpuDevice::device() const
@@ -97,6 +103,22 @@ const vk::raii::Queue& GpuDevice::presentQueue() const
 uint32_t GpuDevice::graphicsQueueFamilyIndex() const
 {
     return graphicsQueueFamilyIndex_;
+}
+
+const vk::raii::DescriptorPool& GpuDevice::descriptorPool() const
+{
+    return descriptorPool_;
+}
+
+const vk::raii::CommandPool& GpuDevice::commandPool() const
+{
+    return commandPool_;
+}
+
+int GpuDevice::maxFramesInFlight() const
+{
+    constexpr auto maxFramesInFlight = 2;
+    return maxFramesInFlight;
 }
 
 void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)
@@ -130,8 +152,7 @@ void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
 {
     graphicsQueueFamilyIndex_ = getGraphicsQueueFamilyIndex(physicalDevice_);
 
-    const auto surfacePresentationQueueFamilyIndex =
-        getSurfacePresentationQueueFamilyIndex(physicalDevice_, surface);
+    const auto surfacePresentationQueueFamilyIndex = getSurfacePresentationQueueFamilyIndex(physicalDevice_, surface);
 
     auto queuePriority = 0.5f;
     auto deviceQueueCreateInfo = vk::DeviceQueueCreateInfo{};
@@ -151,11 +172,14 @@ void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
     auto extendedDynamicStateFeatures = vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT{};
     extendedDynamicStateFeatures.extendedDynamicState = true;
 
-    auto featureChain = vk::StructureChain<vk::PhysicalDeviceFeatures2,
-                                           vk::PhysicalDeviceVulkan11Features,
-                                           vk::PhysicalDeviceVulkan13Features,
-                                           vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>{
-        deviceFeatures, vulkan11Features, vulkan13Features, extendedDynamicStateFeatures};
+    auto featureChain =
+        vk::StructureChain<vk::PhysicalDeviceFeatures2,
+                           vk::PhysicalDeviceVulkan11Features,
+                           vk::PhysicalDeviceVulkan13Features,
+                           vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>{deviceFeatures,
+                                                                              vulkan11Features,
+                                                                              vulkan13Features,
+                                                                              extendedDynamicStateFeatures};
 
     auto deviceCreateInfo = vk::DeviceCreateInfo{};
     deviceCreateInfo.pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>();
@@ -169,6 +193,30 @@ void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
     presentQueue_ = vk::raii::Queue(device_, surfacePresentationQueueFamilyIndex, 0);
 }
 
+void GpuDevice::createDescriptorPool()
+{
+    auto poolSize = vk::DescriptorPoolSize{};
+    poolSize.type = vk::DescriptorType::eUniformBuffer;
+    poolSize.descriptorCount = maxFramesInFlight();
+
+    auto poolInfo = vk::DescriptorPoolCreateInfo{};
+    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    poolInfo.maxSets = maxFramesInFlight();
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+
+    descriptorPool_ = vk::raii::DescriptorPool(device_, poolInfo);
+}
+
+void GpuDevice::createCommandPool()
+{
+    auto poolInfo = vk::CommandPoolCreateInfo{};
+    poolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+    poolInfo.queueFamilyIndex = graphicsQueueFamilyIndex_;
+
+    commandPool_ = vk::raii::CommandPool(device_, poolInfo);
+}
+
 bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
 {
     const auto properties = device.getProperties();
@@ -176,8 +224,7 @@ bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
 
     if (properties.apiVersion < VK_API_VERSION_1_3)
     {
-        spdlog::info(
-            "Skipping {} - Vulkan API version too low ({})", deviceName, properties.apiVersion);
+        spdlog::info("Skipping {} - Vulkan API version too low ({})", deviceName, properties.apiVersion);
         return false;
     }
 
@@ -191,15 +238,14 @@ bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
     bool hasAllRequiredExtensions = true;
     for (const auto& requiredExtension : deviceExtensions)
     {
-        if (std::ranges::none_of(
-                extensionProperties,
-                [&requiredExtension](auto const& extension)
-                { return strcmp(extension.extensionName, requiredExtension) == 0; }))
+        if (std::ranges::none_of(extensionProperties,
+                                 [&requiredExtension](auto const& extension)
+                                 {
+                                     return strcmp(extension.extensionName, requiredExtension) == 0;
+                                 }))
         {
             hasAllRequiredExtensions = false;
-            spdlog::info("Skipping {} - Does not support required device extension: {}",
-                         deviceName,
-                         requiredExtension);
+            spdlog::info("Skipping {} - Does not support required device extension: {}", deviceName, requiredExtension);
         }
     }
 
@@ -211,8 +257,7 @@ bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
     return true;
 }
 
-vk::raii::PhysicalDevice
-GpuDevice::selectBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices) const
+vk::raii::PhysicalDevice GpuDevice::selectBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices) const
 {
     if (devices.empty())
     {

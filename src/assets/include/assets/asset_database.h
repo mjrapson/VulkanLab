@@ -24,17 +24,14 @@ class AssetDatabase
     AssetHandle<Mesh> addMesh(Mesh&& mesh);
     AssetHandle<Prefab> addPrefab(Prefab&& prefab);
 
-    std::optional<std::reference_wrapper<const Image>>
-    getImage(const AssetHandle<Image>& handle) const;
+    std::optional<std::reference_wrapper<const Image>> getImage(const AssetHandle<Image>& handle) const;
+    std::optional<std::reference_wrapper<const Material>> getMaterial(const AssetHandle<Material>& handle) const;
+    std::optional<std::reference_wrapper<const Mesh>> getMesh(const AssetHandle<Mesh>& handle) const;
+    std::optional<std::reference_wrapper<const Prefab>> getPrefab(const AssetHandle<Prefab>& handle) const;
 
-    std::optional<std::reference_wrapper<const Material>>
-    getMaterial(const AssetHandle<Material>& handle) const;
-
-    std::optional<std::reference_wrapper<const Mesh>>
-    getMesh(const AssetHandle<Mesh>& handle) const;
-
-    std::optional<std::reference_wrapper<const Prefab>>
-    getPrefab(const AssetHandle<Prefab>& handle) const;
+    const AssetStorage<Image>& images() const;
+    const AssetStorage<Material>& materials() const;
+    const AssetStorage<Mesh>& meshes() const;
 
     void clear();
 

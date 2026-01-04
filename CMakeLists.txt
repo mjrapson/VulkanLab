@@ -43,6 +43,12 @@ add_subdirectory(third_party/glfw)
 add_subdirectory(third_party/glm)
 add_subdirectory(third_party/spdlog)
 
+set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE BOOL "" FORCE)
+set(TINYGLTF_INSTALL OFF CACHE BOOL "" FORCE)
+set(TINYGLTF_INSTALL_VENDOR OFF CACHE BOOL "" FORCE)
+set(TINYGLTF_HEADER_ONLY ON CACHE BOOL "" FORCE)
+add_subdirectory(third_party/tinygltf)
+
 find_package(Vulkan REQUIRED)
 find_program(SLANGC_EXECUTABLE
     NAMES slangc

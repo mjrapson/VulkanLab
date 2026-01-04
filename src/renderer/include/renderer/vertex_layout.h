@@ -25,22 +25,29 @@ struct VertexLayout
         return bindingDescription;
     }
 
-    static std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions()
+    static std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions()
     {
         auto positionAttribute = vk::VertexInputAttributeDescription{};
         positionAttribute.location = 0;
         positionAttribute.binding = 0;
-        positionAttribute.format = vk::Format::eR32G32Sfloat;
+        positionAttribute.format = vk::Format::eR32G32B32Sfloat;
         positionAttribute.offset = offsetof(core::Vertex, position);
 
-        auto colorAttribute = vk::VertexInputAttributeDescription{};
-        colorAttribute.location = 1;
-        colorAttribute.binding = 0;
-        colorAttribute.format = vk::Format::eR32G32B32Sfloat;
-        colorAttribute.offset = offsetof(core::Vertex, color);
+        auto normalAttribute = vk::VertexInputAttributeDescription{};
+        normalAttribute.location = 1;
+        normalAttribute.binding = 0;
+        normalAttribute.format = vk::Format::eR32G32B32Sfloat;
+        normalAttribute.offset = offsetof(core::Vertex, normal);
 
-        return std::array<vk::VertexInputAttributeDescription, 2>{positionAttribute,
-                                                                  colorAttribute};
+        auto textureUVAttribute = vk::VertexInputAttributeDescription{};
+        textureUVAttribute.location = 2;
+        textureUVAttribute.binding = 0;
+        textureUVAttribute.format = vk::Format::eR32G32Sfloat;
+        textureUVAttribute.offset = offsetof(core::Vertex, textureUV);
+
+        return std::array<vk::VertexInputAttributeDescription, 3>{positionAttribute,
+                                                                  normalAttribute,
+                                                                  textureUVAttribute};
     }
 };
 } // namespace renderer

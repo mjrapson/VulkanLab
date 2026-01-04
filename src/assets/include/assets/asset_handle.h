@@ -14,18 +14,21 @@ struct AssetHandle
 {
     uint32_t index;
 
-    bool operator==(const AssetHandle<AssetType>& rhs) const
+    constexpr bool operator==(const AssetHandle<AssetType>& rhs) const
     {
         return index == rhs.index;
     }
 };
+} // namespace assets
 
-template <typename AssetType>
-struct AssetHandleHash
+namespace std
 {
-    std::size_t operator()(const AssetHandle<AssetType>& handle) const
+template <typename AssetType>
+struct hash<assets::AssetHandle<AssetType>>
+{
+    size_t operator()(const assets::AssetHandle<AssetType>& handle) const noexcept
     {
         return std::hash<uint32_t>{}(handle.index);
     }
 };
-} // namespace assets
+} // namespace std

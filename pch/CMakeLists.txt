@@ -13,6 +13,7 @@ target_precompile_headers(pch PUBLIC
     <fstream>
     <functional>
     <memory>
+    <numeric>
     <optional>
     <ranges>
     <span>

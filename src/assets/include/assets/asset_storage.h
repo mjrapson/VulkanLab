@@ -6,6 +6,7 @@
 #include "asset_handle.h"
 
 #include <optional>
+#include <ranges>
 #include <stdint.h>
 #include <unordered_map>
 
@@ -23,8 +24,7 @@ class AssetStorage
         return handle;
     }
 
-    std::optional<std::reference_wrapper<const AssetType>>
-    get(const AssetHandle<AssetType>& handle) const
+    std::optional<std::reference_wrapper<const AssetType>> get(const AssetHandle<AssetType>& handle) const
     {
         auto itr = store_.find(handle);
         if (itr == store_.end())
@@ -33,6 +33,21 @@ class AssetStorage
         }
 
         return itr->second;
+    }
+
+    const auto& entries() const
+    {
+        return store_;
+    }
+
+    auto values() const
+    {
+        return store_ | std::views::values;
+    }
+
+    size_t size() const
+    {
+        return store_.size();
     }
 
     void remove(const AssetHandle<AssetType>& handle)
@@ -46,7 +61,7 @@ class AssetStorage
     }
 
   private:
-    std::unordered_map<AssetHandle<AssetType>, AssetType, AssetHandleHash<AssetType>> store_;
+    std::unordered_map<AssetHandle<AssetType>, AssetType> store_;
     uint32_t nextIndex_{0};
 };
 } // namespace assets

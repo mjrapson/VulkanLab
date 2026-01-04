@@ -31,18 +31,18 @@ constexpr bool validationLayersEnabled()
 }
 
 [[nodiscard]]
-bool validateExtensions(const std::vector<const char*>& requiredExtensions,
-                        const vk::raii::Context& context)
+bool validateExtensions(const std::vector<const char*>& requiredExtensions, const vk::raii::Context& context)
 {
     bool allExtensionsValid = true;
 
     const auto availableExtensions = context.enumerateInstanceExtensionProperties();
     for (const auto requiredExtension : requiredExtensions)
     {
-        if (std::ranges::none_of(
-                availableExtensions,
-                [requiredExtension](const auto& extensionProperty)
-                { return strcmp(extensionProperty.extensionName, requiredExtension) == 0; }))
+        if (std::ranges::none_of(availableExtensions,
+                                 [requiredExtension](const auto& extensionProperty)
+                                 {
+                                     return strcmp(extensionProperty.extensionName, requiredExtension) == 0;
+                                 }))
         {
             allExtensionsValid = false;
             spdlog::error("Required extension {} not supported", requiredExtension);
@@ -53,8 +53,7 @@ bool validateExtensions(const std::vector<const char*>& requiredExtensions,
 }
 
 [[nodiscard]]
-bool validateLayers(const std::vector<const char*>& requiredLayers,
-                    const vk::raii::Context& context)
+bool validateLayers(const std::vector<const char*>& requiredLayers, const vk::raii::Context& context)
 {
     bool allLayersValid = true;
 
@@ -63,7 +62,9 @@ bool validateLayers(const std::vector<const char*>& requiredLayers,
     {
         if (std::ranges::none_of(availableLayers,
                                  [requiredLayer](const auto& layerProperty)
-                                 { return strcmp(layerProperty.layerName, requiredLayer) == 0; }))
+                                 {
+                                     return strcmp(layerProperty.layerName, requiredLayer) == 0;
+                                 }))
         {
             allLayersValid = false;
             spdlog::error("Required validation layer {} not available", requiredLayer);
@@ -94,7 +95,8 @@ static vk::Bool32 debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severit
     return VK_TRUE;
 }
 
-VulkanApplication::VulkanApplication() : assetDatabase_{std::make_unique<assets::AssetDatabase>()}
+VulkanApplication::VulkanApplication()
+    : assetDatabase_{std::make_unique<assets::AssetDatabase>()}
 {
 }
 
@@ -147,8 +149,11 @@ void VulkanApplication::windowResized(int width, int height)
 
 void VulkanApplication::initGlfw()
 {
-    glfwSetErrorCallback([](int errorCode, const char* description)
-                         { spdlog::error("GLFW error {}: {}", errorCode, description); });
+    glfwSetErrorCallback(
+        [](int errorCode, const char* description)
+        {
+            spdlog::error("GLFW error {}: {}", errorCode, description);
+        });
 
     if (!glfwInit())
     {
@@ -158,9 +163,7 @@ void VulkanApplication::initGlfw()
     glfwInitialised_ = true;
 }
 
-void VulkanApplication::initWindow(int windowWidth,
-                                   int windowHeight,
-                                   const std::string& windowTitle)
+void VulkanApplication::initWindow(int windowWidth, int windowHeight, const std::string& windowTitle)
 {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
@@ -199,8 +202,7 @@ void VulkanApplication::initVulkan(int windowWidth, int windowHeight)
     gpuDevice_ = std::make_unique<renderer::GpuDevice>(instance_, surface_);
 
     spdlog::info("Creating renderer");
-    renderer_ = std::make_unique<renderer::Renderer>(
-        instance_, surface_, *gpuDevice_, windowWidth, windowHeight);
+    renderer_ = std::make_unique<renderer::Renderer>(instance_, surface_, *gpuDevice_, windowWidth, windowHeight);
 }
 
 void VulkanApplication::createInstance()
@@ -245,12 +247,12 @@ void VulkanApplication::createInstance()
 
 void VulkanApplication::createDebugMessenger()
 {
-    const auto severityFlags = (vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose
-                                | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
-                                | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
-    const auto messageTypeFlags = (vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
-                                   | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
-                                   | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+    const auto severityFlags =
+        (vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
+         | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+    const auto messageTypeFlags =
+        (vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
+         | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
 
     auto debugCreateInfo = vk::DebugUtilsMessengerCreateInfoEXT{};
     debugCreateInfo.messageSeverity = severityFlags;
