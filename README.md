@@ -34,3 +34,4 @@ cmake --build build
 - GLFW
 - glm
 - spdlog
+- stb
