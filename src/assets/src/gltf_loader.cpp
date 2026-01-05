@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Mark Rapson
 
-#include "gltf_loader.h"
+#include "assets/gltf_loader.h"
 
 #include "assets/asset_database.h"
 #include "assets/image.h"
 #include "assets/material.h"
 #include "assets/mesh.h"
 #include "assets/prefab.h"
-#include "image_loader.h"
+#include "private/image_loader.h"
 
 #include <core/vertex.h>
 
@@ -113,6 +113,9 @@ GltfLoader::GltfLoader(AssetDatabase& db)
 
 Prefab GltfLoader::load(const std::filesystem::path& path)
 {
+    imageCache_.clear();
+    materialCache_.clear();
+
     if (path.extension() != ".glb")
     {
         throw std::runtime_error("Unsupported gtlf file: " + path.string());
@@ -154,8 +157,7 @@ Prefab GltfLoader::load(const std::filesystem::path& path)
     return Prefab{std::move(meshHandles)};
 }
 
-AssetHandle<Mesh> GltfLoader::readMeshPrimitive(tinygltf::Primitive& primitive,
-                                                tinygltf::Model& model)
+AssetHandle<Mesh> GltfLoader::readMeshPrimitive(tinygltf::Primitive& primitive, tinygltf::Model& model)
 {
     auto mesh = Mesh{};
     mesh.vertices = readVertices(primitive, model);

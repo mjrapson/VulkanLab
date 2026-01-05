@@ -2,17 +2,17 @@ add_library(Assets STATIC)
 
 target_sources(Assets
     PRIVATE
-        src/private/gltf_loader.cpp
-        src/private/gltf_loader.h
         src/private/image_loader.cpp
         src/private/image_loader.h
         src/asset_database.cpp
+        src/gltf_loader.cpp
         src/image.cpp
         src/prefab.cpp
     PUBLIC
         include/assets/asset_database.h
         include/assets/asset_handle.h
         include/assets/asset_storage.h
+        include/assets/gltf_loader.h
         include/assets/image.h
         include/assets/material.h
         include/assets/mesh.h
