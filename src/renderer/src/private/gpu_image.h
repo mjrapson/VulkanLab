@@ -9,7 +9,6 @@ namespace renderer
 {
 struct GpuImage
 {
-    uint32_t samplerIndex;
     vk::raii::Image image{nullptr};
     vk::raii::DeviceMemory memory{nullptr};
     vk::raii::ImageView view{nullptr};

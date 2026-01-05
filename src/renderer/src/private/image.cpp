@@ -9,7 +9,7 @@ vk::raii::Image createImage(const vk::raii::Device& device, uint32_t width, uint
 {
     auto imageInfo = vk::ImageCreateInfo{};
     imageInfo.imageType = vk::ImageType::e2D;
-    imageInfo.format = vk::Format::eR8G8B8A8Unorm;
+    imageInfo.format = vk::Format::eR8G8B8A8Srgb;
     imageInfo.extent = vk::Extent3D{width, height, 1};
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;

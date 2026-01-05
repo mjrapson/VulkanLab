@@ -72,10 +72,7 @@ GpuDevice::GpuDevice(const vk::raii::Instance& instance, const vk::raii::Surface
 
     spdlog::info("Creating logical GPU device");
     createLogicalDevice(surface);
-
-    spdlog::info("Creating descriptor pool");
-    createDescriptorPool();
-
+    
     spdlog::info("Creating command pool");
     createCommandPool();
 }
@@ -103,11 +100,6 @@ const vk::raii::Queue& GpuDevice::presentQueue() const
 uint32_t GpuDevice::graphicsQueueFamilyIndex() const
 {
     return graphicsQueueFamilyIndex_;
-}
-
-const vk::raii::DescriptorPool& GpuDevice::descriptorPool() const
-{
-    return descriptorPool_;
 }
 
 const vk::raii::CommandPool& GpuDevice::commandPool() const
@@ -191,21 +183,6 @@ void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
     device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
     graphicsQueue_ = vk::raii::Queue(device_, graphicsQueueFamilyIndex_, 0);
     presentQueue_ = vk::raii::Queue(device_, surfacePresentationQueueFamilyIndex, 0);
-}
-
-void GpuDevice::createDescriptorPool()
-{
-    auto poolSize = vk::DescriptorPoolSize{};
-    poolSize.type = vk::DescriptorType::eUniformBuffer;
-    poolSize.descriptorCount = maxFramesInFlight();
-
-    auto poolInfo = vk::DescriptorPoolCreateInfo{};
-    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    poolInfo.maxSets = maxFramesInFlight();
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-
-    descriptorPool_ = vk::raii::DescriptorPool(device_, poolInfo);
 }
 
 void GpuDevice::createCommandPool()

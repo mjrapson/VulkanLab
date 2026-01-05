@@ -59,3 +59,9 @@ foreach(SHADER_NAME ${SHADER_FILENAMES})
     add_dependencies(VulkanDemo shader_${SHADER_NAME})
 endforeach()
 
+add_custom_target(post_build ALL 
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/prefabs ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prefabs
+)
+
+add_dependencies(post_build VulkanDemo)
+

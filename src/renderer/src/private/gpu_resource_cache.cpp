@@ -1,11 +1,11 @@
 /// SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Mark Rapson
 
-#include "renderer/gpu_resource_cache.h"
+#include "gpu_resource_cache.h"
 
-#include "private/buffer.h"
-#include "private/image.h"
-#include "private/memory.h"
+#include "buffer.h"
+#include "image.h"
+#include "memory.h"
 #include "renderer/gpu_device.h"
 
 #include <assets/asset_database.h>
@@ -14,22 +14,9 @@
 
 namespace renderer
 {
-GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db,
-                                   GpuDevice& gpuDevice,
-                                   int maxFramesInFlight,
-                                   const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout)
-    : gpuDevice_{gpuDevice},
-      maxFramesInFlight_{maxFramesInFlight}
+GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice)
+    : gpuDevice_{gpuDevice}
 {
-    auto layouts = std::vector<vk::DescriptorSetLayout>(maxFramesInFlight_, *materialDescriptorSetLayout);
-
-    auto allocInfo = vk::DescriptorSetAllocateInfo{};
-    allocInfo.descriptorPool = *gpuDevice_.descriptorPool();
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(layouts.size());
-    allocInfo.pSetLayouts = layouts.data();
-
-    materialDescriptorSets_ = gpuDevice_.device().allocateDescriptorSets(allocInfo);
-
     uploadData(db);
 }
 
@@ -94,11 +81,9 @@ void GpuResourceCache::uploadData(const assets::AssetDatabase& db)
 
 void GpuResourceCache::uploadImageData(const assets::AssetStorage<assets::Image>& images)
 {
-    auto index = uint32_t{0};
     for (const auto& [handle, image] : images.entries())
     {
         auto gpuImage = GpuImage{};
-        gpuImage.samplerIndex = index++;
         gpuImage.image = createImage(gpuDevice_.device(), image.width(), image.height());
         gpuImage.memory = allocateImageMemory(gpuDevice_.device(),
                                               gpuDevice_.physicalDevice(),
@@ -160,28 +145,6 @@ void GpuResourceCache::uploadImageData(const assets::AssetStorage<assets::Image>
 
         gpuImages_.emplace(handle, std::move(gpuImage));
     }
-
-    for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
-    {
-        auto imageInfos = std::vector<vk::DescriptorImageInfo>{};
-        for (const auto& [handle, gpuImage] : gpuImages_)
-        {
-            auto imageInfo = vk::DescriptorImageInfo{};
-            imageInfo.sampler = *gpuImage.sampler;
-            imageInfo.imageView = *gpuImage.view;
-            imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-            imageInfos.push_back(imageInfo);
-        }
-
-        vk::WriteDescriptorSet writeImages{};
-        writeImages.dstSet = *materialDescriptorSets_[frameIndex];
-        writeImages.dstBinding = 1;
-        writeImages.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        writeImages.descriptorCount = static_cast<uint32_t>(imageInfos.size());
-        writeImages.pImageInfo = imageInfos.data();
-
-        gpuDevice_.device().updateDescriptorSets(writeImages, {});
-    }
 }
 
 void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Material>& materials)
@@ -189,7 +152,7 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Mat
     auto stride = alignMemory(sizeof(GpuMaterialBufferData),
                               gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
 
-    for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
+    for (auto frameIndex = 0; frameIndex < gpuDevice_.maxFramesInFlight(); ++frameIndex)
     {
         auto buffer = createBuffer(gpuDevice_.device(),
                                    stride * materials.size(),
@@ -213,41 +176,20 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Mat
     for (const auto& [handle, material] : materials.entries())
     {
         auto gpuMaterial = GpuMaterial{};
-        gpuMaterial.data.diffuseColor = glm::vec4{material.diffuse, 1.0};
         gpuMaterial.uboOffset = currentOffset;
 
-        if (material.diffuseTexture)
-        {
-            gpuMaterial.imageIndex = gpuImages_.at(material.diffuseTexture.value()).samplerIndex;
-        }
+        auto uboData = GpuMaterialBufferData{};
+        uboData.diffuseColor = glm::vec4{material.diffuse, 1.0f};
+        uboData.hasDiffuseTexture = material.diffuseTexture ? 1 : 0;
 
-        for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
+        for (auto frameIndex = 0; frameIndex < gpuDevice_.maxFramesInFlight(); ++frameIndex)
         {
+
             auto data = materialUboMappedMemory_.at(frameIndex);
-            std::memcpy(static_cast<std::byte*>(data) + currentOffset,
-                        &gpuMaterial.data,
-                        sizeof(GpuMaterialBufferData));
+            std::memcpy(static_cast<std::byte*>(data) + currentOffset, &uboData, sizeof(GpuMaterialBufferData));
         }
 
         currentOffset += stride;
-    }
-
-    for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
-    {
-        auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = *materialUboBuffers_.at(frameIndex);
-        bufferInfo.offset = 0;
-        bufferInfo.range = stride * materials.size();
-
-        auto writeInfo = vk::WriteDescriptorSet{};
-        writeInfo.dstSet = *materialDescriptorSets_.at(frameIndex);
-        writeInfo.dstBinding = 0;
-        writeInfo.dstArrayElement = 0;
-        writeInfo.descriptorCount = 1;
-        writeInfo.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
-        writeInfo.pBufferInfo = &bufferInfo;
-
-        gpuDevice_.device().updateDescriptorSets(writeInfo, {});
     }
 }
 

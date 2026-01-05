@@ -1,35 +1,40 @@
 struct VertexInput
 {
-    float2 position;
-    float3 color;
+    float3 position;
+    float3 normal;
+    float2 uv;
 };
 
-struct UniformBuffer 
+struct MaterialData
 {
-    float4x4 model;
-    float4x4 view;
-    float4x4 projection;
-}
-ConstantBuffer<UniformBuffer> ubo;
+    float4 diffuseColor;
+};
+
+[[vk::binding(0, 0)]]
+ConstantBuffer<MaterialData> material;
+
+[[vk::binding(1, 0)]]
+Sampler2D textures[];
 
 struct VertexOutput 
 {
-    float3 color;
     float4 position : SV_Position;
+    float3 normal   : TEXCOORD0;
+    float2 uv       : TEXCOORD1;
 };
 
 [shader("vertex")]
 VertexOutput vertMain(VertexInput vertexInput) 
 {
     VertexOutput output;
-    output.position = mul(ubo.projection, mul(ubo.view, mul(ubo.model, float4(vertexInput.position, 0.0, 1.0))));
-    output.color = vertexInput.color;
+    output.position = float4(vertexInput.position, 1.0);
+    output.normal = vertexInput.normal;
+    output.uv = vertexInput.uv;
     return output;
 }
 
 [shader("fragment")]
 float4 fragMain(VertexOutput inVert) : SV_Target
 {
-    float3 color = inVert.color;
-    return float4(color, 1.0);
+    return float4(0.8, 0.8, 0.8, 1.0);
 }

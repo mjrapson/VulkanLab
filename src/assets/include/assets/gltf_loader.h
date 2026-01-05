@@ -7,7 +7,6 @@
 #include "assets/image.h"
 #include "assets/material.h"
 #include "assets/mesh.h"
-#include "assets/prefab.h"
 
 #include <filesystem>
 #include <unordered_map>
@@ -35,7 +34,7 @@ class GltfLoader
     GltfLoader(GltfLoader&& other) = delete;
     GltfLoader& operator=(GltfLoader&& other) = delete;
 
-    Prefab load(const std::filesystem::path& path);
+    bool load(const std::filesystem::path& path);
 
   private:
     AssetHandle<Mesh> readMeshPrimitive(tinygltf::Primitive& primitive, tinygltf::Model& modell);

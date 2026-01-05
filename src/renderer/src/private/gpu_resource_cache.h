@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include "renderer/gpu_image.h"
-#include "renderer/gpu_material.h"
-#include "renderer/gpu_mesh.h"
+#include "gpu_image.h"
+#include "gpu_material.h"
+#include "gpu_mesh.h"
 
 #include <assets/asset_handle.h>
 #include <assets/asset_storage.h>
@@ -28,10 +28,7 @@ class GpuDevice;
 class GpuResourceCache
 {
   public:
-    GpuResourceCache(const assets::AssetDatabase& db,
-                     GpuDevice& gpuDevice,
-                     int maxFramesInFlight,
-                     const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout);
+    GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice);
 
     ~GpuResourceCache() = default;
 
@@ -56,8 +53,7 @@ class GpuResourceCache
     void uploadMeshData(const assets::AssetStorage<assets::Mesh>& meshes);
 
   private:
-    GpuDevice& gpuDevice_;
-    int maxFramesInFlight_;
+    const GpuDevice& gpuDevice_;
 
     vk::raii::Buffer meshVertexBuffer_{nullptr};
     vk::raii::Buffer meshIndexBuffer_{nullptr};
@@ -67,7 +63,6 @@ class GpuResourceCache
     std::vector<vk::raii::Buffer> materialUboBuffers_;
     std::vector<vk::raii::DeviceMemory> materialUboBuffersMemory_;
     std::vector<void*> materialUboMappedMemory_;
-    std::vector<vk::raii::DescriptorSet> materialDescriptorSets_;
 
     std::unordered_map<assets::AssetHandle<assets::Image>, GpuImage> gpuImages_;
     std::unordered_map<assets::AssetHandle<assets::Material>, GpuMaterial> gpuMaterials_;

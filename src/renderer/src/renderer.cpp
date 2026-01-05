@@ -1,13 +1,15 @@
 #include "renderer/renderer.h"
 
 #include "private/buffer.h"
+#include "private/gpu_material.h"
+#include "private/gpu_resource_cache.h"
 #include "private/image.h"
 #include "private/memory.h"
 #include "private/shader.h"
 #include "renderer/gpu_device.h"
-#include "renderer/gpu_material.h"
 #include "renderer/vertex_layout.h"
 
+#include <assets/asset_database.h>
 #include <core/file_system.h>
 
 #include <spdlog/spdlog.h>
@@ -20,8 +22,6 @@
 
 namespace renderer
 {
-constexpr auto maxFramesInFlight = 2;
-
 struct UniformBufferObject
 {
     glm::mat4 model;
@@ -92,6 +92,8 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     createSwapchainImageViews();
 
     spdlog::info("Creating graphics pipeline");
+    createDescriptorPool();
+    createDescriptorSetLayout();
     createGraphicsPipeline();
 
     spdlog::info("Creating command buffers");
@@ -99,7 +101,12 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
     spdlog::info("Creating sync objects");
     createSyncObjects();
+
+    spdlog::info("Creating default objects");
+    createDefaultObjects();
 }
+
+Renderer::~Renderer() = default;
 
 void Renderer::renderFrame()
 {
@@ -168,7 +175,7 @@ void Renderer::renderFrame()
         recreateSwapchain();
     }
 
-    currentFrameIndex_ = (currentFrameIndex_ + 1) & maxFramesInFlight;
+    currentFrameIndex_ = (currentFrameIndex_ + 1) & gpuDevice_.maxFramesInFlight();
 }
 
 void Renderer::windowResized(int width, int height)
@@ -186,6 +193,62 @@ void Renderer::windowResized(int width, int height)
     }
 
     windowResized_ = true;
+}
+
+void Renderer::setResources(const assets::AssetDatabase& db)
+{
+    gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_);
+
+    // To move into a pipeline object
+    auto layouts = std::vector<vk::DescriptorSetLayout>{gpuDevice_.maxFramesInFlight(), *descriptorSetLayout_};
+
+    auto stride = alignMemory(sizeof(GpuMaterialBufferData),
+                              gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
+
+    for (const auto& [handle, material] : db.materials().entries())
+    {
+        auto allocInfo = vk::DescriptorSetAllocateInfo{};
+        allocInfo.descriptorPool = *descriptorPool_;
+        allocInfo.descriptorSetCount = gpuDevice_.maxFramesInFlight();
+        allocInfo.pSetLayouts = layouts.data();
+
+        descriptorSets_[handle] = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+
+        for (auto frameIndex = uint32_t{0}; frameIndex < gpuDevice_.maxFramesInFlight(); ++frameIndex)
+        {
+            auto bufferInfo = vk::DescriptorBufferInfo{};
+            bufferInfo.buffer = gpuResources_->materialUniformBuffer(frameIndex);
+            bufferInfo.offset = 0;
+            bufferInfo.range = stride;
+
+            auto uboWrite = vk::WriteDescriptorSet{};
+            uboWrite.dstSet = descriptorSets_.at(handle).at(frameIndex);
+            uboWrite.dstBinding = 0;
+            uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+            uboWrite.descriptorCount = 1;
+            uboWrite.pBufferInfo = &bufferInfo;
+
+            vk::DescriptorImageInfo imageInfo{};
+            imageInfo.imageView = material.diffuseTexture
+                                      ? gpuResources_->gpuImage(material.diffuseTexture.value()).view
+                                      : emptyImageView;
+            imageInfo.sampler = material.diffuseTexture
+                                    ? gpuResources_->gpuImage(material.diffuseTexture.value()).sampler
+                                    : emptyImageSampler;
+            ;
+            imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+            vk::WriteDescriptorSet textureWrite{};
+            textureWrite.dstSet = descriptorSets_.at(handle).at(frameIndex);
+            textureWrite.dstBinding = 1;
+            textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+            textureWrite.descriptorCount = 1;
+            textureWrite.pImageInfo = &imageInfo;
+
+            std::array writes{uboWrite, textureWrite};
+            gpuDevice_.device().updateDescriptorSets(writes, {});
+        }
+    }
 }
 
 void Renderer::createSwapchain()
@@ -233,10 +296,55 @@ void Renderer::createSwapchainImageViews()
     }
 }
 
+// To move into a pipeline object
+void Renderer::createDescriptorPool()
+{
+    auto materialUboPoolSize = vk::DescriptorPoolSize{};
+    materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
+    materialUboPoolSize.descriptorCount = gpuDevice_.maxFramesInFlight();
+
+    auto texturePoolSize = vk::DescriptorPoolSize{};
+    texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
+    texturePoolSize.descriptorCount = gpuDevice_.maxFramesInFlight();
+
+    auto poolSizes = std::array{materialUboPoolSize, texturePoolSize};
+
+    auto poolInfo = vk::DescriptorPoolCreateInfo{};
+    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    poolInfo.maxSets = gpuDevice_.maxFramesInFlight();
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
+
+    descriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), poolInfo};
+}
+
+// To move into a pipeline object
+void Renderer::createDescriptorSetLayout()
+{
+    auto materialUboLayoutBinding = vk::DescriptorSetLayoutBinding{};
+    materialUboLayoutBinding.binding = 0;
+    materialUboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+    materialUboLayoutBinding.descriptorCount = 1;
+    materialUboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+    auto textureBinding = vk::DescriptorSetLayoutBinding{};
+    textureBinding.binding = 1;
+    textureBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    textureBinding.descriptorCount = 1;
+    textureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+    auto bindings = std::array{materialUboLayoutBinding, textureBinding};
+
+    auto layoutInfo = vk::DescriptorSetLayoutCreateInfo{};
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+
+    descriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), layoutInfo);
+}
+
+// To move into a pipeline object
 void Renderer::createGraphicsPipeline()
 {
-    materialDescriptorSetLayout_ = GpuMaterial::createDescriptorSetLayout(gpuDevice_.device());
-
     // Shader-progammable stages
     auto vertexShaderModule = createShaderModule(gpuDevice_.device(),
                                                  core::readBinaryFile(core::getShaderDir() / "basic.vert.spv"));
@@ -305,7 +413,7 @@ void Renderer::createGraphicsPipeline()
 
     auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo{};
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &*materialDescriptorSetLayout_;
+    pipelineLayoutInfo.pSetLayouts = &*descriptorSetLayout_;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
 
     pipelineLayout_ = vk::raii::PipelineLayout(gpuDevice_.device(), pipelineLayoutInfo);
@@ -332,45 +440,12 @@ void Renderer::createGraphicsPipeline()
     graphicsPipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
 }
 
-// void Renderer::createDescriptorSets()
-// {
-//     descriptorSets_.clear();
-
-//     auto layouts = std::vector<vk::DescriptorSetLayout>(maxFramesInFlight,
-//     *descriptorSetLayout_);
-
-//     auto allocInfo = vk::DescriptorSetAllocateInfo{};
-//     allocInfo.descriptorPool = descriptorPool_;
-//     allocInfo.descriptorSetCount = static_cast<uint32_t>(layouts.size());
-//     allocInfo.pSetLayouts = layouts.data();
-
-//     descriptorSets_ = gpuDevice_.device().allocateDescriptorSets(allocInfo);
-
-//     for ([[maybe_unused]] auto frameIndex : std::views::repeat(0, maxFramesInFlight))
-//     {
-//         auto bufferInfo = vk::DescriptorBufferInfo{};
-//         bufferInfo.buffer = uniformBuffers_.at(frameIndex);
-//         bufferInfo.offset = 0;
-//         bufferInfo.range = sizeof(UniformBufferObject);
-
-//         auto writeInfo = vk::WriteDescriptorSet{};
-//         writeInfo.dstSet = descriptorSets_.at(frameIndex);
-//         writeInfo.dstBinding = 0;
-//         writeInfo.dstArrayElement = 0;
-//         writeInfo.descriptorCount = 1;
-//         writeInfo.descriptorType = vk::DescriptorType::eUniformBuffer;
-//         writeInfo.pBufferInfo = &bufferInfo;
-
-//         gpuDevice_.device().updateDescriptorSets(writeInfo, {});
-//     }
-// }
-
 void Renderer::createCommandBuffers()
 {
     auto allocInfo = vk::CommandBufferAllocateInfo{};
     allocInfo.commandPool = *gpuDevice_.commandPool();
     allocInfo.level = vk::CommandBufferLevel::ePrimary;
-    allocInfo.commandBufferCount = maxFramesInFlight;
+    allocInfo.commandBufferCount = gpuDevice_.maxFramesInFlight();
 
     commandBuffers_ = vk::raii::CommandBuffers(gpuDevice_.device(), allocInfo);
 }
@@ -382,7 +457,7 @@ void Renderer::createSyncObjects()
         renderFinishedSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
     }
 
-    for ([[maybe_unused]] auto _ : std::views::repeat(0, maxFramesInFlight))
+    for ([[maybe_unused]] auto _ : std::views::repeat(0, gpuDevice_.maxFramesInFlight()))
     {
         presentCompleteSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
 
@@ -390,6 +465,67 @@ void Renderer::createSyncObjects()
         fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
         drawFences_.emplace_back(gpuDevice_.device(), fenceCreateInfo);
     }
+}
+
+void Renderer::createDefaultObjects()
+{
+    emptyImage = createImage(gpuDevice_.device(), 1, 1);
+    emptyImageMemory = allocateImageMemory(gpuDevice_.device(),
+                                           gpuDevice_.physicalDevice(),
+                                           emptyImage,
+                                           vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+    const auto imageSize = 4; //  RGBA8
+    auto stagingBuffer = createBuffer(gpuDevice_.device(),
+                                      imageSize,
+                                      vk::BufferUsageFlagBits::eTransferSrc,
+                                      vk::SharingMode::eExclusive);
+
+    auto stagingMemory = allocateBufferMemory(gpuDevice_.device(),
+                                              gpuDevice_.physicalDevice(),
+                                              stagingBuffer,
+                                              vk::MemoryPropertyFlagBits::eHostVisible
+                                                  | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    auto imageData = std::vector<std::byte>{std::byte{1}, std::byte{1}, std::byte{1}, std::byte{1}};
+    void* data = stagingMemory.mapMemory(0, imageSize);
+    std::memcpy(data, imageData.data(), imageSize);
+    stagingMemory.unmapMemory();
+
+    copyBufferToImage(gpuDevice_.device(),
+                      stagingBuffer,
+                      emptyImage,
+                      gpuDevice_.graphicsQueue(),
+                      gpuDevice_.commandPool(),
+                      1,
+                      1);
+
+    auto subresourceRange = vk::ImageSubresourceRange{};
+    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = 1;
+
+    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
+    imageViewCreateInfo.image = *emptyImage;
+    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
+    imageViewCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
+    imageViewCreateInfo.subresourceRange = subresourceRange;
+
+    emptyImageView = vk::raii::ImageView{gpuDevice_.device(), imageViewCreateInfo};
+
+    auto samplerInfo = vk::SamplerCreateInfo{};
+    samplerInfo.magFilter = vk::Filter::eLinear, samplerInfo.minFilter = vk::Filter::eLinear;
+    samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+
+    emptyImageSampler = vk::raii::Sampler{gpuDevice_.device(), samplerInfo};
 }
 
 void Renderer::recreateSwapchain()

@@ -4,6 +4,8 @@
 #include "vulkan_application.h"
 
 #include <assets/asset_database.h>
+#include <assets/gltf_loader.h>
+#include <core/file_system.h>
 #include <renderer/gpu_device.h>
 #include <renderer/renderer.h>
 
@@ -126,6 +128,14 @@ void VulkanApplication::init(int windowWidth, int windowHeight, const std::strin
 
     spdlog::info("Initializing Vulkan");
     initVulkan(windowWidth, windowHeight);
+
+    spdlog::info("Loading demo assets");
+    
+    // Demo
+    auto loader = assets::GltfLoader{*assetDatabase_.get()};
+    loader.load(core::getPrefabsDir() / "cube.glb");
+
+    renderer_->setResources(*assetDatabase_.get());
 }
 
 void VulkanApplication::run()

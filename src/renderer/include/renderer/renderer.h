@@ -3,11 +3,22 @@
 
 #pragma once
 
+#include <assets/asset_handle.h>
+#include <assets/material.h>
+
 #include <vulkan/vulkan_raii.hpp>
+
+#include <memory>
+
+namespace assets
+{
+class AssetDatabase;
+}
 
 namespace renderer
 {
 class GpuDevice;
+class GpuResourceCache;
 
 class Renderer
 {
@@ -18,6 +29,8 @@ class Renderer
              int windowWidth,
              int windowHeight);
 
+    ~Renderer();
+
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
 
@@ -27,12 +40,20 @@ class Renderer
     void renderFrame();
     void windowResized(int width, int height);
 
+    void setResources(const assets::AssetDatabase& db);
+
   private:
     void createSwapchain();
     void createSwapchainImageViews();
+
+    void createDescriptorPool();
+    void createDescriptorSetLayout();
     void createGraphicsPipeline();
     void createCommandBuffers();
     void createSyncObjects();
+    void createDefaultObjects();
+
+    void createDescriptorSets();
 
     void recreateSwapchain();
     void recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer);
@@ -53,7 +74,8 @@ class Renderer
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;
     std::vector<vk::raii::ImageView> swapchainImageViews_;
-    vk::raii::DescriptorSetLayout materialDescriptorSetLayout_{nullptr};
+    vk::raii::DescriptorPool descriptorPool_{nullptr};
+    vk::raii::DescriptorSetLayout descriptorSetLayout_{nullptr};
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline graphicsPipeline_{nullptr};
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
@@ -61,5 +83,13 @@ class Renderer
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
+
+    vk::raii::Image emptyImage{nullptr};
+    vk::raii::DeviceMemory emptyImageMemory{nullptr};
+    vk::raii::ImageView emptyImageView{nullptr};
+    vk::raii::Sampler emptyImageSampler{nullptr};
+
+    std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
+    std::unordered_map<assets::AssetHandle<assets::Material>, std::vector<vk::raii::DescriptorSet>> descriptorSets_;
 };
 } // namespace renderer

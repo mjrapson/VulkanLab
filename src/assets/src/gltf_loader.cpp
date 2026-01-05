@@ -111,7 +111,7 @@ GltfLoader::GltfLoader(AssetDatabase& db)
 {
 }
 
-Prefab GltfLoader::load(const std::filesystem::path& path)
+bool GltfLoader::load(const std::filesystem::path& path)
 {
     imageCache_.clear();
     materialCache_.clear();
@@ -141,7 +141,7 @@ Prefab GltfLoader::load(const std::filesystem::path& path)
     if (!ret)
     {
         spdlog::critical("Failed to parse glTF {}", path.string());
-        throw std::runtime_error("Failed to load gtlf file: " + path.string());
+        return false;
     }
 
     auto meshHandles = std::vector<AssetHandle<Mesh>>{};
@@ -154,7 +154,10 @@ Prefab GltfLoader::load(const std::filesystem::path& path)
         }
     }
 
-    return Prefab{std::move(meshHandles)};
+    auto prefab = Prefab{std::move(meshHandles)};
+    db_.addPrefab(std::move(prefab));
+
+    return true;
 }
 
 AssetHandle<Mesh> GltfLoader::readMeshPrimitive(tinygltf::Primitive& primitive, tinygltf::Model& model)

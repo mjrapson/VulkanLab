@@ -10,6 +10,7 @@ namespace core
 {
 std::filesystem::path getRootDir();
 std::filesystem::path getShaderDir();
+std::filesystem::path getPrefabsDir();
 
 [[nodiscard]]
 std::vector<char> readBinaryFile(const std::filesystem::path& filepath);

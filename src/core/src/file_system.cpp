@@ -45,6 +45,11 @@ std::filesystem::path getShaderDir()
     return getRootDir() / "shaders";
 }
 
+std::filesystem::path getPrefabsDir()
+{
+    return getRootDir() / "prefabs";
+}
+
 std::vector<char> readBinaryFile(const std::filesystem::path& filepath)
 {
     auto file = std::ifstream(filepath, std::ios::ate | std::ios::binary);
