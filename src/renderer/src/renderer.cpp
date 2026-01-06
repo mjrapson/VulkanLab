@@ -33,6 +33,12 @@ struct CameraBufferObject
     glm::mat4 projection;
 };
 
+// To move into a pipeline object
+struct PushConstants
+{
+    glm::mat4 modelTransform;
+};
+
 vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth, int windowHeight)
 {
     if (capabilities.currentExtent.width != 0xFFFFFFFF)
@@ -448,10 +454,21 @@ void Renderer::createGraphicsPipeline()
 
     auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout_, *materialDescriptorSetLayout_};
 
+    if(gpuDevice_.physicalDevice().getProperties().limits.maxPushConstantsSize < sizeof(PushConstants))
+    {
+        throw std::runtime_error{"Requested push constant size exceeds device limits"};
+    }
+
+    auto pushConstantRange = vk::PushConstantRange{};
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(PushConstants);
+    pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+
     auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo{};
     pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
     pipelineLayout_ = vk::raii::PipelineLayout(gpuDevice_.device(), pipelineLayoutInfo);
 

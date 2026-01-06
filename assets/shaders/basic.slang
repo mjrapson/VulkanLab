@@ -5,6 +5,14 @@ struct VertexInput
     float2 uv;
 };
 
+struct PushConstants
+{
+    float4x4 model;
+};
+
+[[vk::push_constant]]
+PushConstants pc;
+
 struct CameraData
 {
     float4x4 view;
