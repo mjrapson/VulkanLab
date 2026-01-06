@@ -14,8 +14,9 @@
 
 namespace renderer
 {
-GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice)
-    : gpuDevice_{gpuDevice}
+GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice, int maxFramesInFlight)
+    : gpuDevice_{gpuDevice},
+      maxFramesInFlight_{maxFramesInFlight}
 {
     uploadData(db);
 }
@@ -152,7 +153,7 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Mat
     auto stride = alignMemory(sizeof(GpuMaterialBufferData),
                               gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
 
-    for (auto frameIndex = 0; frameIndex < gpuDevice_.maxFramesInFlight(); ++frameIndex)
+    for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
     {
         auto buffer = createBuffer(gpuDevice_.device(),
                                    stride * materials.size(),
@@ -183,7 +184,7 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Mat
         uboData.diffuseColor = glm::vec4{material.diffuse, 1.0f};
         uboData.hasDiffuseTexture = material.diffuseTexture ? 1 : 0;
 
-        for (auto frameIndex = 0; frameIndex < gpuDevice_.maxFramesInFlight(); ++frameIndex)
+        for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
         {
 
             auto data = materialUboMappedMemory_.at(frameIndex);

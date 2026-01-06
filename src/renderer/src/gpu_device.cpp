@@ -107,12 +107,6 @@ const vk::raii::CommandPool& GpuDevice::commandPool() const
     return commandPool_;
 }
 
-int GpuDevice::maxFramesInFlight() const
-{
-    constexpr auto maxFramesInFlight = 2;
-    return maxFramesInFlight;
-}
-
 void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)
 {
     const auto devices = instance.enumeratePhysicalDevices();

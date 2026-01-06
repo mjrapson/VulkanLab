@@ -22,6 +22,9 @@
 
 namespace renderer
 {
+
+constexpr auto maxFramesInFlight = 2;
+
 struct UniformBufferObject
 {
     glm::mat4 model;
@@ -173,7 +176,7 @@ void Renderer::renderFrame()
         recreateSwapchain();
     }
 
-    currentFrameIndex_ = (currentFrameIndex_ + 1) & gpuDevice_.maxFramesInFlight();
+    currentFrameIndex_ = (currentFrameIndex_ + 1) & maxFramesInFlight;
 }
 
 void Renderer::windowResized(int width, int height)
@@ -195,10 +198,10 @@ void Renderer::windowResized(int width, int height)
 
 void Renderer::setResources(const assets::AssetDatabase& db)
 {
-    gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_);
+    gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_, maxFramesInFlight);
 
     // To move into a pipeline object
-    auto layouts = std::vector<vk::DescriptorSetLayout>{gpuDevice_.maxFramesInFlight(), *descriptorSetLayout_};
+    auto layouts = std::vector<vk::DescriptorSetLayout>{maxFramesInFlight, *descriptorSetLayout_};
 
     auto stride = alignMemory(sizeof(GpuMaterialBufferData),
                               gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
@@ -207,12 +210,12 @@ void Renderer::setResources(const assets::AssetDatabase& db)
     {
         auto allocInfo = vk::DescriptorSetAllocateInfo{};
         allocInfo.descriptorPool = *descriptorPool_;
-        allocInfo.descriptorSetCount = gpuDevice_.maxFramesInFlight();
+        allocInfo.descriptorSetCount = maxFramesInFlight;
         allocInfo.pSetLayouts = layouts.data();
 
         descriptorSets_[handle] = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
 
-        for (auto frameIndex = uint32_t{0}; frameIndex < gpuDevice_.maxFramesInFlight(); ++frameIndex)
+        for (auto frameIndex = uint32_t{0}; frameIndex < maxFramesInFlight; ++frameIndex)
         {
             auto bufferInfo = vk::DescriptorBufferInfo{};
             bufferInfo.buffer = gpuResources_->materialUniformBuffer(frameIndex);
@@ -299,17 +302,17 @@ void Renderer::createDescriptorPool()
 {
     auto materialUboPoolSize = vk::DescriptorPoolSize{};
     materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
-    materialUboPoolSize.descriptorCount = gpuDevice_.maxFramesInFlight();
+    materialUboPoolSize.descriptorCount = maxFramesInFlight;
 
     auto texturePoolSize = vk::DescriptorPoolSize{};
     texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
-    texturePoolSize.descriptorCount = gpuDevice_.maxFramesInFlight();
+    texturePoolSize.descriptorCount = maxFramesInFlight;
 
     auto poolSizes = std::array{materialUboPoolSize, texturePoolSize};
 
     auto poolInfo = vk::DescriptorPoolCreateInfo{};
     poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    poolInfo.maxSets = gpuDevice_.maxFramesInFlight();
+    poolInfo.maxSets = maxFramesInFlight;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
 
@@ -443,7 +446,7 @@ void Renderer::createCommandBuffers()
     auto allocInfo = vk::CommandBufferAllocateInfo{};
     allocInfo.commandPool = *gpuDevice_.commandPool();
     allocInfo.level = vk::CommandBufferLevel::ePrimary;
-    allocInfo.commandBufferCount = gpuDevice_.maxFramesInFlight();
+    allocInfo.commandBufferCount = maxFramesInFlight;
 
     commandBuffers_ = vk::raii::CommandBuffers(gpuDevice_.device(), allocInfo);
 }
@@ -455,7 +458,7 @@ void Renderer::createSyncObjects()
         renderFinishedSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
     }
 
-    for ([[maybe_unused]] auto _ : std::views::repeat(0, gpuDevice_.maxFramesInFlight()))
+    for ([[maybe_unused]] auto _ : std::views::repeat(0, maxFramesInFlight))
     {
         presentCompleteSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
 

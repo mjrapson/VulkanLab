@@ -28,7 +28,7 @@ class GpuDevice;
 class GpuResourceCache
 {
   public:
-    GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice);
+    GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice, int maxFramesInFlight);
 
     ~GpuResourceCache() = default;
 
@@ -54,6 +54,7 @@ class GpuResourceCache
 
   private:
     const GpuDevice& gpuDevice_;
+    const int maxFramesInFlight_;
 
     vk::raii::Buffer meshVertexBuffer_{nullptr};
     vk::raii::Buffer meshIndexBuffer_{nullptr};
