@@ -136,8 +136,6 @@ void Renderer::renderFrame()
 
     recordCommands(imageIndex, commandBuffer);
 
-    // updateUniformBuffer(currentFrameIndex_);
-
     const auto waitDestinationStageMask = vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
     auto submitInfo = vk::SubmitInfo{};
@@ -575,8 +573,8 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
 
     commandBuffer.beginRendering(renderingInfo);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_);
-    // commandBuffer.bindVertexBuffers(0, *vertexBuffer_, {0});
-    // commandBuffer.bindIndexBuffer(*indexBuffer_, 0, vk::IndexType::eUint16);
+    commandBuffer.bindVertexBuffers(0, *gpuResources_->meshVertexBuffer(), {0});
+    commandBuffer.bindIndexBuffer(*gpuResources_->meshIndexBuffer(), 0, vk::IndexType::eUint16);
     // commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
     //                                  pipelineLayout_,
     //                                  0,
