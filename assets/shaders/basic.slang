@@ -44,7 +44,7 @@ struct VertexOutput
 VertexOutput vertMain(VertexInput vertexInput) 
 {
     VertexOutput output;
-    output.position = float4(vertexInput.position, 1.0);
+    output.position = mul(camera.projection, mul(camera.view, mul(pc.model, float4(vertexInput.position, 1.0))));
     output.normal = vertexInput.normal;
     output.uv = vertexInput.uv;
     return output;
@@ -53,5 +53,5 @@ VertexOutput vertMain(VertexInput vertexInput)
 [shader("fragment")]
 float4 fragMain(VertexOutput inVert) : SV_Target
 {
-    return float4(0.8, 0.8, 0.8, 1.0);
+    return float4(0.4, 0.8, 0.8, 1.0);
 }

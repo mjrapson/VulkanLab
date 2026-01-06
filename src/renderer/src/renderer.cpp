@@ -119,7 +119,7 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
 Renderer::~Renderer() = default;
 
-void Renderer::renderFrame()
+void Renderer::renderFrame(const std::vector<DrawCommand>& drawCommands)
 {
     if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
         != vk::Result::eSuccess)
@@ -145,7 +145,7 @@ void Renderer::renderFrame()
     auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
     commandBuffer.reset();
 
-    recordCommands(imageIndex, commandBuffer);
+    recordCommands(imageIndex, commandBuffer, drawCommands);
 
     const auto waitDestinationStageMask = vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
@@ -454,7 +454,7 @@ void Renderer::createGraphicsPipeline()
 
     auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout_, *materialDescriptorSetLayout_};
 
-    if(gpuDevice_.physicalDevice().getProperties().limits.maxPushConstantsSize < sizeof(PushConstants))
+    if (gpuDevice_.physicalDevice().getProperties().limits.maxPushConstantsSize < sizeof(PushConstants))
     {
         throw std::runtime_error{"Requested push constant size exceeds device limits"};
     }
@@ -645,7 +645,9 @@ void Renderer::recreateSwapchain()
     createSwapchainImageViews();
 }
 
-void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
+void Renderer::recordCommands(uint32_t imageIndex,
+                              const vk::raii::CommandBuffer& commandBuffer,
+                              const std::vector<DrawCommand>& drawCommands)
 {
     commandBuffer.begin({});
 
@@ -677,10 +679,10 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
     commandBuffer.beginRendering(renderingInfo);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_);
     commandBuffer.bindVertexBuffers(0, *gpuResources_->meshVertexBuffer(), {0});
-    commandBuffer.bindIndexBuffer(*gpuResources_->meshIndexBuffer(), 0, vk::IndexType::eUint16);
+    commandBuffer.bindIndexBuffer(*gpuResources_->meshIndexBuffer(), 0, vk::IndexType::eUint32);
 
     // test - temporary
-    glm::vec3 position{0.0f, 0.0f, 0.0f};
+    glm::vec3 position{0.0f, 0.0f, 4.0f};
     glm::vec3 front{0.0f, 0.0f, -1.0f};
     glm::vec3 up{0.0f, 1.0f, 0.0f};
     float fieldOfView{45.0f};
@@ -691,6 +693,7 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
     auto cameraBuffer = CameraBufferObject{};
     cameraBuffer.projection = glm::perspective(fieldOfView, aspectRatio, nearPlane, farPlane);
     cameraBuffer.view = glm::lookAt(position, position + front, up);
+    //cameraBuffer.projection[1][1] *= -1.0f;
     memcpy(cameraUboMappedMemory_[currentFrameIndex_], &cameraBuffer, sizeof(cameraBuffer));
 
     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
@@ -708,7 +711,19 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
                                            1.0f));
     commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
 
-    // commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+    for (const auto& drawCommand : drawCommands)
+    {
+        auto pushConstants = PushConstants{};
+        pushConstants.modelTransform = drawCommand.transform;
+
+        commandBuffer.pushConstants(pipelineLayout_,
+                                    vk::ShaderStageFlagBits::eVertex,
+                                    0,
+                                    vk::ArrayProxy<const PushConstants>{pushConstants});
+
+        auto& gpuMesh = gpuResources_->gpuMesh(drawCommand.mesh);
+        commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);
+    }
 
     commandBuffer.endRendering();
 

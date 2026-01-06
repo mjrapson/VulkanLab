@@ -130,7 +130,7 @@ void VulkanApplication::init(int windowWidth, int windowHeight, const std::strin
     initVulkan(windowWidth, windowHeight);
 
     spdlog::info("Loading demo assets");
-    
+
     // Demo
     auto loader = assets::GltfLoader{*assetDatabase_.get()};
     loader.load(core::getPrefabsDir() / "cube.glb");
@@ -146,7 +146,7 @@ void VulkanApplication::run()
     {
         glfwPollEvents();
 
-        renderer_->renderFrame();
+        renderer_->renderFrame({{assets::AssetHandle<assets::Mesh>{0}, glm::mat4{1.0f}}});
     }
 
     gpuDevice_->device().waitIdle();
@@ -257,12 +257,12 @@ void VulkanApplication::createInstance()
 
 void VulkanApplication::createDebugMessenger()
 {
-    const auto severityFlags =
-        (vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
-         | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
-    const auto messageTypeFlags =
-        (vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
-         | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+    const auto severityFlags = (vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose
+                                | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
+                                | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+    const auto messageTypeFlags = (vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
+                                   | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
+                                   | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
 
     auto debugCreateInfo = vk::DebugUtilsMessengerCreateInfoEXT{};
     debugCreateInfo.messageSeverity = severityFlags;

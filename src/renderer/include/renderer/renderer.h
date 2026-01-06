@@ -3,12 +3,15 @@
 
 #pragma once
 
+#include "renderer/draw_command.h"
+
 #include <assets/asset_handle.h>
 #include <assets/material.h>
 
 #include <vulkan/vulkan_raii.hpp>
 
 #include <memory>
+#include <vector>
 
 namespace assets
 {
@@ -37,7 +40,7 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
-    void renderFrame();
+    void renderFrame(const std::vector<DrawCommand>& drawCommands);
     void windowResized(int width, int height);
 
     void setResources(const assets::AssetDatabase& db);
@@ -57,8 +60,9 @@ class Renderer
     void createDescriptorSets();
 
     void recreateSwapchain();
-    void recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer);
-    // void updateUniformBuffer(uint32_t frameIndex);
+    void recordCommands(uint32_t imageIndex,
+                        const vk::raii::CommandBuffer& commandBuffer,
+                        const std::vector<DrawCommand>& drawCommands);
 
   private:
     const vk::raii::Instance& instance_;
@@ -98,6 +102,7 @@ class Renderer
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
 
     std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
-    std::unordered_map<assets::AssetHandle<assets::Material>, std::vector<vk::raii::DescriptorSet>> materialDescriptorSets_;
+    std::unordered_map<assets::AssetHandle<assets::Material>, std::vector<vk::raii::DescriptorSet>>
+        materialDescriptorSets_;
 };
 } // namespace renderer
