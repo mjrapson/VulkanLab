@@ -177,6 +177,7 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Mat
     {
         auto gpuMaterial = GpuMaterial{};
         gpuMaterial.uboOffset = currentOffset;
+        gpuMaterials_.emplace(handle, std::move(gpuMaterial));
 
         auto uboData = GpuMaterialBufferData{};
         uboData.diffuseColor = glm::vec4{material.diffuse, 1.0f};
