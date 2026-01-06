@@ -14,6 +14,7 @@
 
 #include <spdlog/spdlog.h>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -25,9 +26,9 @@ namespace renderer
 
 constexpr auto maxFramesInFlight = 2;
 
-struct UniformBufferObject
+// To move into a pipeline object
+struct CameraBufferObject
 {
-    glm::mat4 model;
     glm::mat4 view;
     glm::mat4 projection;
 };
@@ -95,8 +96,8 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     createSwapchainImageViews();
 
     spdlog::info("Creating graphics pipeline");
-    createDescriptorPool();
-    createDescriptorSetLayout();
+    createDescriptorPools();
+    createDescriptorSetLayouts();
     createGraphicsPipeline();
 
     spdlog::info("Creating command buffers");
@@ -107,6 +108,7 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
     spdlog::info("Creating default objects");
     createDefaultObjects();
+    createCameraBuffers();
 }
 
 Renderer::~Renderer() = default;
@@ -201,7 +203,7 @@ void Renderer::setResources(const assets::AssetDatabase& db)
     gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_, maxFramesInFlight);
 
     // To move into a pipeline object
-    auto layouts = std::vector<vk::DescriptorSetLayout>{maxFramesInFlight, *descriptorSetLayout_};
+    auto layouts = std::vector<vk::DescriptorSetLayout>{maxFramesInFlight, *materialDescriptorSetLayout_};
 
     auto stride = alignMemory(sizeof(GpuMaterialBufferData),
                               gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
@@ -209,11 +211,11 @@ void Renderer::setResources(const assets::AssetDatabase& db)
     for (const auto& [handle, material] : db.materials().entries())
     {
         auto allocInfo = vk::DescriptorSetAllocateInfo{};
-        allocInfo.descriptorPool = *descriptorPool_;
+        allocInfo.descriptorPool = *materialDescriptorPool_;
         allocInfo.descriptorSetCount = maxFramesInFlight;
         allocInfo.pSetLayouts = layouts.data();
 
-        descriptorSets_[handle] = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+        materialDescriptorSets_[handle] = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
 
         for (auto frameIndex = uint32_t{0}; frameIndex < maxFramesInFlight; ++frameIndex)
         {
@@ -223,7 +225,7 @@ void Renderer::setResources(const assets::AssetDatabase& db)
             bufferInfo.range = stride;
 
             auto uboWrite = vk::WriteDescriptorSet{};
-            uboWrite.dstSet = descriptorSets_.at(handle).at(frameIndex);
+            uboWrite.dstSet = materialDescriptorSets_.at(handle).at(frameIndex);
             uboWrite.dstBinding = 0;
             uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
             uboWrite.descriptorCount = 1;
@@ -240,7 +242,7 @@ void Renderer::setResources(const assets::AssetDatabase& db)
             imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
             vk::WriteDescriptorSet textureWrite{};
-            textureWrite.dstSet = descriptorSets_.at(handle).at(frameIndex);
+            textureWrite.dstSet = materialDescriptorSets_.at(handle).at(frameIndex);
             textureWrite.dstBinding = 1;
             textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
             textureWrite.descriptorCount = 1;
@@ -298,8 +300,24 @@ void Renderer::createSwapchainImageViews()
 }
 
 // To move into a pipeline object
-void Renderer::createDescriptorPool()
+void Renderer::createDescriptorPools()
 {
+    // Camera descriptor pool
+    auto cameraPoolSize = vk::DescriptorPoolSize{};
+    cameraPoolSize.type = vk::DescriptorType::eUniformBuffer;
+    cameraPoolSize.descriptorCount = maxFramesInFlight;
+
+    auto cameraPoolSizes = std::array{cameraPoolSize};
+
+    auto cameraPoolInfo = vk::DescriptorPoolCreateInfo{};
+    cameraPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    cameraPoolInfo.maxSets = maxFramesInFlight;
+    cameraPoolInfo.poolSizeCount = static_cast<uint32_t>(cameraPoolSizes.size());
+    cameraPoolInfo.pPoolSizes = cameraPoolSizes.data();
+
+    cameraDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), cameraPoolInfo};
+
+    // Material descriptor pool
     auto materialUboPoolSize = vk::DescriptorPoolSize{};
     materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
     materialUboPoolSize.descriptorCount = maxFramesInFlight;
@@ -308,20 +326,36 @@ void Renderer::createDescriptorPool()
     texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
     texturePoolSize.descriptorCount = maxFramesInFlight;
 
-    auto poolSizes = std::array{materialUboPoolSize, texturePoolSize};
+    auto materialPoolSizes = std::array{materialUboPoolSize, texturePoolSize};
 
-    auto poolInfo = vk::DescriptorPoolCreateInfo{};
-    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    poolInfo.maxSets = maxFramesInFlight;
-    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-    poolInfo.pPoolSizes = poolSizes.data();
+    auto materialPoolInfo = vk::DescriptorPoolCreateInfo{};
+    materialPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    materialPoolInfo.maxSets = maxFramesInFlight;
+    materialPoolInfo.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size());
+    materialPoolInfo.pPoolSizes = materialPoolSizes.data();
 
-    descriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), poolInfo};
+    materialDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), materialPoolInfo};
 }
 
 // To move into a pipeline object
-void Renderer::createDescriptorSetLayout()
+void Renderer::createDescriptorSetLayouts()
 {
+    // Camera descriptor set layout
+    auto cameraLayoutBinding = vk::DescriptorSetLayoutBinding{};
+    cameraLayoutBinding.binding = 0;
+    cameraLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+    cameraLayoutBinding.descriptorCount = 1;
+    cameraLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+
+    auto cameraLayoutBindings = std::array{cameraLayoutBinding};
+
+    auto cameraLayoutInfo = vk::DescriptorSetLayoutCreateInfo{};
+    cameraLayoutInfo.bindingCount = static_cast<uint32_t>(cameraLayoutBindings.size());
+    cameraLayoutInfo.pBindings = cameraLayoutBindings.data();
+
+    cameraDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), cameraLayoutInfo);
+
+    // Material descriptor set layout
     auto materialUboLayoutBinding = vk::DescriptorSetLayoutBinding{};
     materialUboLayoutBinding.binding = 0;
     materialUboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
@@ -334,13 +368,13 @@ void Renderer::createDescriptorSetLayout()
     textureBinding.descriptorCount = 1;
     textureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-    auto bindings = std::array{materialUboLayoutBinding, textureBinding};
+    auto materialLayoutBindings = std::array{materialUboLayoutBinding, textureBinding};
 
-    auto layoutInfo = vk::DescriptorSetLayoutCreateInfo{};
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings = bindings.data();
+    auto materialLayoutInfo = vk::DescriptorSetLayoutCreateInfo{};
+    materialLayoutInfo.bindingCount = static_cast<uint32_t>(materialLayoutBindings.size());
+    materialLayoutInfo.pBindings = materialLayoutBindings.data();
 
-    descriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), layoutInfo);
+    materialDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), materialLayoutInfo);
 }
 
 // To move into a pipeline object
@@ -412,9 +446,11 @@ void Renderer::createGraphicsPipeline()
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
+    auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout_, *materialDescriptorSetLayout_};
+
     auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo{};
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &*descriptorSetLayout_;
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
+    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
     pipelineLayoutInfo.pushConstantRangeCount = 0;
 
     pipelineLayout_ = vk::raii::PipelineLayout(gpuDevice_.device(), pipelineLayoutInfo);
@@ -529,6 +565,53 @@ void Renderer::createDefaultObjects()
     emptyImageSampler = vk::raii::Sampler{gpuDevice_.device(), samplerInfo};
 }
 
+void Renderer::createCameraBuffers()
+{
+    auto layouts = std::vector<vk::DescriptorSetLayout>{maxFramesInFlight, *cameraDescriptorSetLayout_};
+
+    auto allocInfo = vk::DescriptorSetAllocateInfo{};
+    allocInfo.descriptorPool = *cameraDescriptorPool_;
+    allocInfo.descriptorSetCount = maxFramesInFlight;
+    allocInfo.pSetLayouts = layouts.data();
+
+    cameraDescriptorSets_ = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+
+    for (auto frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex)
+    {
+        auto buffer = createBuffer(gpuDevice_.device(),
+                                   sizeof(CameraBufferObject),
+                                   vk::BufferUsageFlagBits::eUniformBuffer,
+                                   vk::SharingMode::eExclusive);
+
+        auto memory = allocateBufferMemory(gpuDevice_.device(),
+                                           gpuDevice_.physicalDevice(),
+                                           buffer,
+                                           vk::MemoryPropertyFlagBits::eHostVisible
+                                               | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+        auto mappedMemory = memory.mapMemory(0, VK_WHOLE_SIZE);
+
+        auto bufferInfo = vk::DescriptorBufferInfo{};
+        bufferInfo.buffer = buffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(CameraBufferObject);
+
+        auto uboWrite = vk::WriteDescriptorSet{};
+        uboWrite.dstSet = cameraDescriptorSets_.at(frameIndex);
+        uboWrite.dstBinding = 0;
+        uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
+        uboWrite.descriptorCount = 1;
+        uboWrite.pBufferInfo = &bufferInfo;
+
+        auto writes = std::array{uboWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+
+        cameraUboBuffers_.emplace_back(std::move(buffer));
+        cameraUboBuffersMemory_.emplace_back(std::move(memory));
+        cameraUboMappedMemory_.emplace_back(std::move(mappedMemory));
+    }
+}
+
 void Renderer::recreateSwapchain()
 {
     if (windowMinimized_)
@@ -578,11 +661,26 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_);
     commandBuffer.bindVertexBuffers(0, *gpuResources_->meshVertexBuffer(), {0});
     commandBuffer.bindIndexBuffer(*gpuResources_->meshIndexBuffer(), 0, vk::IndexType::eUint16);
-    // commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-    //                                  pipelineLayout_,
-    //                                  0,
-    //                                  *descriptorSets_.at(currentFrameIndex_),
-    //                                  nullptr);
+
+    // test - temporary
+    glm::vec3 position{0.0f, 0.0f, 0.0f};
+    glm::vec3 front{0.0f, 0.0f, -1.0f};
+    glm::vec3 up{0.0f, 1.0f, 0.0f};
+    float fieldOfView{45.0f};
+    float nearPlane{0.1f};
+    float farPlane{1000.0f};
+    float aspectRatio = static_cast<float>(windowWidth_) / static_cast<float>(windowHeight_);
+
+    auto cameraBuffer = CameraBufferObject{};
+    cameraBuffer.projection = glm::perspective(fieldOfView, aspectRatio, nearPlane, farPlane);
+    cameraBuffer.view = glm::lookAt(position, position + front, up);
+    memcpy(cameraUboMappedMemory_[currentFrameIndex_], &cameraBuffer, sizeof(cameraBuffer));
+
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                     pipelineLayout_,
+                                     0,
+                                     *cameraDescriptorSets_.at(currentFrameIndex_),
+                                     nullptr);
 
     commandBuffer.setViewport(0,
                               vk::Viewport(0.0f,
@@ -609,25 +707,4 @@ void Renderer::recordCommands(uint32_t imageIndex, const vk::raii::CommandBuffer
 
     commandBuffer.end();
 }
-
-// void Renderer::updateUniformBuffer(uint32_t frameIndex)
-// {
-//     static auto startTime = std::chrono::high_resolution_clock::now();
-
-//     const auto currentTime = std::chrono::high_resolution_clock::now();
-//     const auto time =
-//         std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-//     auto ubo = UniformBufferObject{};
-//     ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-//     ubo.view = lookAt(
-//         glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-//     ubo.projection = glm::perspective(glm::radians(45.0f),
-//                                       static_cast<float>(swapchainExtent_.width)
-//                                           / static_cast<float>(swapchainExtent_.height),
-//                                       0.1f,
-//                                       10.0f);
-//     ubo.projection[1][1] *= -1;
-//     memcpy(mappedUniformBuffers_[frameIndex], &ubo, sizeof(ubo));
-// }
 } // namespace renderer

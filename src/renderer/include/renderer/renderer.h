@@ -46,12 +46,13 @@ class Renderer
     void createSwapchain();
     void createSwapchainImageViews();
 
-    void createDescriptorPool();
-    void createDescriptorSetLayout();
+    void createDescriptorPools();
+    void createDescriptorSetLayouts();
     void createGraphicsPipeline();
     void createCommandBuffers();
     void createSyncObjects();
     void createDefaultObjects();
+    void createCameraBuffers();
 
     void createDescriptorSets();
 
@@ -74,8 +75,10 @@ class Renderer
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;
     std::vector<vk::raii::ImageView> swapchainImageViews_;
-    vk::raii::DescriptorPool descriptorPool_{nullptr};
-    vk::raii::DescriptorSetLayout descriptorSetLayout_{nullptr};
+    vk::raii::DescriptorPool cameraDescriptorPool_{nullptr};
+    vk::raii::DescriptorSetLayout cameraDescriptorSetLayout_{nullptr};
+    vk::raii::DescriptorPool materialDescriptorPool_{nullptr};
+    vk::raii::DescriptorSetLayout materialDescriptorSetLayout_{nullptr};
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline graphicsPipeline_{nullptr};
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
@@ -89,7 +92,12 @@ class Renderer
     vk::raii::ImageView emptyImageView{nullptr};
     vk::raii::Sampler emptyImageSampler{nullptr};
 
+    std::vector<vk::raii::Buffer> cameraUboBuffers_;
+    std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;
+    std::vector<void*> cameraUboMappedMemory_;
+    std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
+
     std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
-    std::unordered_map<assets::AssetHandle<assets::Material>, std::vector<vk::raii::DescriptorSet>> descriptorSets_;
+    std::unordered_map<assets::AssetHandle<assets::Material>, std::vector<vk::raii::DescriptorSet>> materialDescriptorSets_;
 };
 } // namespace renderer

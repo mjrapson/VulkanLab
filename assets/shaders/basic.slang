@@ -5,15 +5,24 @@ struct VertexInput
     float2 uv;
 };
 
+struct CameraData
+{
+    float4x4 view;
+    float4x4 projection;
+};
+
 struct MaterialData
 {
     float4 diffuseColor;
 };
 
 [[vk::binding(0, 0)]]
+ConstantBuffer<CameraData> camera;
+
+[[vk::binding(0, 1)]]
 ConstantBuffer<MaterialData> material;
 
-[[vk::binding(1, 0)]]
+[[vk::binding(1, 1)]]
 Sampler2D textures[];
 
 struct VertexOutput 
