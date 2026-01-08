@@ -53,5 +53,5 @@ VertexOutput vertMain(VertexInput vertexInput)
 [shader("fragment")]
 float4 fragMain(VertexOutput inVert) : SV_Target
 {
-    return float4(0.4, 0.8, 0.8, 1.0);
+    return material.diffuseColor;
 }

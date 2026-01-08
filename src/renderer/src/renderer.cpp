@@ -693,7 +693,7 @@ void Renderer::recordCommands(uint32_t imageIndex,
     auto cameraBuffer = CameraBufferObject{};
     cameraBuffer.projection = glm::perspective(fieldOfView, aspectRatio, nearPlane, farPlane);
     cameraBuffer.view = glm::lookAt(position, position + front, up);
-    //cameraBuffer.projection[1][1] *= -1.0f;
+    // cameraBuffer.projection[1][1] *= -1.0f;
     memcpy(cameraUboMappedMemory_[currentFrameIndex_], &cameraBuffer, sizeof(cameraBuffer));
 
     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
@@ -720,6 +720,13 @@ void Renderer::recordCommands(uint32_t imageIndex,
                                     vk::ShaderStageFlagBits::eVertex,
                                     0,
                                     vk::ArrayProxy<const PushConstants>{pushConstants});
+
+        const auto& gpuMaterial = gpuResources_->gpuMaterial(drawCommand.material);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         pipelineLayout_,
+                                         1,
+                                         *materialDescriptorSets_.at(drawCommand.material).at(currentFrameIndex_),
+                                         gpuMaterial.uboOffset);
 
         auto& gpuMesh = gpuResources_->gpuMesh(drawCommand.mesh);
         commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);
