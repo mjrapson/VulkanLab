@@ -6,9 +6,10 @@
 #include "assets/image.h"
 
 #include <filesystem>
+#include <memory>
 
 namespace assets
 {
 Image createImageFromPath(const std::filesystem::path& path);
-Image createImageFromData(int width, int height, const std::vector<unsigned char>& data);
+std::unique_ptr<Image> createImageFromData(int width, int height, const std::vector<unsigned char>& data);
 } // namespace assets

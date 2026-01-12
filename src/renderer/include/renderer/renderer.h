@@ -5,7 +5,6 @@
 
 #include "renderer/draw_command.h"
 
-#include <assets/asset_handle.h>
 #include <assets/material.h>
 
 #include <vulkan/vulkan_raii.hpp>
@@ -102,7 +101,6 @@ class Renderer
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
 
     std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
-    std::unordered_map<assets::AssetHandle<assets::Material>, std::vector<vk::raii::DescriptorSet>>
-        materialDescriptorSets_;
+    std::unordered_map<assets::Material*, std::vector<vk::raii::DescriptorSet>> materialDescriptorSets_;
 };
 } // namespace renderer

@@ -41,9 +41,9 @@ const vk::raii::Buffer& GpuResourceCache::materialUniformBuffer(int frameIndex) 
     return materialUboBuffers_.at(frameIndex);
 }
 
-GpuImage& GpuResourceCache::gpuImage(const assets::AssetHandle<assets::Image>& handle)
+GpuImage& GpuResourceCache::gpuImage(assets::Image* image)
 {
-    if (auto itr = gpuImages_.find(handle); itr != gpuImages_.end())
+    if (auto itr = gpuImages_.find(image); itr != gpuImages_.end())
     {
         return itr->second;
     }
@@ -51,9 +51,9 @@ GpuImage& GpuResourceCache::gpuImage(const assets::AssetHandle<assets::Image>& h
     throw std::runtime_error("Image handle not uploaded to GPU");
 }
 
-GpuMaterial& GpuResourceCache::gpuMaterial(const assets::AssetHandle<assets::Material>& handle)
+GpuMaterial& GpuResourceCache::gpuMaterial(assets::Material* material)
 {
-    if (auto itr = gpuMaterials_.find(handle); itr != gpuMaterials_.end())
+    if (auto itr = gpuMaterials_.find(material); itr != gpuMaterials_.end())
     {
         return itr->second;
     }
@@ -61,9 +61,9 @@ GpuMaterial& GpuResourceCache::gpuMaterial(const assets::AssetHandle<assets::Mat
     throw std::runtime_error("Material handle not uploaded to GPU");
 }
 
-GpuMesh& GpuResourceCache::gpuMesh(const assets::AssetHandle<assets::Mesh>& handle)
+GpuMesh& GpuResourceCache::gpuMesh(assets::Mesh* mesh)
 {
-    if (auto itr = gpuMeshes_.find(handle); itr != gpuMeshes_.end())
+    if (auto itr = gpuMeshes_.find(mesh); itr != gpuMeshes_.end())
     {
         return itr->second;
     }
@@ -73,25 +73,42 @@ GpuMesh& GpuResourceCache::gpuMesh(const assets::AssetHandle<assets::Mesh>& hand
 
 void GpuResourceCache::uploadData(const assets::AssetDatabase& db)
 {
-    uploadImageData(db.images());
+    auto images = std::vector<assets::Image*>{};
+    for (const auto& prefab : db.prefabs())
+    {
+        for (const auto& image : prefab.second->images())
+        {
+            images.push_back(image.second.get());
+        }
+    }
+    uploadImageData(images);
 
-    uploadMaterialData(db.materials());
+    auto materials = std::vector<assets::Material*>{};
+    for (const auto& prefab : db.prefabs())
+    {
+        for (const auto& material : prefab.second->materials())
+        {
+            materials.push_back(material.second.get());
+        }
+    }
+    uploadMaterialData(materials);
 
-    uploadMeshData(db.meshes());
+    uploadMeshData(db);
 }
 
-void GpuResourceCache::uploadImageData(const assets::AssetStorage<assets::Image>& images)
+void GpuResourceCache::uploadImageData(const std::vector<assets::Image*>& images)
 {
-    for (const auto& [handle, image] : images.entries())
+    for (const auto& image : images)
     {
+
         auto gpuImage = GpuImage{};
-        gpuImage.image = createImage(gpuDevice_.device(), image.width(), image.height());
+        gpuImage.image = createImage(gpuDevice_.device(), image->width, image->height);
         gpuImage.memory = allocateImageMemory(gpuDevice_.device(),
                                               gpuDevice_.physicalDevice(),
                                               gpuImage.image,
                                               vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-        const auto imageSize = image.width() * image.height() * 4; //  RGBA8
+        const auto imageSize = image->width * image->height * 4; //  RGBA8
         auto stagingBuffer = createBuffer(gpuDevice_.device(),
                                           imageSize,
                                           vk::BufferUsageFlagBits::eTransferSrc,
@@ -104,7 +121,7 @@ void GpuResourceCache::uploadImageData(const assets::AssetStorage<assets::Image>
                                                       | vk::MemoryPropertyFlagBits::eHostCoherent);
 
         void* data = stagingMemory.mapMemory(0, imageSize);
-        std::memcpy(data, image.data().data(), imageSize);
+        std::memcpy(data, image->data.data(), imageSize);
         stagingMemory.unmapMemory();
 
         copyBufferToImage(gpuDevice_.device(),
@@ -112,8 +129,8 @@ void GpuResourceCache::uploadImageData(const assets::AssetStorage<assets::Image>
                           gpuImage.image,
                           gpuDevice_.graphicsQueue(),
                           gpuDevice_.commandPool(),
-                          image.width(),
-                          image.height());
+                          image->width,
+                          image->height);
 
         auto subresourceRange = vk::ImageSubresourceRange{};
         subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
@@ -144,12 +161,17 @@ void GpuResourceCache::uploadImageData(const assets::AssetStorage<assets::Image>
 
         gpuImage.sampler = vk::raii::Sampler{gpuDevice_.device(), samplerInfo};
 
-        gpuImages_.emplace(handle, std::move(gpuImage));
+        gpuImages_.emplace(image, std::move(gpuImage));
     }
 }
 
-void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Material>& materials)
+void GpuResourceCache::uploadMaterialData(const std::vector<assets::Material*>& materials)
 {
+    if (materials.empty())
+    {
+        return;
+    }
+
     auto stride = alignMemory(sizeof(GpuMaterialBufferData),
                               gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
 
@@ -174,15 +196,15 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Mat
     }
 
     auto currentOffset = uint32_t{0};
-    for (const auto& [handle, material] : materials.entries())
+    for (const auto& material : materials)
     {
         auto gpuMaterial = GpuMaterial{};
         gpuMaterial.uboOffset = currentOffset;
-        gpuMaterials_.emplace(handle, std::move(gpuMaterial));
+        gpuMaterials_.emplace(material, std::move(gpuMaterial));
 
         auto uboData = GpuMaterialBufferData{};
-        uboData.diffuseColor = glm::vec4{material.diffuse, 1.0f};
-        uboData.hasDiffuseTexture = material.diffuseTexture ? 1 : 0;
+        uboData.diffuseColor = glm::vec4{material->diffuse, 1.0f};
+        uboData.hasDiffuseTexture = material->diffuseTexture ? 1 : 0;
 
         for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
         {
@@ -191,18 +213,22 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetStorage<assets::Mat
             std::memcpy(static_cast<std::byte*>(data) + currentOffset, &uboData, sizeof(GpuMaterialBufferData));
         }
 
-        currentOffset += stride;
+        currentOffset += static_cast<uint32_t>(stride);
     }
 }
 
-void GpuResourceCache::uploadMeshData(const assets::AssetStorage<assets::Mesh>& meshes)
+void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
 {
     auto totalVertices = size_t{0};
     auto totalIndices = size_t{0};
-    for (const auto& mesh : meshes.values())
+
+    for (const auto& [_, prefab] : db.prefabs())
     {
-        totalVertices += mesh.vertices.size();
-        totalIndices += mesh.indices.size();
+        for (const auto& mesh : prefab->meshes())
+        {
+            totalVertices += mesh->vertices.size();
+            totalIndices += mesh->indices.size();
+        }
     }
 
     const auto vertexBufferSize = sizeof(core::Vertex) * totalVertices;
@@ -254,29 +280,32 @@ void GpuResourceCache::uploadMeshData(const assets::AssetStorage<assets::Mesh>& 
 
     auto currentVertexOffset = size_t{0};
     auto currentIndexOffset = size_t{0};
-    for (const auto& [handle, mesh] : meshes.entries())
+    for (const auto& [_, prefab] : db.prefabs())
     {
-        auto gpuMesh = GpuMesh{};
-        gpuMesh.vertexCount = static_cast<uint32_t>(mesh.vertices.size());
-        gpuMesh.indexCount = static_cast<uint32_t>(mesh.indices.size());
-        gpuMesh.vertexOffset = static_cast<uint32_t>(currentVertexOffset);
-        gpuMesh.indexOffset = static_cast<uint32_t>(currentIndexOffset);
+        for (const auto& mesh : prefab->meshes())
+        {
+            auto gpuMesh = GpuMesh{};
+            gpuMesh.vertexCount = static_cast<uint32_t>(mesh->vertices.size());
+            gpuMesh.indexCount = static_cast<uint32_t>(mesh->indices.size());
+            gpuMesh.vertexOffset = static_cast<uint32_t>(currentVertexOffset);
+            gpuMesh.indexOffset = static_cast<uint32_t>(currentIndexOffset);
 
-        const auto vertexSize = mesh.vertices.size() * sizeof(core::Vertex);
-        const auto indexSize = mesh.indices.size() * sizeof(uint32_t);
+            const auto vertexSize = mesh->vertices.size() * sizeof(core::Vertex);
+            const auto indexSize = mesh->indices.size() * sizeof(uint32_t);
 
-        std::memcpy(static_cast<std::byte*>(vertexStagingMemory) + currentVertexOffset * sizeof(core::Vertex),
-                    mesh.vertices.data(),
-                    vertexSize);
+            std::memcpy(static_cast<std::byte*>(vertexStagingMemory) + currentVertexOffset * sizeof(core::Vertex),
+                        mesh->vertices.data(),
+                        vertexSize);
 
-        std::memcpy(static_cast<std::byte*>(indexStagingMemory) + currentIndexOffset * sizeof(uint32_t),
-                    mesh.indices.data(),
-                    indexSize);
+            std::memcpy(static_cast<std::byte*>(indexStagingMemory) + currentIndexOffset * sizeof(uint32_t),
+                        mesh->indices.data(),
+                        indexSize);
 
-        currentVertexOffset += mesh.vertices.size();
-        currentIndexOffset += mesh.indices.size();
+            currentVertexOffset += mesh->vertices.size();
+            currentIndexOffset += mesh->indices.size();
 
-        gpuMeshes_.emplace(handle, std::move(gpuMesh));
+            gpuMeshes_.emplace(mesh.get(), std::move(gpuMesh));
+        }
     }
 
     vertexStagingBufferMemory.unmapMemory();

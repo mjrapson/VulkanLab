@@ -3,20 +3,18 @@
 
 #pragma once
 
-#include "asset_handle.h"
-#include "material.h"
-
 #include <core/vertex.h>
 
-#include <optional>
 #include <vector>
 
 namespace assets
 {
+struct Material;
+
 struct Mesh
 {
     std::vector<core::Vertex> vertices;
     std::vector<uint32_t> indices;
-    std::optional<AssetHandle<Material>> material;
+    Material* material{nullptr};
 };
 } // namespace assets

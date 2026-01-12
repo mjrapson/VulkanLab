@@ -3,20 +3,17 @@
 
 #pragma once
 
-#include "asset_handle.h"
-#include "image.h"
-
 #include <glm/glm.hpp>
-
-#include <optional>
 
 namespace assets
 {
+struct Image;
+
 struct Material
 {
     glm::vec3 ambient;
     glm::vec3 diffuse;
     glm::vec3 specular;
-    std::optional<AssetHandle<Image>> diffuseTexture;
+    Image* diffuseTexture;
 };
 } // namespace assets

@@ -3,7 +3,6 @@
 
 #include "assets/gltf_loader.h"
 
-#include "assets/asset_database.h"
 #include "assets/image.h"
 #include "assets/material.h"
 #include "assets/mesh.h"
@@ -106,19 +105,22 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
     return vertices;
 }
 
-GltfLoader::GltfLoader(AssetDatabase& db)
-    : db_{db}
+Image* readBaseColorTexture(tinygltf::Material& material, tinygltf::Model& model, Prefab& prefab)
 {
+    const auto texIndex = material.pbrMetallicRoughness.baseColorTexture.index;
+    if (texIndex < 0)
+    {
+        return nullptr;
+    }
+
+    return prefab.getImage(model.images[model.textures[texIndex].source].name);
 }
 
-bool GltfLoader::load(const std::filesystem::path& path)
+std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
 {
-    imageCache_.clear();
-    materialCache_.clear();
-
     if (path.extension() != ".glb")
     {
-        throw std::runtime_error("Unsupported gtlf file: " + path.string());
+        throw std::runtime_error("Unsupported gltf file: " + path.string());
     }
 
     auto model = tinygltf::Model{};
@@ -141,91 +143,36 @@ bool GltfLoader::load(const std::filesystem::path& path)
     if (!ret)
     {
         spdlog::critical("Failed to parse glTF {}", path.string());
-        return false;
+        return nullptr;
     }
 
-    auto meshHandles = std::vector<AssetHandle<Mesh>>{};
+    auto prefab = std::make_unique<Prefab>();
+
+    for (auto& image : model.images)
+    {
+        prefab->addImage(image.name, createImageFromData(image.width, image.height, image.image));
+    }
+
+    for (auto& gltfMaterial : model.materials)
+    {
+        auto material = std::make_unique<Material>();
+        material->diffuse = readColor(gltfMaterial.pbrMetallicRoughness.baseColorFactor);
+        material->diffuseTexture = readBaseColorTexture(gltfMaterial, model, *prefab);
+        prefab->addMaterial(gltfMaterial.name, std::move(material));
+    }
 
     for (auto& gltfMesh : model.meshes)
     {
         for (auto& primitive : gltfMesh.primitives)
         {
-            meshHandles.push_back(readMeshPrimitive(primitive, model));
+            auto mesh = std::make_unique<Mesh>();
+            mesh->vertices = readVertices(primitive, model);
+            mesh->indices = readIndices(primitive, model);
+            mesh->material = prefab->getMaterial(model.materials[primitive.material].name);
+            prefab->addMesh(std::move(mesh));
         }
     }
 
-    auto prefab = Prefab{std::move(meshHandles)};
-    db_.addPrefab(std::move(prefab));
-
-    return true;
-}
-
-AssetHandle<Mesh> GltfLoader::readMeshPrimitive(tinygltf::Primitive& primitive, tinygltf::Model& model)
-{
-    auto mesh = Mesh{};
-    mesh.vertices = readVertices(primitive, model);
-    mesh.indices = readIndices(primitive, model);
-    mesh.material = readMaterial(primitive.material, model);
-
-    return db_.addMesh(std::move(mesh));
-}
-
-std::optional<AssetHandle<Material>> GltfLoader::readMaterial(int index, tinygltf::Model& model)
-{
-    if (index < 0)
-    {
-        return std::nullopt;
-    }
-
-    if (static_cast<size_t>(index) >= model.materials.size())
-    {
-        return std::nullopt;
-    }
-
-    if (auto itr = materialCache_.find(index); itr != materialCache_.end())
-    {
-        return itr->second;
-    }
-
-    auto& pbr = model.materials[index].pbrMetallicRoughness;
-
-    auto material = Material{};
-    material.diffuse = readColor(pbr.baseColorFactor);
-    material.diffuseTexture = readTextureImage(pbr.baseColorTexture.index, model);
-
-    const auto handle = db_.addMaterial(std::move(material));
-
-    materialCache_[index] = handle;
-
-    return handle;
-}
-
-std::optional<AssetHandle<Image>> GltfLoader::readTextureImage(int index, tinygltf::Model& model)
-{
-    if (index < 0)
-    {
-        return std::nullopt;
-    }
-
-    if (static_cast<size_t>(index) >= model.textures.size())
-    {
-        return std::nullopt;
-    }
-
-    if (auto itr = imageCache_.find(index); itr != imageCache_.end())
-    {
-        return itr->second;
-    }
-
-    const auto textureSource = model.textures[index].source;
-    const auto imageWidth = model.images[textureSource].width;
-    const auto imageHeight = model.images[textureSource].height;
-    const auto& data = model.images[textureSource].image;
-
-    const auto handle = db_.addImage(std::move(createImageFromData(imageWidth, imageHeight, data)));
-
-    imageCache_[index] = handle;
-
-    return handle;
+    return prefab;
 }
 } // namespace assets

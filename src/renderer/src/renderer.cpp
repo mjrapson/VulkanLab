@@ -214,48 +214,52 @@ void Renderer::setResources(const assets::AssetDatabase& db)
     auto stride = alignMemory(sizeof(GpuMaterialBufferData),
                               gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
 
-    for (const auto& [handle, material] : db.materials().entries())
+    for (const auto& prefab : db.prefabs())
     {
-        auto allocInfo = vk::DescriptorSetAllocateInfo{};
-        allocInfo.descriptorPool = *materialDescriptorPool_;
-        allocInfo.descriptorSetCount = maxFramesInFlight;
-        allocInfo.pSetLayouts = layouts.data();
-
-        materialDescriptorSets_[handle] = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
-
-        for (auto frameIndex = uint32_t{0}; frameIndex < maxFramesInFlight; ++frameIndex)
+        for (const auto& material : prefab.second->materials())
         {
-            auto bufferInfo = vk::DescriptorBufferInfo{};
-            bufferInfo.buffer = gpuResources_->materialUniformBuffer(frameIndex);
-            bufferInfo.offset = 0;
-            bufferInfo.range = stride;
+            auto allocInfo = vk::DescriptorSetAllocateInfo{};
+            allocInfo.descriptorPool = *materialDescriptorPool_;
+            allocInfo.descriptorSetCount = maxFramesInFlight;
+            allocInfo.pSetLayouts = layouts.data();
 
-            auto uboWrite = vk::WriteDescriptorSet{};
-            uboWrite.dstSet = materialDescriptorSets_.at(handle).at(frameIndex);
-            uboWrite.dstBinding = 0;
-            uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
-            uboWrite.descriptorCount = 1;
-            uboWrite.pBufferInfo = &bufferInfo;
+            materialDescriptorSets_[material.second.get()] = std::move(
+                vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
 
-            vk::DescriptorImageInfo imageInfo{};
-            imageInfo.imageView = material.diffuseTexture
-                                      ? gpuResources_->gpuImage(material.diffuseTexture.value()).view
-                                      : emptyImageView;
-            imageInfo.sampler = material.diffuseTexture
-                                    ? gpuResources_->gpuImage(material.diffuseTexture.value()).sampler
-                                    : emptyImageSampler;
-            ;
-            imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+            for (auto frameIndex = uint32_t{0}; frameIndex < maxFramesInFlight; ++frameIndex)
+            {
+                auto bufferInfo = vk::DescriptorBufferInfo{};
+                bufferInfo.buffer = gpuResources_->materialUniformBuffer(frameIndex);
+                bufferInfo.offset = 0;
+                bufferInfo.range = stride;
 
-            vk::WriteDescriptorSet textureWrite{};
-            textureWrite.dstSet = materialDescriptorSets_.at(handle).at(frameIndex);
-            textureWrite.dstBinding = 1;
-            textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-            textureWrite.descriptorCount = 1;
-            textureWrite.pImageInfo = &imageInfo;
+                auto uboWrite = vk::WriteDescriptorSet{};
+                uboWrite.dstSet = materialDescriptorSets_.at(material.second.get()).at(frameIndex);
+                uboWrite.dstBinding = 0;
+                uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+                uboWrite.descriptorCount = 1;
+                uboWrite.pBufferInfo = &bufferInfo;
 
-            std::array writes{uboWrite, textureWrite};
-            gpuDevice_.device().updateDescriptorSets(writes, {});
+                vk::DescriptorImageInfo imageInfo{};
+                imageInfo.imageView = material.second->diffuseTexture
+                                          ? gpuResources_->gpuImage(material.second->diffuseTexture).view
+                                          : emptyImageView;
+                imageInfo.sampler = material.second->diffuseTexture
+                                        ? gpuResources_->gpuImage(material.second->diffuseTexture).sampler
+                                        : emptyImageSampler;
+                ;
+                imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+                vk::WriteDescriptorSet textureWrite{};
+                textureWrite.dstSet = materialDescriptorSets_.at(material.second.get()).at(frameIndex);
+                textureWrite.dstBinding = 1;
+                textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+                textureWrite.descriptorCount = 1;
+                textureWrite.pImageInfo = &imageInfo;
+
+                std::array writes{uboWrite, textureWrite};
+                gpuDevice_.device().updateDescriptorSets(writes, {});
+            }
         }
     }
 }
@@ -682,13 +686,22 @@ void Renderer::recordCommands(uint32_t imageIndex,
     commandBuffer.bindIndexBuffer(*gpuResources_->meshIndexBuffer(), 0, vk::IndexType::eUint32);
 
     // test - temporary
-    glm::vec3 position{0.0f, 0.0f, 4.0f};
-    glm::vec3 front{0.0f, 0.0f, -1.0f};
+    glm::vec3 position{-4.5f, -1.5f, 0.5f};
     glm::vec3 up{0.0f, 1.0f, 0.0f};
     float fieldOfView{45.0f};
     float nearPlane{0.1f};
     float farPlane{1000.0f};
+    float pitch{15.0f}; // horizontal
+    float yaw{-30.0f};  // vertical
+    float roll{0.0f};
     float aspectRatio = static_cast<float>(windowWidth_) / static_cast<float>(windowHeight_);
+
+    auto front = glm::vec3{};
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+
+    front = glm::normalize(front);
 
     auto cameraBuffer = CameraBufferObject{};
     cameraBuffer.projection = glm::perspective(fieldOfView, aspectRatio, nearPlane, farPlane);
@@ -721,12 +734,16 @@ void Renderer::recordCommands(uint32_t imageIndex,
                                     0,
                                     vk::ArrayProxy<const PushConstants>{pushConstants});
 
-        const auto& gpuMaterial = gpuResources_->gpuMaterial(drawCommand.material);
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                         pipelineLayout_,
-                                         1,
-                                         *materialDescriptorSets_.at(drawCommand.material).at(currentFrameIndex_),
-                                         gpuMaterial.uboOffset);
+        if (drawCommand.mesh->material)
+        {
+            const auto& gpuMaterial = gpuResources_->gpuMaterial(drawCommand.mesh->material);
+            commandBuffer.bindDescriptorSets(
+                vk::PipelineBindPoint::eGraphics,
+                pipelineLayout_,
+                1,
+                *materialDescriptorSets_.at(drawCommand.mesh->material).at(currentFrameIndex_),
+                gpuMaterial.uboOffset);
+        }
 
         auto& gpuMesh = gpuResources_->gpuMesh(drawCommand.mesh);
         commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);

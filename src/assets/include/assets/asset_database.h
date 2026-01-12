@@ -3,42 +3,26 @@
 
 #pragma once
 
-#include "asset_handle.h"
-#include "asset_storage.h"
-#include "image.h"
-#include "material.h"
-#include "mesh.h"
 #include "prefab.h"
 
-#include <filesystem>
-#include <optional>
-#include <vector>
+#include <memory>
+#include <unordered_map>
 
 namespace assets
 {
 class AssetDatabase
 {
   public:
-    AssetHandle<Image> addImage(Image&& image);
-    AssetHandle<Material> addMaterial(Material&& material);
-    AssetHandle<Mesh> addMesh(Mesh&& mesh);
-    AssetHandle<Prefab> addPrefab(Prefab&& prefab);
+    template <typename AssetType>
+    using AssetStorage = std::unordered_map<std::string, std::unique_ptr<AssetType>>;
 
-    std::optional<std::reference_wrapper<const Image>> getImage(const AssetHandle<Image>& handle) const;
-    std::optional<std::reference_wrapper<const Material>> getMaterial(const AssetHandle<Material>& handle) const;
-    std::optional<std::reference_wrapper<const Mesh>> getMesh(const AssetHandle<Mesh>& handle) const;
-    std::optional<std::reference_wrapper<const Prefab>> getPrefab(const AssetHandle<Prefab>& handle) const;
+    void addPrefab(const std::string& name, std::unique_ptr<Prefab> prefab);
 
-    const AssetStorage<Image>& images() const;
-    const AssetStorage<Material>& materials() const;
-    const AssetStorage<Mesh>& meshes() const;
+    const AssetStorage<Prefab>& prefabs() const;
 
     void clear();
 
   private:
-    AssetStorage<Image> images_;
-    AssetStorage<Material> materials_;
-    AssetStorage<Mesh> meshes_;
     AssetStorage<Prefab> prefabs_;
 };
 } // namespace assets

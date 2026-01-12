@@ -8,6 +8,8 @@
 #include <core/file_system.h>
 #include <renderer/gpu_device.h>
 #include <renderer/renderer.h>
+#include <world/systems/render_system.h>
+#include <world/world.h>
 
 #include <GLFW/glfw3.h>
 
@@ -129,11 +131,21 @@ void VulkanApplication::init(int windowWidth, int windowHeight, const std::strin
     spdlog::info("Initializing Vulkan");
     initVulkan(windowWidth, windowHeight);
 
+    spdlog::info("Creating systems");
+    world_ = std::make_unique<world::World>();
+    renderSystem_ = std::make_unique<world::RenderSystem>(*renderer_.get(), *world_.get());
+
     spdlog::info("Loading demo assets");
 
     // Demo
-    auto loader = assets::GltfLoader{*assetDatabase_.get()};
-    loader.load(core::getPrefabsDir() / "cube.glb");
+    auto cube = assets::loadGLTFModel(core::getPrefabsDir() / "cube.glb");
+    assetDatabase_->addPrefab("cube", std::move(cube));
+
+    auto cubeEntity = world_->createEntity();
+    auto& renderComponent = world_->addComponent<world::RenderComponent>(cubeEntity);
+    renderComponent.prefab = assetDatabase_->prefabs().at("cube").get();
+    auto& transformComponent = world_->addComponent<world::TransformComponent>(cubeEntity);
+    transformComponent.position = glm::vec3{0.0f, 0.0f, 0.0f};
 
     renderer_->setResources(*assetDatabase_.get());
 }
@@ -146,7 +158,7 @@ void VulkanApplication::run()
     {
         glfwPollEvents();
 
-        renderer_->renderFrame({{assets::AssetHandle<assets::Mesh>{0}, glm::mat4{1.0f}}});
+        renderSystem_->update();
     }
 
     gpuDevice_->device().waitIdle();

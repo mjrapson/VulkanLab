@@ -7,8 +7,6 @@
 #include "gpu_material.h"
 #include "gpu_mesh.h"
 
-#include <assets/asset_handle.h>
-#include <assets/asset_storage.h>
 #include <assets/image.h>
 #include <assets/material.h>
 #include <assets/mesh.h>
@@ -42,15 +40,15 @@ class GpuResourceCache
     const vk::raii::Buffer& meshIndexBuffer() const;
     const vk::raii::Buffer& materialUniformBuffer(int frameIndex) const;
 
-    GpuImage& gpuImage(const assets::AssetHandle<assets::Image>& handle);
-    GpuMaterial& gpuMaterial(const assets::AssetHandle<assets::Material>& handle);
-    GpuMesh& gpuMesh(const assets::AssetHandle<assets::Mesh>& handle);
+    GpuImage& gpuImage(assets::Image* image);
+    GpuMaterial& gpuMaterial(assets::Material* material);
+    GpuMesh& gpuMesh(assets::Mesh* mesh);
 
   private:
     void uploadData(const assets::AssetDatabase& db);
-    void uploadImageData(const assets::AssetStorage<assets::Image>& images);
-    void uploadMaterialData(const assets::AssetStorage<assets::Material>& materials);
-    void uploadMeshData(const assets::AssetStorage<assets::Mesh>& meshes);
+    void uploadImageData(const std::vector<assets::Image*>& images);
+    void uploadMaterialData(const std::vector<assets::Material*>& materials);
+    void uploadMeshData(const assets::AssetDatabase& db);
 
   private:
     const GpuDevice& gpuDevice_;
@@ -65,8 +63,8 @@ class GpuResourceCache
     std::vector<vk::raii::DeviceMemory> materialUboBuffersMemory_;
     std::vector<void*> materialUboMappedMemory_;
 
-    std::unordered_map<assets::AssetHandle<assets::Image>, GpuImage> gpuImages_;
-    std::unordered_map<assets::AssetHandle<assets::Material>, GpuMaterial> gpuMaterials_;
-    std::unordered_map<assets::AssetHandle<assets::Mesh>, GpuMesh> gpuMeshes_;
+    std::unordered_map<assets::Image*, GpuImage> gpuImages_;
+    std::unordered_map<assets::Material*, GpuMaterial> gpuMaterials_;
+    std::unordered_map<assets::Mesh*, GpuMesh> gpuMeshes_;
 };
 } // namespace renderer

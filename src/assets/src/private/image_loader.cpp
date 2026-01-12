@@ -13,8 +13,6 @@
 #pragma GCC diagnostic pop
 #endif
 
-
-
 #include <cstring>
 
 namespace assets
@@ -41,11 +39,11 @@ Image createImageFromPath(const std::filesystem::path& path)
     return Image{static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::move(data)};
 }
 
-Image createImageFromData(int width, int height, const std::vector<unsigned char>& data)
+std::unique_ptr<Image> createImageFromData(int width, int height, const std::vector<unsigned char>& data)
 {
     auto byteData = std::vector<std::byte>(data.size());
     std::memcpy(byteData.data(), data.data(), data.size());
 
-    return Image{static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::move(byteData)};
+    return std::make_unique<Image>(static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::move(byteData));
 }
 } // namespace assets

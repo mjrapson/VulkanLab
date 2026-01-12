@@ -17,6 +17,7 @@ target_link_libraries(VulkanDemo
     Core
     Assets
     Renderer
+    World
     glfw
     spdlog
     Vulkan::Vulkan
