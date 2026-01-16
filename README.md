@@ -39,3 +39,4 @@ This project makes use of the following 3rd party libraries:
 - spdlog
 - stb
 - tinygltf
+- nlohmann (JSON parser)
