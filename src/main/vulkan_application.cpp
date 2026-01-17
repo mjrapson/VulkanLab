@@ -6,11 +6,12 @@
 #include <assets/asset_database.h>
 #include <assets/gltf_loader.h>
 #include <core/file_system.h>
-#include <scene/scene.h>
-#include <scene/scene_loader.h>
+#include <core/input_handler.h>
 #include <renderer/camera.h>
 #include <renderer/gpu_device.h>
 #include <renderer/renderer.h>
+#include <scene/scene.h>
+#include <scene/scene_loader.h>
 #include <world/systems/render_system.h>
 #include <world/world.h>
 
@@ -18,6 +19,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <chrono>
 #include <ranges>
 #include <stdexcept>
 #include <vector>
@@ -26,6 +28,12 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
 {
     auto app = static_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
     app->windowResized(width, height);
+}
+
+static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    auto app = static_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
+    app->keyPressed(key, scancode, action, mods);
 }
 
 constexpr bool validationLayersEnabled()
@@ -103,6 +111,7 @@ static vk::Bool32 debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severit
 }
 
 VulkanApplication::VulkanApplication()
+    : inputHandler_{std::make_unique<core::InputHandler>()}
 {
 }
 
@@ -143,7 +152,7 @@ void VulkanApplication::run()
     // Probably show some loading screen here...
     // Move to separate func
     auto db = assets::AssetDatabase{};
-    for(auto& prefabDef : scene->prefabs)
+    for (auto& prefabDef : scene->prefabs)
     {
         db.addPrefab(prefabDef.name, assets::loadGLTFModel(core::getPrefabsDir() / prefabDef.path));
     }
@@ -153,11 +162,27 @@ void VulkanApplication::run()
     auto world = world::World{*scene, db, *renderer_};
     // ...end loading screen
 
+    constexpr auto maxFps = std::chrono::duration<double>(1.0 / 60.0);
+    auto lastTime = std::chrono::steady_clock::now();
+
     while (!glfwWindowShouldClose(window_))
     {
+        const auto frameStartTime = std::chrono::steady_clock::now();
+        const auto deltaTime = std::chrono::duration<double>(frameStartTime - lastTime).count();
+        lastTime = frameStartTime;
+
         glfwPollEvents();
 
+        updateCamera(deltaTime);
+
         world.update(*camera_);
+
+        const auto frameFinishTime = std::chrono::steady_clock::now();
+        const auto frameDuration = frameFinishTime - frameStartTime;
+        if (frameDuration < maxFps)
+        {
+            std::this_thread::sleep_for(maxFps - frameDuration);
+        }
     }
 
     gpuDevice_->device().waitIdle();
@@ -166,6 +191,21 @@ void VulkanApplication::run()
 void VulkanApplication::windowResized(int width, int height)
 {
     renderer_->windowResized(width, height);
+
+    const auto aspectRatio = static_cast<float>(width) / static_cast<float>(height);
+    camera_->setAspectRatio(aspectRatio);
+}
+
+void VulkanApplication::keyPressed(int key, int, int action, int)
+{
+    if (action == GLFW_PRESS)
+    {
+        inputHandler_->setKeyPressed(key);
+    }
+    else if (action == GLFW_RELEASE)
+    {
+        inputHandler_->setKeyReleased(key);
+    }
 }
 
 void VulkanApplication::initGlfw()
@@ -197,6 +237,7 @@ void VulkanApplication::initWindow(int windowWidth, int windowHeight, const std:
 
     glfwSetWindowUserPointer(window_, this);
     glfwSetFramebufferSizeCallback(window_, framebufferResizeCallback);
+    glfwSetKeyCallback(window_, keyCallback);
 }
 
 void VulkanApplication::initVulkan(int windowWidth, int windowHeight)
@@ -227,6 +268,8 @@ void VulkanApplication::initVulkan(int windowWidth, int windowHeight)
 
     spdlog::info("Creating camera");
     camera_ = std::make_unique<renderer::Camera>();
+    const auto aspectRatio = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
+    camera_->setAspectRatio(aspectRatio);
 }
 
 void VulkanApplication::createInstance()
@@ -295,4 +338,51 @@ void VulkanApplication::createSurface()
     }
 
     surface_ = vk::raii::SurfaceKHR(instance_, surface);
+}
+
+void VulkanApplication::updateCamera(float deltaTime)
+{
+    const auto speed = 10.0f;
+    auto movement = glm::vec3{0.0f};
+
+    auto worldUp = glm::vec3(0, 1, 0);
+    auto forward = glm::normalize(camera_->front());
+    auto right = glm::normalize(glm::cross(forward, worldUp));
+    auto up = glm::normalize(glm::cross(right, forward));
+    
+    if(inputHandler_->isKeyPressed(GLFW_KEY_W))
+    {
+        movement = movement + forward;
+    }
+
+    if(inputHandler_->isKeyPressed(GLFW_KEY_S))
+    {
+        movement = movement - forward;
+    }
+
+    if(inputHandler_->isKeyPressed(GLFW_KEY_A))
+    {
+        movement = movement - right;
+    }
+
+    if(inputHandler_->isKeyPressed(GLFW_KEY_D))
+    {
+        movement = movement + right;
+    }
+
+    if(inputHandler_->isKeyPressed(GLFW_KEY_E))
+    {
+        movement = movement + up;
+    }
+
+    if(inputHandler_->isKeyPressed(GLFW_KEY_Q))
+    {
+        movement = movement - up;
+    }
+
+    if(glm::length(movement) > 0.0f)
+    {
+        movement = glm::normalize(movement) * speed * deltaTime;
+        camera_->setPosition(camera_->position() + movement);
+    }
 }

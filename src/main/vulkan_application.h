@@ -13,6 +13,11 @@ namespace assets
 class AssetDatabase;
 }
 
+namespace core
+{
+class InputHandler;
+}
+
 namespace renderer
 {
 class Camera;
@@ -32,6 +37,7 @@ class VulkanApplication
     void run();
 
     void windowResized(int width, int height);
+    void keyPressed(int key, int scancode, int action, int mods);
 
   private:
     void initGlfw();
@@ -42,6 +48,8 @@ class VulkanApplication
     void createDebugMessenger();
     void createSurface();
 
+    void updateCamera(float deltaTime);
+
   private:
     bool glfwInitialised_{false};
     GLFWwindow* window_{nullptr};
@@ -51,6 +59,7 @@ class VulkanApplication
     vk::raii::DebugUtilsMessengerEXT debugMessenger_{nullptr};
     vk::raii::SurfaceKHR surface_{nullptr};
 
+    std::unique_ptr<core::InputHandler> inputHandler_{nullptr};
     std::unique_ptr<renderer::GpuDevice> gpuDevice_{nullptr};
     std::unique_ptr<renderer::Renderer> renderer_{nullptr};
     std::unique_ptr<renderer::Camera> camera_{nullptr};
