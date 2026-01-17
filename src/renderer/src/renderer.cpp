@@ -6,6 +6,7 @@
 #include "private/image.h"
 #include "private/memory.h"
 #include "private/shader.h"
+#include "renderer/camera.h"
 #include "renderer/gpu_device.h"
 #include "renderer/vertex_layout.h"
 
@@ -14,9 +15,7 @@
 
 #include <spdlog/spdlog.h>
 
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 
 #include <chrono>
 #include <ranges>
@@ -102,8 +101,10 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     createSwapchainImageViews();
 
     spdlog::info("Creating graphics pipeline");
+    createCameraDescriptorPool();
     createDescriptorSetLayouts();
     createGraphicsPipeline();
+    createCameraBuffers();
 
     spdlog::info("Creating command buffers");
     createCommandBuffers();
@@ -116,7 +117,7 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
 Renderer::~Renderer() = default;
 
-void Renderer::renderFrame(const std::vector<DrawCommand>& drawCommands)
+void Renderer::renderFrame(const renderer::Camera& camera, const std::vector<DrawCommand>& drawCommands)
 {
     if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
         != vk::Result::eSuccess)
@@ -142,7 +143,7 @@ void Renderer::renderFrame(const std::vector<DrawCommand>& drawCommands)
     auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
     commandBuffer.reset();
 
-    recordCommands(imageIndex, commandBuffer, drawCommands);
+    recordCommands(imageIndex, commandBuffer, camera, drawCommands);
 
     const auto waitDestinationStageMask = vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
@@ -213,8 +214,7 @@ void Renderer::setResources(const assets::AssetDatabase& db)
         }
     }
 
-    createDescriptorPools(materials);
-    createCameraBuffers();
+    createMaterialDescriptorPools(materials);
 
     gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_, maxFramesInFlight);
 
@@ -323,9 +323,8 @@ void Renderer::createSwapchainImageViews()
 }
 
 // To move into a pipeline object
-void Renderer::createDescriptorPools(uint32_t materialCount)
+void Renderer::createCameraDescriptorPool()
 {
-    // Camera descriptor pool
     auto cameraPoolSize = vk::DescriptorPoolSize{};
     cameraPoolSize.type = vk::DescriptorType::eUniformBuffer;
     cameraPoolSize.descriptorCount = maxFramesInFlight;
@@ -339,8 +338,11 @@ void Renderer::createDescriptorPools(uint32_t materialCount)
     cameraPoolInfo.pPoolSizes = cameraPoolSizes.data();
 
     cameraDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), cameraPoolInfo};
+}
 
-    // Material descriptor pool
+// To move into a pipeline object
+void Renderer::createMaterialDescriptorPools(uint32_t materialCount)
+{
     auto materialUboPoolSize = vk::DescriptorPoolSize{};
     materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
     materialUboPoolSize.descriptorCount = maxFramesInFlight;
@@ -603,6 +605,7 @@ void Renderer::recreateSwapchain()
 
 void Renderer::recordCommands(uint32_t imageIndex,
                               const vk::raii::CommandBuffer& commandBuffer,
+                              const renderer::Camera& camera,
                               const std::vector<DrawCommand>& drawCommands)
 {
     commandBuffer.begin({});
@@ -637,28 +640,10 @@ void Renderer::recordCommands(uint32_t imageIndex,
     commandBuffer.bindVertexBuffers(0, *gpuResources_->meshVertexBuffer(), {0});
     commandBuffer.bindIndexBuffer(*gpuResources_->meshIndexBuffer(), 0, vk::IndexType::eUint32);
 
-    // test - temporary
-    glm::vec3 position{-4.5f, -1.5f, 0.5f};
-    glm::vec3 up{0.0f, 1.0f, 0.0f};
-    float fieldOfView{45.0f};
-    float nearPlane{0.1f};
-    float farPlane{1000.0f};
-    float pitch{15.0f}; // horizontal
-    float yaw{-30.0f};  // vertical
-    float roll{0.0f};
-    float aspectRatio = static_cast<float>(windowWidth_) / static_cast<float>(windowHeight_);
-
-    auto front = glm::vec3{};
-    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front.y = sin(glm::radians(pitch));
-    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-
-    front = glm::normalize(front);
-
     auto cameraBuffer = CameraBufferObject{};
-    cameraBuffer.projection = glm::perspective(fieldOfView, aspectRatio, nearPlane, farPlane);
-    cameraBuffer.view = glm::lookAt(position, position + front, up);
-    // cameraBuffer.projection[1][1] *= -1.0f;
+    cameraBuffer.projection = camera.projection();
+    cameraBuffer.view = camera.view();
+
     memcpy(cameraUboMappedMemory_[currentFrameIndex_], &cameraBuffer, sizeof(cameraBuffer));
 
     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
@@ -720,9 +705,9 @@ void Renderer::createDefaultImage()
 {
     emptyImage_ = createImage(gpuDevice_.device(), 1, 1);
     emptyImageMemory_ = allocateImageMemory(gpuDevice_.device(),
-                                           gpuDevice_.physicalDevice(),
-                                           emptyImage_,
-                                           vk::MemoryPropertyFlagBits::eDeviceLocal);
+                                            gpuDevice_.physicalDevice(),
+                                            emptyImage_,
+                                            vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     const auto imageSize = 4; //  RGBA8
     auto stagingBuffer = createBuffer(gpuDevice_.device(),

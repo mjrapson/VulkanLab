@@ -21,7 +21,7 @@ RenderSystem::RenderSystem(renderer::Renderer& renderer, World& world)
 {
 }
 
-void RenderSystem::update()
+void RenderSystem::update(const renderer::Camera& camera)
 {
     auto commands = std::vector<renderer::DrawCommand>{};
     for (auto& [entity, renderComponent] : world_.getAllComponents<RenderComponent>())
@@ -61,6 +61,6 @@ void RenderSystem::update()
         }
     }
 
-    renderer_.renderFrame(commands);
+    renderer_.renderFrame(camera, commands);
 }
 } // namespace world

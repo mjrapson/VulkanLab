@@ -5,6 +5,7 @@
 
 namespace renderer
 {
+class Camera;
 class Renderer;
 }
 
@@ -17,7 +18,7 @@ class RenderSystem
   public:
     RenderSystem(renderer::Renderer& renderer, World& world);
 
-    void update();
+    void update(const renderer::Camera& camera);
 
   private:
     renderer::Renderer& renderer_;

@@ -8,6 +8,7 @@
 #include <core/file_system.h>
 #include <scene/scene.h>
 #include <scene/scene_loader.h>
+#include <renderer/camera.h>
 #include <renderer/gpu_device.h>
 #include <renderer/renderer.h>
 #include <world/systems/render_system.h>
@@ -156,7 +157,7 @@ void VulkanApplication::run()
     {
         glfwPollEvents();
 
-        world.update();
+        world.update(*camera_);
     }
 
     gpuDevice_->device().waitIdle();
@@ -223,6 +224,9 @@ void VulkanApplication::initVulkan(int windowWidth, int windowHeight)
 
     spdlog::info("Creating renderer");
     renderer_ = std::make_unique<renderer::Renderer>(instance_, surface_, *gpuDevice_, windowWidth, windowHeight);
+
+    spdlog::info("Creating camera");
+    camera_ = std::make_unique<renderer::Camera>();
 }
 
 void VulkanApplication::createInstance()

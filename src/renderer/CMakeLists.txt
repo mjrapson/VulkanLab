@@ -2,6 +2,7 @@ add_library(Renderer STATIC)
 
 target_sources(Renderer
     PUBLIC
+        include/renderer/camera.h
         include/renderer/gpu_device.h
         include/renderer/renderer.h
         include/renderer/vertex_layout.h
@@ -19,6 +20,7 @@ target_sources(Renderer
         src/private/memory.h
         src/private/shader.cpp
         src/private/shader.h
+        src/camera.cpp
         src/gpu_device.cpp
         src/renderer.cpp
 )

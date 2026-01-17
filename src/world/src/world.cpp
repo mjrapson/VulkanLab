@@ -42,13 +42,12 @@ Entity World::createEntity()
 
 void World::destroyEntity(Entity entity)
 {
-    cameraComponents_.erase(entity);
     renderComponents_.erase(entity);
     transformComponents_.erase(entity);
 }
 
-void World::update()
+void World::update(const renderer::Camera& camera)
 {
-    renderSystem_.update();
+    renderSystem_.update(camera);
 }
 } // namespace world

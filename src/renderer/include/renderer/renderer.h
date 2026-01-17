@@ -19,6 +19,7 @@ class AssetDatabase;
 
 namespace renderer
 {
+class Camera;
 class GpuDevice;
 class GpuResourceCache;
 
@@ -39,7 +40,7 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
-    void renderFrame(const std::vector<DrawCommand>& drawCommands);
+    void renderFrame(const renderer::Camera& camera, const std::vector<DrawCommand>& drawCommands);
     void windowResized(int width, int height);
 
     void setResources(const assets::AssetDatabase& db);
@@ -48,7 +49,8 @@ class Renderer
     void createSwapchain();
     void createSwapchainImageViews();
 
-    void createDescriptorPools(uint32_t materialCount);
+    void createCameraDescriptorPool();
+    void createMaterialDescriptorPools(uint32_t materialCount);
     void createDescriptorSetLayouts();
     void createGraphicsPipeline();
     void createCommandBuffers();
@@ -61,6 +63,7 @@ class Renderer
     void recreateSwapchain();
     void recordCommands(uint32_t imageIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
+                        const renderer::Camera& camera,
                         const std::vector<DrawCommand>& drawCommands);
 
     void createDefaultImage();

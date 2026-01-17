@@ -15,6 +15,7 @@ class AssetDatabase;
 
 namespace renderer
 {
+class Camera;
 class GpuDevice;
 class Renderer;
 } // namespace renderer
@@ -52,4 +53,5 @@ class VulkanApplication
 
     std::unique_ptr<renderer::GpuDevice> gpuDevice_{nullptr};
     std::unique_ptr<renderer::Renderer> renderer_{nullptr};
+    std::unique_ptr<renderer::Camera> camera_{nullptr};
 };

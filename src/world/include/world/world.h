@@ -4,7 +4,6 @@
 #pragma once
 
 #include "entity.h"
-#include "world/components/camera_component.h"
 #include "world/components/render_component.h"
 #include "world/components/transform_component.h"
 #include "world/systems/render_system.h"
@@ -25,6 +24,7 @@ class AssetDatabase;
 
 namespace renderer
 {
+class Camera;
 class Renderer;
 }
 
@@ -45,7 +45,7 @@ class World
     Entity createEntity();
     void destroyEntity(Entity entity);
 
-    void update();
+    void update(const renderer::Camera& camera);
 
     template <typename Component, typename... Args>
     Component& addComponent(Entity entity, Args&&... args)
@@ -94,14 +94,9 @@ class World
     template <typename Component>
     auto& getStorage()
     {
-        static_assert(std::is_same_v<Component, CameraComponent> || std::is_same_v<Component, RenderComponent>
-                          || std::is_same_v<Component, TransformComponent>,
+        static_assert(std::is_same_v<Component, RenderComponent> || std::is_same_v<Component, TransformComponent>,
                       "Component type unknown");
 
-        if constexpr (std::is_same_v<Component, CameraComponent>)
-        {
-            return cameraComponents_;
-        }
         if constexpr (std::is_same_v<Component, RenderComponent>)
         {
             return renderComponents_;
@@ -113,7 +108,6 @@ class World
     }
 
   private:
-    std::unordered_map<Entity, CameraComponent> cameraComponents_;
     std::unordered_map<Entity, RenderComponent> renderComponents_;
     std::unordered_map<Entity, TransformComponent> transformComponents_;
 
