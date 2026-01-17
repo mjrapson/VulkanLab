@@ -22,6 +22,7 @@ struct CameraData
 struct MaterialData
 {
     float4 diffuseColor;
+    uint hasDiffuseImage;
 };
 
 [[vk::binding(0, 0)]]
@@ -31,7 +32,7 @@ ConstantBuffer<CameraData> camera;
 ConstantBuffer<MaterialData> material;
 
 [[vk::binding(1, 1)]]
-Sampler2D textures[];
+Sampler2D texture;
 
 struct VertexOutput 
 {
@@ -53,5 +54,10 @@ VertexOutput vertMain(VertexInput vertexInput)
 [shader("fragment")]
 float4 fragMain(VertexOutput inVert) : SV_Target
 {
+    if(material.hasDiffuseImage == 1)
+    {
+        return texture.Sample(inVert.uv);
+    }
+
     return material.diffuseColor;
 }

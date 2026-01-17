@@ -110,6 +110,8 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
     spdlog::info("Creating sync objects");
     createSyncObjects();
+
+    createDefaultImage();
 }
 
 Renderer::~Renderer() = default;
@@ -248,28 +250,28 @@ void Renderer::setResources(const assets::AssetDatabase& db)
                 uboWrite.descriptorCount = 1;
                 uboWrite.pBufferInfo = &bufferInfo;
 
+                auto imageInfo = vk::DescriptorImageInfo{};
                 if (material.second->diffuseTexture)
                 {
-                    vk::DescriptorImageInfo imageInfo{};
                     imageInfo.imageView = gpuResources_->gpuImage(material.second->diffuseTexture).view;
                     imageInfo.sampler = gpuResources_->gpuImage(material.second->diffuseTexture).sampler;
-                    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-                    vk::WriteDescriptorSet textureWrite{};
-                    textureWrite.dstSet = materialDescriptorSets_.at(material.second.get()).at(frameIndex);
-                    textureWrite.dstBinding = 1;
-                    textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-                    textureWrite.descriptorCount = 1;
-                    textureWrite.pImageInfo = &imageInfo;
-
-                    std::array writes{uboWrite, textureWrite};
-                    gpuDevice_.device().updateDescriptorSets(writes, {});
                 }
                 else
                 {
-                    std::array writes{uboWrite};
-                    gpuDevice_.device().updateDescriptorSets(writes, {});
+                    imageInfo.imageView = emptyImageView_;
+                    imageInfo.sampler = emptyImageSampler_;
                 }
+                imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+                auto textureWrite = vk::WriteDescriptorSet{};
+                textureWrite.dstSet = materialDescriptorSets_.at(material.second.get()).at(frameIndex);
+                textureWrite.dstBinding = 1;
+                textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+                textureWrite.descriptorCount = 1;
+                textureWrite.pImageInfo = &imageInfo;
+
+                std::array writes{uboWrite, textureWrite};
+                gpuDevice_.device().updateDescriptorSets(writes, {});
             }
         }
     }
@@ -712,5 +714,66 @@ void Renderer::recordCommands(uint32_t imageIndex,
     );
 
     commandBuffer.end();
+}
+
+void Renderer::createDefaultImage()
+{
+    emptyImage_ = createImage(gpuDevice_.device(), 1, 1);
+    emptyImageMemory_ = allocateImageMemory(gpuDevice_.device(),
+                                           gpuDevice_.physicalDevice(),
+                                           emptyImage_,
+                                           vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+    const auto imageSize = 4; //  RGBA8
+    auto stagingBuffer = createBuffer(gpuDevice_.device(),
+                                      imageSize,
+                                      vk::BufferUsageFlagBits::eTransferSrc,
+                                      vk::SharingMode::eExclusive);
+
+    auto stagingMemory = allocateBufferMemory(gpuDevice_.device(),
+                                              gpuDevice_.physicalDevice(),
+                                              stagingBuffer,
+                                              vk::MemoryPropertyFlagBits::eHostVisible
+                                                  | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    auto imageData = std::vector<std::byte>{std::byte{1}, std::byte{1}, std::byte{1}, std::byte{1}};
+    void* data = stagingMemory.mapMemory(0, imageSize);
+    std::memcpy(data, imageData.data(), imageSize);
+    stagingMemory.unmapMemory();
+
+    copyBufferToImage(gpuDevice_.device(),
+                      stagingBuffer,
+                      emptyImage_,
+                      gpuDevice_.graphicsQueue(),
+                      gpuDevice_.commandPool(),
+                      1,
+                      1);
+
+    auto subresourceRange = vk::ImageSubresourceRange{};
+    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = 1;
+
+    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
+    imageViewCreateInfo.image = *emptyImage_;
+    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
+    imageViewCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
+    imageViewCreateInfo.subresourceRange = subresourceRange;
+
+    emptyImageView_ = vk::raii::ImageView{gpuDevice_.device(), imageViewCreateInfo};
+
+    auto samplerInfo = vk::SamplerCreateInfo{};
+    samplerInfo.magFilter = vk::Filter::eLinear, samplerInfo.minFilter = vk::Filter::eLinear;
+    samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
+    samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+
+    emptyImageSampler_ = vk::raii::Sampler{gpuDevice_.device(), samplerInfo};
 }
 } // namespace renderer

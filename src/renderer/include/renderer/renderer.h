@@ -63,6 +63,8 @@ class Renderer
                         const vk::raii::CommandBuffer& commandBuffer,
                         const std::vector<DrawCommand>& drawCommands);
 
+    void createDefaultImage();
+
   private:
     const vk::raii::Instance& instance_;
     const vk::raii::SurfaceKHR& surface_;
@@ -90,10 +92,10 @@ class Renderer
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
 
-    vk::raii::Image emptyImage{nullptr};
-    vk::raii::DeviceMemory emptyImageMemory{nullptr};
-    vk::raii::ImageView emptyImageView{nullptr};
-    vk::raii::Sampler emptyImageSampler{nullptr};
+    vk::raii::Image emptyImage_{nullptr};
+    vk::raii::DeviceMemory emptyImageMemory_{nullptr};
+    vk::raii::ImageView emptyImageView_{nullptr};
+    vk::raii::Sampler emptyImageSampler_{nullptr};
 
     std::vector<vk::raii::Buffer> cameraUboBuffers_;
     std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;
