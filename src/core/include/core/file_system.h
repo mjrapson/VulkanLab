@@ -9,6 +9,7 @@
 namespace core
 {
 std::filesystem::path getRootDir();
+std::filesystem::path getScenesDir();
 std::filesystem::path getShaderDir();
 std::filesystem::path getPrefabsDir();
 

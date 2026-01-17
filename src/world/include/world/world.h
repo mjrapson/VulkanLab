@@ -7,26 +7,45 @@
 #include "world/components/camera_component.h"
 #include "world/components/render_component.h"
 #include "world/components/transform_component.h"
+#include "world/systems/render_system.h"
 
+#include <memory>
 #include <stdexcept>
 #include <unordered_map>
+
+namespace scene
+{
+struct Scene;
+}
+
+namespace assets
+{
+class AssetDatabase;
+}
+
+namespace renderer
+{
+class Renderer;
+}
 
 namespace world
 {
 class World
 {
   public:
-    Entity createEntity()
-    {
-        return nextEntity++;
-    }
+    World(renderer::Renderer& renderer);
+    World(const scene::Scene& scene, const assets::AssetDatabase& assetDatabase, renderer::Renderer& renderer);
 
-    void destroyEntity(Entity entity)
-    {
-        cameraComponents_.erase(entity);
-        renderComponents_.erase(entity);
-        transformComponents_.erase(entity);
-    }
+    World(const World&) = delete;
+    World& operator=(const World&) = delete;
+
+    World(World&& other) = delete;
+    World& operator=(World&& other) = delete;
+
+    Entity createEntity();
+    void destroyEntity(Entity entity);
+
+    void update();
 
     template <typename Component, typename... Args>
     Component& addComponent(Entity entity, Args&&... args)
@@ -100,5 +119,6 @@ class World
 
   private:
     Entity nextEntity{0};
+    RenderSystem renderSystem_;
 };
 } // namespace world

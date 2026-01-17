@@ -102,7 +102,6 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     createSwapchainImageViews();
 
     spdlog::info("Creating graphics pipeline");
-    createDescriptorPools();
     createDescriptorSetLayouts();
     createGraphicsPipeline();
 
@@ -111,10 +110,6 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
     spdlog::info("Creating sync objects");
     createSyncObjects();
-
-    spdlog::info("Creating default objects");
-    createDefaultObjects();
-    createCameraBuffers();
 }
 
 Renderer::~Renderer() = default;
@@ -206,6 +201,19 @@ void Renderer::windowResized(int width, int height)
 
 void Renderer::setResources(const assets::AssetDatabase& db)
 {
+    // Hack (temp)
+    auto materials = uint32_t{0};
+    for (const auto& prefab : db.prefabs())
+    {
+        for (const auto& material : prefab.second->materials())
+        {
+            materials++;
+        }
+    }
+
+    createDescriptorPools(materials);
+    createCameraBuffers();
+
     gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_, maxFramesInFlight);
 
     // To move into a pipeline object
@@ -240,25 +248,28 @@ void Renderer::setResources(const assets::AssetDatabase& db)
                 uboWrite.descriptorCount = 1;
                 uboWrite.pBufferInfo = &bufferInfo;
 
-                vk::DescriptorImageInfo imageInfo{};
-                imageInfo.imageView = material.second->diffuseTexture
-                                          ? gpuResources_->gpuImage(material.second->diffuseTexture).view
-                                          : emptyImageView;
-                imageInfo.sampler = material.second->diffuseTexture
-                                        ? gpuResources_->gpuImage(material.second->diffuseTexture).sampler
-                                        : emptyImageSampler;
-                ;
-                imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+                if (material.second->diffuseTexture)
+                {
+                    vk::DescriptorImageInfo imageInfo{};
+                    imageInfo.imageView = gpuResources_->gpuImage(material.second->diffuseTexture).view;
+                    imageInfo.sampler = gpuResources_->gpuImage(material.second->diffuseTexture).sampler;
+                    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
-                vk::WriteDescriptorSet textureWrite{};
-                textureWrite.dstSet = materialDescriptorSets_.at(material.second.get()).at(frameIndex);
-                textureWrite.dstBinding = 1;
-                textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-                textureWrite.descriptorCount = 1;
-                textureWrite.pImageInfo = &imageInfo;
+                    vk::WriteDescriptorSet textureWrite{};
+                    textureWrite.dstSet = materialDescriptorSets_.at(material.second.get()).at(frameIndex);
+                    textureWrite.dstBinding = 1;
+                    textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+                    textureWrite.descriptorCount = 1;
+                    textureWrite.pImageInfo = &imageInfo;
 
-                std::array writes{uboWrite, textureWrite};
-                gpuDevice_.device().updateDescriptorSets(writes, {});
+                    std::array writes{uboWrite, textureWrite};
+                    gpuDevice_.device().updateDescriptorSets(writes, {});
+                }
+                else
+                {
+                    std::array writes{uboWrite};
+                    gpuDevice_.device().updateDescriptorSets(writes, {});
+                }
             }
         }
     }
@@ -310,7 +321,7 @@ void Renderer::createSwapchainImageViews()
 }
 
 // To move into a pipeline object
-void Renderer::createDescriptorPools()
+void Renderer::createDescriptorPools(uint32_t materialCount)
 {
     // Camera descriptor pool
     auto cameraPoolSize = vk::DescriptorPoolSize{};
@@ -340,7 +351,7 @@ void Renderer::createDescriptorPools()
 
     auto materialPoolInfo = vk::DescriptorPoolCreateInfo{};
     materialPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    materialPoolInfo.maxSets = maxFramesInFlight;
+    materialPoolInfo.maxSets = maxFramesInFlight * materialCount;
     materialPoolInfo.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size());
     materialPoolInfo.pPoolSizes = materialPoolSizes.data();
 
@@ -523,67 +534,6 @@ void Renderer::createSyncObjects()
         fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
         drawFences_.emplace_back(gpuDevice_.device(), fenceCreateInfo);
     }
-}
-
-void Renderer::createDefaultObjects()
-{
-    emptyImage = createImage(gpuDevice_.device(), 1, 1);
-    emptyImageMemory = allocateImageMemory(gpuDevice_.device(),
-                                           gpuDevice_.physicalDevice(),
-                                           emptyImage,
-                                           vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    const auto imageSize = 4; //  RGBA8
-    auto stagingBuffer = createBuffer(gpuDevice_.device(),
-                                      imageSize,
-                                      vk::BufferUsageFlagBits::eTransferSrc,
-                                      vk::SharingMode::eExclusive);
-
-    auto stagingMemory = allocateBufferMemory(gpuDevice_.device(),
-                                              gpuDevice_.physicalDevice(),
-                                              stagingBuffer,
-                                              vk::MemoryPropertyFlagBits::eHostVisible
-                                                  | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-    auto imageData = std::vector<std::byte>{std::byte{1}, std::byte{1}, std::byte{1}, std::byte{1}};
-    void* data = stagingMemory.mapMemory(0, imageSize);
-    std::memcpy(data, imageData.data(), imageSize);
-    stagingMemory.unmapMemory();
-
-    copyBufferToImage(gpuDevice_.device(),
-                      stagingBuffer,
-                      emptyImage,
-                      gpuDevice_.graphicsQueue(),
-                      gpuDevice_.commandPool(),
-                      1,
-                      1);
-
-    auto subresourceRange = vk::ImageSubresourceRange{};
-    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = 1;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = 1;
-
-    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
-    imageViewCreateInfo.image = *emptyImage;
-    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
-    imageViewCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
-    imageViewCreateInfo.subresourceRange = subresourceRange;
-
-    emptyImageView = vk::raii::ImageView{gpuDevice_.device(), imageViewCreateInfo};
-
-    auto samplerInfo = vk::SamplerCreateInfo{};
-    samplerInfo.magFilter = vk::Filter::eLinear, samplerInfo.minFilter = vk::Filter::eLinear;
-    samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
-    samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
-    samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
-    samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
-
-    emptyImageSampler = vk::raii::Sampler{gpuDevice_.device(), samplerInfo};
 }
 
 void Renderer::createCameraBuffers()

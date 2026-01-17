@@ -11,6 +11,7 @@ target_sources(World
     PRIVATE
         src/components/camera_component.cpp
         src/systems/render_system.cpp
+        src/world.cpp
 )
 
 target_include_directories(World
@@ -21,6 +22,7 @@ target_include_directories(World
 target_link_libraries(World
     PRIVATE
         Core
+        Scene
         Assets
         Renderer
         spdlog

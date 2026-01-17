@@ -48,7 +48,7 @@ class Renderer
     void createSwapchain();
     void createSwapchainImageViews();
 
-    void createDescriptorPools();
+    void createDescriptorPools(uint32_t materialCount);
     void createDescriptorSetLayouts();
     void createGraphicsPipeline();
     void createCommandBuffers();

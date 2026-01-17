@@ -1,0 +1,87 @@
+{
+    "prefabs": [
+        {
+            "name": "terrain1",
+            "path": "terrain1.glb"
+        },
+        {
+            "name": "cube",
+            "path": "cube.glb"
+        },
+        {
+            "name": "sphere",
+            "path": "sphere.glb"
+        }
+    ],
+    "entities": [
+        {
+            "name": "cube",
+            "transformComponent": {
+                "position": {
+                    "x": 0.0,
+                    "y": 3.0,
+                    "z": -8.0
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                }
+            },
+            "renderComponent": {
+                "prefab": "cube"
+            }
+        },
+        {
+            "name": "sphere",
+            "transformComponent": {
+                "position": {
+                    "x": 10.0,
+                    "y": 3.5,
+                    "z": 5.0
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.25,
+                    "y": 1.25,
+                    "z": 1.25
+                }
+            },
+            "renderComponent": {
+                "prefab": "sphere"
+            }
+        },
+        {
+            "name": "terrain1",
+            "transformComponent": {
+                "position": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "rotation": {
+                    "x": 180.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 100.0,
+                    "y": 50.0,
+                    "z": 100.0
+                }
+            },
+            "renderComponent": {
+                "prefab": "terrain1"
+            }
+        }
+    ]
+}

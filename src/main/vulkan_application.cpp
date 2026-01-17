@@ -6,6 +6,8 @@
 #include <assets/asset_database.h>
 #include <assets/gltf_loader.h>
 #include <core/file_system.h>
+#include <scene/scene.h>
+#include <scene/scene_loader.h>
 #include <renderer/gpu_device.h>
 #include <renderer/renderer.h>
 #include <world/systems/render_system.h>
@@ -100,7 +102,6 @@ static vk::Bool32 debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severit
 }
 
 VulkanApplication::VulkanApplication()
-    : assetDatabase_{std::make_unique<assets::AssetDatabase>()}
 {
 }
 
@@ -130,35 +131,32 @@ void VulkanApplication::init(int windowWidth, int windowHeight, const std::strin
 
     spdlog::info("Initializing Vulkan");
     initVulkan(windowWidth, windowHeight);
-
-    spdlog::info("Creating systems");
-    world_ = std::make_unique<world::World>();
-    renderSystem_ = std::make_unique<world::RenderSystem>(*renderer_.get(), *world_.get());
-
-    spdlog::info("Loading demo assets");
-
-    // Demo
-    auto cube = assets::loadGLTFModel(core::getPrefabsDir() / "cube.glb");
-    assetDatabase_->addPrefab("cube", std::move(cube));
-
-    auto cubeEntity = world_->createEntity();
-    auto& renderComponent = world_->addComponent<world::RenderComponent>(cubeEntity);
-    renderComponent.prefab = assetDatabase_->prefabs().at("cube").get();
-    auto& transformComponent = world_->addComponent<world::TransformComponent>(cubeEntity);
-    transformComponent.position = glm::vec3{0.0f, 0.0f, 0.0f};
-
-    renderer_->setResources(*assetDatabase_.get());
 }
 
 void VulkanApplication::run()
 {
     spdlog::info("Running");
 
+    auto scene = scene::loadScene(core::getScenesDir() / "demo.json");
+
+    // Probably show some loading screen here...
+    // Move to separate func
+    auto db = assets::AssetDatabase{};
+    for(auto& prefabDef : scene->prefabs)
+    {
+        db.addPrefab(prefabDef.name, assets::loadGLTFModel(core::getPrefabsDir() / prefabDef.path));
+    }
+
+    renderer_->setResources(db);
+
+    auto world = world::World{*scene, db, *renderer_};
+    // ...end loading screen
+
     while (!glfwWindowShouldClose(window_))
     {
         glfwPollEvents();
 
-        renderSystem_->update();
+        world.update();
     }
 
     gpuDevice_->device().waitIdle();

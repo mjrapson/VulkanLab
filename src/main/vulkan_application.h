@@ -19,12 +19,6 @@ class GpuDevice;
 class Renderer;
 } // namespace renderer
 
-namespace world
-{
-class RenderSystem;
-class World;
-}
-
 struct GLFWwindow;
 
 class VulkanApplication
@@ -58,8 +52,4 @@ class VulkanApplication
 
     std::unique_ptr<renderer::GpuDevice> gpuDevice_{nullptr};
     std::unique_ptr<renderer::Renderer> renderer_{nullptr};
-    std::unique_ptr<assets::AssetDatabase> assetDatabase_{nullptr};
-
-    std::unique_ptr<world::World> world_{nullptr};
-    std::unique_ptr<world::RenderSystem> renderSystem_{nullptr};
 };

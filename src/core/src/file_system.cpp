@@ -40,6 +40,11 @@ std::filesystem::path getRootDir()
 #endif
 }
 
+std::filesystem::path getScenesDir()
+{
+    return getRootDir() / "scenes";
+}
+
 std::filesystem::path getShaderDir()
 {
     return getRootDir() / "shaders";

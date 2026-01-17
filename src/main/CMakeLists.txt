@@ -15,6 +15,7 @@ target_include_directories(VulkanDemo
 target_link_libraries(VulkanDemo
     PRIVATE
     Core
+    Scene
     Assets
     Renderer
     World
@@ -62,6 +63,7 @@ endforeach()
 
 add_custom_target(post_build ALL 
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/prefabs ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prefabs
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/scenes ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scenes
 )
 
 add_dependencies(post_build VulkanDemo)
