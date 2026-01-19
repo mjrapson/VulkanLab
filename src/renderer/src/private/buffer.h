@@ -26,5 +26,6 @@ void copyBufferToImage(const vk::raii::Device& device,
                        const vk::raii::Queue& graphicsQueue,
                        const vk::raii::CommandPool& commandPool,
                        uint32_t width,
-                       uint32_t height);
+                       uint32_t height,
+                       const vk::ImageAspectFlags& aspectFlags);
 } // namespace renderer

@@ -55,7 +55,6 @@ class Renderer
     void createGraphicsPipeline();
     void createCommandBuffers();
     void createSyncObjects();
-    void createDefaultObjects();
     void createCameraBuffers();
 
     void createDescriptorSets();
@@ -66,6 +65,7 @@ class Renderer
                         const renderer::Camera& camera,
                         const std::vector<DrawCommand>& drawCommands);
 
+    void createDepthBufferImage();
     void createDefaultImage();
 
   private:
@@ -99,6 +99,9 @@ class Renderer
     vk::raii::DeviceMemory emptyImageMemory_{nullptr};
     vk::raii::ImageView emptyImageView_{nullptr};
     vk::raii::Sampler emptyImageSampler_{nullptr};
+    vk::raii::Image depthImage_{nullptr};
+    vk::raii::DeviceMemory depthImageMemory_{nullptr};
+    vk::raii::ImageView depthImageView_{nullptr};
 
     std::vector<vk::raii::Buffer> cameraUboBuffers_;
     std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;

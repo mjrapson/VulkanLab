@@ -22,6 +22,44 @@ vk::raii::Image createImage(const vk::raii::Device& device, uint32_t width, uint
     return vk::raii::Image{device, imageInfo};
 }
 
+vk::raii::Image createDepthImage(const vk::raii::Device& device, uint32_t width, uint32_t height)
+{
+    auto imageInfo = vk::ImageCreateInfo{};
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.format = vk::Format::eD32Sfloat;
+    imageInfo.extent = vk::Extent3D{width, height, 1};
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = vk::SampleCountFlagBits::e1;
+    imageInfo.tiling = vk::ImageTiling::eOptimal;
+    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
+    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+
+    return vk::raii::Image{device, imageInfo};
+}
+
+vk::raii::ImageView createImageView(const vk::raii::Device& device,
+                                    const vk::raii::Image& image,
+                                    const vk::Format& format,
+                                    const vk::ImageAspectFlags& aspectFlags)
+{
+    auto subresourceRange = vk::ImageSubresourceRange{};
+    subresourceRange.aspectMask = aspectFlags;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = 1;
+
+    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
+    imageViewCreateInfo.image = *image;
+    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
+    imageViewCreateInfo.format = format;
+    imageViewCreateInfo.subresourceRange = subresourceRange;
+
+    return vk::raii::ImageView{device, imageViewCreateInfo};
+}
+
 void transitionImageLayout(const vk::Image& image,
                            const vk::raii::CommandBuffer& commandBuffer,
                            vk::ImageLayout oldLayout,
@@ -29,10 +67,11 @@ void transitionImageLayout(const vk::Image& image,
                            vk::AccessFlags2 srcAccessMask,
                            vk::AccessFlags2 dstAccessMask,
                            vk::PipelineStageFlags2 srcStageMask,
-                           vk::PipelineStageFlags2 dstStageMask)
+                           vk::PipelineStageFlags2 dstStageMask,
+                           const vk::ImageAspectFlags& aspectFlags)
 {
     auto subresourceRange = vk::ImageSubresourceRange{};
-    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    subresourceRange.aspectMask = aspectFlags;
     subresourceRange.baseMipLevel = 0;
     subresourceRange.levelCount = 1;
     subresourceRange.baseArrayLayer = 0;

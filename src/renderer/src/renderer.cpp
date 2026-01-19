@@ -99,6 +99,7 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
     spdlog::info("Creating swapchain image views");
     createSwapchainImageViews();
+    createDepthBufferImage();
 
     spdlog::info("Creating graphics pipeline");
     createCameraDescriptorPool();
@@ -491,10 +492,18 @@ void Renderer::createGraphicsPipeline()
 
     pipelineLayout_ = vk::raii::PipelineLayout(gpuDevice_.device(), pipelineLayoutInfo);
 
+    auto depthStencilState = vk::PipelineDepthStencilStateCreateInfo{};
+    depthStencilState.depthTestEnable = true;
+    depthStencilState.depthWriteEnable = true;
+    depthStencilState.depthCompareOp = vk::CompareOp::eLess;
+    depthStencilState.depthBoundsTestEnable = false;
+    depthStencilState.stencilTestEnable = false;
+
     // Render passes (dynamic rendering)
     auto pipelineRenderingCreateInfo = vk::PipelineRenderingCreateInfo{};
     pipelineRenderingCreateInfo.colorAttachmentCount = 1;
     pipelineRenderingCreateInfo.pColorAttachmentFormats = &surfaceFormat_.format;
+    pipelineRenderingCreateInfo.depthAttachmentFormat = vk::Format::eD32Sfloat;
 
     auto pipelineInfo = vk::GraphicsPipelineCreateInfo{};
     pipelineInfo.pNext = &pipelineRenderingCreateInfo;
@@ -508,6 +517,7 @@ void Renderer::createGraphicsPipeline()
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = *pipelineLayout_;
+    pipelineInfo.pDepthStencilState = &depthStencilState;
     pipelineInfo.renderPass = nullptr;
 
     graphicsPipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
@@ -601,6 +611,7 @@ void Renderer::recreateSwapchain()
 
     createSwapchain();
     createSwapchainImageViews();
+    createDepthBufferImage();
 }
 
 void Renderer::recordCommands(uint32_t imageIndex,
@@ -617,10 +628,22 @@ void Renderer::recordCommands(uint32_t imageIndex,
                           {}, // srcAccessMask (no need to wait for previous operations)
                           vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
                           vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput  // dstStage
-    );
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
+                          vk::ImageAspectFlagBits::eColor);
+
+    transitionImageLayout(
+        depthImage_,
+        commandBuffer,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthAttachmentOptimal,
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+        vk::ImageAspectFlagBits::eDepth);
 
     const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
+    const auto clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 
     auto attachmentInfo = vk::RenderingAttachmentInfo{};
     attachmentInfo.imageView = *swapchainImageViews_.at(imageIndex);
@@ -629,11 +652,19 @@ void Renderer::recordCommands(uint32_t imageIndex,
     attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
     attachmentInfo.clearValue = clearColor;
 
+    auto depthAttachmentInfo = vk::RenderingAttachmentInfo{};
+    depthAttachmentInfo.imageView = depthImageView_;
+    depthAttachmentInfo.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
+    depthAttachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
+    depthAttachmentInfo.storeOp = vk::AttachmentStoreOp::eDontCare;
+    depthAttachmentInfo.clearValue = clearDepth;
+
     auto renderingInfo = vk::RenderingInfo{};
     renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
     renderingInfo.layerCount = 1;
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachments = &attachmentInfo;
+    renderingInfo.pDepthAttachment = &depthAttachmentInfo;
 
     commandBuffer.beginRendering(renderingInfo);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_);
@@ -695,10 +726,21 @@ void Renderer::recordCommands(uint32_t imageIndex,
                           vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
                           {},                                                 // dstAccessMask
                           vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                          vk::PipelineStageFlagBits2::eBottomOfPipe           // dstStage
-    );
+                          vk::PipelineStageFlagBits2::eBottomOfPipe,          // dstStage
+                          vk::ImageAspectFlagBits::eColor);
 
     commandBuffer.end();
+}
+
+void Renderer::createDepthBufferImage()
+{
+    depthImage_ = createDepthImage(gpuDevice_.device(), swapchainExtent_.width, swapchainExtent_.height);
+    depthImageMemory_ = allocateImageMemory(gpuDevice_.device(),
+                                            gpuDevice_.physicalDevice(),
+                                            depthImage_,
+                                            vk::MemoryPropertyFlagBits::eDeviceLocal);
+    depthImageView_ =
+        createImageView(gpuDevice_.device(), depthImage_, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
 }
 
 void Renderer::createDefaultImage()
@@ -732,22 +774,11 @@ void Renderer::createDefaultImage()
                       gpuDevice_.graphicsQueue(),
                       gpuDevice_.commandPool(),
                       1,
-                      1);
+                      1,
+                      vk::ImageAspectFlagBits::eColor);
 
-    auto subresourceRange = vk::ImageSubresourceRange{};
-    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = 1;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = 1;
-
-    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
-    imageViewCreateInfo.image = *emptyImage_;
-    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
-    imageViewCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
-    imageViewCreateInfo.subresourceRange = subresourceRange;
-
-    emptyImageView_ = vk::raii::ImageView{gpuDevice_.device(), imageViewCreateInfo};
+    emptyImageView_ =
+        createImageView(gpuDevice_.device(), emptyImage_, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
 
     auto samplerInfo = vk::SamplerCreateInfo{};
     samplerInfo.magFilter = vk::Filter::eLinear, samplerInfo.minFilter = vk::Filter::eLinear;

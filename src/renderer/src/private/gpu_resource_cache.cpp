@@ -130,22 +130,13 @@ void GpuResourceCache::uploadImageData(const std::vector<assets::Image*>& images
                           gpuDevice_.graphicsQueue(),
                           gpuDevice_.commandPool(),
                           image->width,
-                          image->height);
+                          image->height,
+                          vk::ImageAspectFlagBits::eColor);
 
-        auto subresourceRange = vk::ImageSubresourceRange{};
-        subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-        subresourceRange.baseMipLevel = 0;
-        subresourceRange.levelCount = 1;
-        subresourceRange.baseArrayLayer = 0;
-        subresourceRange.layerCount = 1;
-
-        auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
-        imageViewCreateInfo.image = *gpuImage.image;
-        imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
-        imageViewCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
-        imageViewCreateInfo.subresourceRange = subresourceRange;
-
-        gpuImage.view = vk::raii::ImageView{gpuDevice_.device(), imageViewCreateInfo};
+        gpuImage.view = createImageView(gpuDevice_.device(),
+                                        gpuImage.image,
+                                        vk::Format::eR8G8B8A8Srgb,
+                                        vk::ImageAspectFlagBits::eColor);
 
         auto samplerInfo = vk::SamplerCreateInfo{};
         samplerInfo.magFilter = vk::Filter::eLinear, samplerInfo.minFilter = vk::Filter::eLinear;

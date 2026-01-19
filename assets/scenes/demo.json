@@ -65,8 +65,8 @@
             "transformComponent": {
                 "position": {
                     "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
+                    "y": 7.5,
+                    "z": 3.0
                 },
                 "rotation": {
                     "x": 180.0,

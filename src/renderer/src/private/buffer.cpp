@@ -51,7 +51,8 @@ void copyBufferToImage(const vk::raii::Device& device,
                        const vk::raii::Queue& graphicsQueue,
                        const vk::raii::CommandPool& commandPool,
                        uint32_t width,
-                       uint32_t height)
+                       uint32_t height,
+                       const vk::ImageAspectFlags& aspectFlags)
 {
     auto allocInfo = vk::CommandBufferAllocateInfo{};
     allocInfo.commandPool = *commandPool;
@@ -70,7 +71,8 @@ void copyBufferToImage(const vk::raii::Device& device,
                           {}, // srcAccess
                           vk::AccessFlagBits2::eTransferWrite,
                           vk::PipelineStageFlagBits2::eTopOfPipe,
-                          vk::PipelineStageFlagBits2::eTransfer);
+                          vk::PipelineStageFlagBits2::eTransfer,
+                          aspectFlags);
 
     auto region = vk::BufferImageCopy{};
     region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
@@ -88,7 +90,8 @@ void copyBufferToImage(const vk::raii::Device& device,
                           vk::AccessFlagBits2::eTransferWrite,
                           vk::AccessFlagBits2::eShaderRead,
                           vk::PipelineStageFlagBits2::eTransfer,
-                          vk::PipelineStageFlagBits2::eFragmentShader);
+                          vk::PipelineStageFlagBits2::eFragmentShader,
+                          aspectFlags);
 
     cmd.end();
 
