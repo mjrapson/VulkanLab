@@ -61,7 +61,7 @@ GpuMaterial& GpuResourceCache::gpuMaterial(assets::Material* material)
     throw std::runtime_error("Material handle not uploaded to GPU");
 }
 
-GpuMesh& GpuResourceCache::gpuMesh(assets::Mesh* mesh)
+GpuMesh& GpuResourceCache::gpuMesh(assets::SubMesh* mesh)
 {
     if (auto itr = gpuMeshes_.find(mesh); itr != gpuMeshes_.end())
     {
@@ -217,8 +217,11 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
     {
         for (const auto& mesh : prefab->meshes())
         {
-            totalVertices += mesh->vertices.size();
-            totalIndices += mesh->indices.size();
+            for (const auto& subMesh : mesh->subMeshes)
+            {
+                totalVertices += subMesh->vertices.size();
+                totalIndices += subMesh->indices.size();
+            }
         }
     }
 
@@ -275,27 +278,30 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
     {
         for (const auto& mesh : prefab->meshes())
         {
-            auto gpuMesh = GpuMesh{};
-            gpuMesh.vertexCount = static_cast<uint32_t>(mesh->vertices.size());
-            gpuMesh.indexCount = static_cast<uint32_t>(mesh->indices.size());
-            gpuMesh.vertexOffset = static_cast<uint32_t>(currentVertexOffset);
-            gpuMesh.indexOffset = static_cast<uint32_t>(currentIndexOffset);
+            for (const auto& subMesh : mesh->subMeshes)
+            {
+                auto gpuMesh = GpuMesh{};
+                gpuMesh.vertexCount = static_cast<uint32_t>(subMesh->vertices.size());
+                gpuMesh.indexCount = static_cast<uint32_t>(subMesh->indices.size());
+                gpuMesh.vertexOffset = static_cast<uint32_t>(currentVertexOffset);
+                gpuMesh.indexOffset = static_cast<uint32_t>(currentIndexOffset);
 
-            const auto vertexSize = mesh->vertices.size() * sizeof(core::Vertex);
-            const auto indexSize = mesh->indices.size() * sizeof(uint32_t);
+                const auto vertexSize = subMesh->vertices.size() * sizeof(core::Vertex);
+                const auto indexSize = subMesh->indices.size() * sizeof(uint32_t);
 
-            std::memcpy(static_cast<std::byte*>(vertexStagingMemory) + currentVertexOffset * sizeof(core::Vertex),
-                        mesh->vertices.data(),
-                        vertexSize);
+                std::memcpy(static_cast<std::byte*>(vertexStagingMemory) + currentVertexOffset * sizeof(core::Vertex),
+                            subMesh->vertices.data(),
+                            vertexSize);
 
-            std::memcpy(static_cast<std::byte*>(indexStagingMemory) + currentIndexOffset * sizeof(uint32_t),
-                        mesh->indices.data(),
-                        indexSize);
+                std::memcpy(static_cast<std::byte*>(indexStagingMemory) + currentIndexOffset * sizeof(uint32_t),
+                            subMesh->indices.data(),
+                            indexSize);
 
-            currentVertexOffset += mesh->vertices.size();
-            currentIndexOffset += mesh->indices.size();
+                currentVertexOffset += subMesh->vertices.size();
+                currentIndexOffset += subMesh->indices.size();
 
-            gpuMeshes_.emplace(mesh.get(), std::move(gpuMesh));
+                gpuMeshes_.emplace(subMesh.get(), std::move(gpuMesh));
+            }
         }
     }
 

@@ -47,17 +47,20 @@ void RenderSystem::update(const renderer::Camera& camera)
                                * glm::toMat4(glm::quat(glm::radians(transformComponent->rotation)))
                                * glm::scale(glm::mat4(1.0f), transformComponent->scale);
 
-        for (auto& mesh : prefab->meshes())
+        for (const auto& instance : prefab->meshInstances())
         {
-            if (!mesh)
+            if (!instance.mesh)
             {
                 continue;
             }
 
-            auto drawCommand = renderer::DrawCommand{};
-            drawCommand.mesh = mesh.get();
-            drawCommand.transform = transformMatrix;
-            commands.push_back(drawCommand);
+            for (const auto& subMesh : instance.mesh->subMeshes)
+            {
+                auto drawCommand = renderer::DrawCommand{};
+                drawCommand.subMesh = subMesh.get();
+                drawCommand.transform = transformMatrix * instance.transform;
+                commands.push_back(drawCommand);
+            }
         }
     }
 

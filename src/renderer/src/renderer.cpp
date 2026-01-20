@@ -702,18 +702,18 @@ void Renderer::recordCommands(uint32_t imageIndex,
                                     0,
                                     vk::ArrayProxy<const PushConstants>{pushConstants});
 
-        if (drawCommand.mesh->material)
+        if (drawCommand.subMesh->material)
         {
-            const auto& gpuMaterial = gpuResources_->gpuMaterial(drawCommand.mesh->material);
+            const auto& gpuMaterial = gpuResources_->gpuMaterial(drawCommand.subMesh->material);
             commandBuffer.bindDescriptorSets(
                 vk::PipelineBindPoint::eGraphics,
                 pipelineLayout_,
                 1,
-                *materialDescriptorSets_.at(drawCommand.mesh->material).at(currentFrameIndex_),
+                *materialDescriptorSets_.at(drawCommand.subMesh->material).at(currentFrameIndex_),
                 gpuMaterial.uboOffset);
         }
 
-        auto& gpuMesh = gpuResources_->gpuMesh(drawCommand.mesh);
+        auto& gpuMesh = gpuResources_->gpuMesh(drawCommand.subMesh);
         commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);
     }
 

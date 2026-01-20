@@ -23,6 +23,12 @@
 #pragma GCC diagnostic pop
 #endif
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/transform.hpp>
+
 #include <spdlog/spdlog.h>
 
 #include <vector>
@@ -116,6 +122,57 @@ Image* readBaseColorTexture(tinygltf::Material& material, tinygltf::Model& model
     return prefab.getImage(model.images[model.textures[texIndex].source].name);
 }
 
+void parseNode(int index, tinygltf::Model& model, const glm::mat4& parentTransform, Prefab& prefab)
+{
+    const auto& node = model.nodes[index];
+
+    auto nodeTransform = glm::mat4{1.0f};
+
+    if (!node.matrix.empty())
+    {
+        nodeTransform = glm::make_mat4(node.matrix.data());
+    }
+    else
+    {
+        if (!node.translation.empty())
+        {
+            nodeTransform = glm::translate(nodeTransform,
+                                           glm::vec3(node.translation[0], node.translation[1], node.translation[2]));
+        }
+
+        if (!node.rotation.empty())
+        {
+            nodeTransform *= glm::mat4_cast(glm::quat(static_cast<float>(node.rotation[3]),
+                                                      static_cast<float>(node.rotation[0]),
+                                                      static_cast<float>(node.rotation[1]),
+                                                      static_cast<float>(node.rotation[2])));
+        }
+
+        if (!node.scale.empty())
+        {
+            nodeTransform = glm::scale(nodeTransform, glm::vec3(node.scale[0], node.scale[1], node.scale[2]));
+        }
+    }
+
+    auto nodeToPrefab = parentTransform * nodeTransform;
+
+    if (node.mesh >= 0)
+    {
+        if (auto mesh = prefab.getMesh(node.mesh))
+        {
+            auto meshInstance = MeshInstance{};
+            meshInstance.mesh = mesh;
+            meshInstance.transform = nodeToPrefab;
+            prefab.addMeshInstance(std::move(meshInstance));
+        }
+    }
+
+    for (const auto& childIndex : node.children)
+    {
+        parseNode(childIndex, model, nodeToPrefab, prefab);
+    }
+}
+
 std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
 {
     if (path.extension() != ".glb")
@@ -163,14 +220,23 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
 
     for (auto& gltfMesh : model.meshes)
     {
+        auto mesh = std::make_unique<Mesh>();
         for (auto& primitive : gltfMesh.primitives)
         {
-            auto mesh = std::make_unique<Mesh>();
-            mesh->vertices = readVertices(primitive, model);
-            mesh->indices = readIndices(primitive, model);
-            mesh->material = prefab->getMaterial(model.materials[primitive.material].name);
-            prefab->addMesh(std::move(mesh));
+            auto subMesh = std::make_unique<SubMesh>();
+            subMesh->vertices = readVertices(primitive, model);
+            subMesh->indices = readIndices(primitive, model);
+            subMesh->material = prefab->getMaterial(model.materials[primitive.material].name);
+            mesh->subMeshes.emplace_back(std::move(subMesh));
         }
+        prefab->addMesh(std::move(mesh));
+    }
+
+    auto& gltfScene = model.scenes[model.defaultScene];
+
+    for (auto& nodeIndex : gltfScene.nodes)
+    {
+        parseNode(nodeIndex, model, glm::mat4{1.0f}, *prefab);
     }
 
     return prefab;

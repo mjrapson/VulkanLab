@@ -11,6 +11,10 @@
         {
             "name": "sphere",
             "path": "sphere.glb"
+        },
+        {
+            "name": "checkerboard",
+            "path": "checkerboard.glb"
         }
     ],
     "entities": [
@@ -19,8 +23,8 @@
             "transformComponent": {
                 "position": {
                     "x": 0.0,
-                    "y": 3.0,
-                    "z": -8.0
+                    "y": 0.0,
+                    "z": -4.0
                 },
                 "rotation": {
                     "x": 0.0,
@@ -41,9 +45,9 @@
             "name": "sphere",
             "transformComponent": {
                 "position": {
-                    "x": 10.0,
-                    "y": 3.5,
-                    "z": 5.0
+                    "x": 5.0,
+                    "y": 0.0,
+                    "z": 2.0
                 },
                 "rotation": {
                     "x": 0.0,
@@ -61,26 +65,26 @@
             }
         },
         {
-            "name": "terrain1",
+            "name": "checkerboard",
             "transformComponent": {
                 "position": {
                     "x": 0.0,
-                    "y": 7.5,
-                    "z": 3.0
+                    "y": 2.5,
+                    "z": 0.0
                 },
                 "rotation": {
-                    "x": 180.0,
+                    "x": 0.0,
                     "y": 0.0,
                     "z": 0.0
                 },
                 "scale": {
-                    "x": 100.0,
-                    "y": 50.0,
-                    "z": 100.0
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
                 }
             },
             "renderComponent": {
-                "prefab": "terrain1"
+                "prefab": "checkerboard"
             }
         }
     ]

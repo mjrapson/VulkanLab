@@ -22,7 +22,7 @@ void Prefab::addMesh(std::unique_ptr<Mesh> mesh)
         return;
     }
 
-    meshes_.push_back(std::move(mesh));
+    meshes_.emplace_back(std::move(mesh));
 }
 
 void Prefab::addImage(const std::string& name, std::unique_ptr<Image> image)
@@ -35,6 +35,11 @@ void Prefab::addImage(const std::string& name, std::unique_ptr<Image> image)
     images_[name] = std::move(image);
 }
 
+void Prefab::addMeshInstance(MeshInstance&& instance)
+{
+    meshInstances_.emplace_back(std::move(instance));
+}
+
 Material* Prefab::getMaterial(const std::string& name) const
 {
     if (!materials_.contains(name))
@@ -43,6 +48,11 @@ Material* Prefab::getMaterial(const std::string& name) const
     }
 
     return materials_.at(name).get();
+}
+
+Mesh* Prefab::getMesh(int index) const
+{
+    return meshes_.at(index).get();
 }
 
 Image* Prefab::getImage(const std::string& name) const
@@ -68,5 +78,10 @@ const std::vector<std::unique_ptr<Mesh>>& Prefab::meshes() const
 const std::unordered_map<std::string, std::unique_ptr<Image>>& Prefab::images() const
 {
     return images_;
+}
+
+const std::vector<MeshInstance>& Prefab::meshInstances() const
+{
+    return meshInstances_;
 }
 } // namespace assets

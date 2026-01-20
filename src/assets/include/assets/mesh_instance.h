@@ -7,14 +7,11 @@
 
 namespace assets
 {
-struct SubMesh;
-} // namespace assets
+struct Mesh;
 
-namespace renderer
+struct MeshInstance
 {
-struct DrawCommand
-{
-    assets::SubMesh* subMesh;
+    Mesh* mesh;
     glm::mat4 transform;
 };
-} // namespace renderer
+} // namespace assets

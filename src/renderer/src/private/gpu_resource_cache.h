@@ -42,7 +42,7 @@ class GpuResourceCache
 
     GpuImage& gpuImage(assets::Image* image);
     GpuMaterial& gpuMaterial(assets::Material* material);
-    GpuMesh& gpuMesh(assets::Mesh* mesh);
+    GpuMesh& gpuMesh(assets::SubMesh* mesh);
 
   private:
     void uploadData(const assets::AssetDatabase& db);
@@ -65,6 +65,6 @@ class GpuResourceCache
 
     std::unordered_map<assets::Image*, GpuImage> gpuImages_;
     std::unordered_map<assets::Material*, GpuMaterial> gpuMaterials_;
-    std::unordered_map<assets::Mesh*, GpuMesh> gpuMeshes_;
+    std::unordered_map<assets::SubMesh*, GpuMesh> gpuMeshes_;
 };
 } // namespace renderer
