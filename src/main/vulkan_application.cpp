@@ -148,6 +148,7 @@ void VulkanApplication::run()
     spdlog::info("Running");
 
     auto scene = scene::loadScene(core::getScenesDir() / "demo.json");
+    camera_->setPosition(glm::vec3{0.0f, 8.0f, 24.0f});
 
     // Probably show some loading screen here...
     // Move to separate func
@@ -342,7 +343,7 @@ void VulkanApplication::createSurface()
 
 void VulkanApplication::updateCamera(float deltaTime)
 {
-    const auto speed = 10.0f;
+    const auto speed = 15.0f;
     auto movement = glm::vec3{0.0f};
 
     auto worldUp = glm::vec3(0, 1, 0);

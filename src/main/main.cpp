@@ -7,8 +7,8 @@
 
 #include <stdexcept>
 
-constexpr auto windowWidth = 1200;
-constexpr auto windowHeight = 900;
+constexpr auto windowWidth = 1440;
+constexpr auto windowHeight = 1080;
 constexpr auto windowTitle = "Vulkan Demo";
 
 int main(int /* argc */, char** /* argv */)

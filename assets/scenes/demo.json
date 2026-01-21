@@ -23,7 +23,7 @@
             "transformComponent": {
                 "position": {
                     "x": 0.0,
-                    "y": 0.0,
+                    "y": 2.5,
                     "z": -4.0
                 },
                 "rotation": {
@@ -46,7 +46,7 @@
             "transformComponent": {
                 "position": {
                     "x": 5.0,
-                    "y": 0.0,
+                    "y": 2.5,
                     "z": 2.0
                 },
                 "rotation": {
@@ -68,8 +68,8 @@
             "name": "checkerboard",
             "transformComponent": {
                 "position": {
-                    "x": 0.0,
-                    "y": 2.5,
+                    "x": 5.5,
+                    "y": 1.0,
                     "z": 0.0
                 },
                 "rotation": {
@@ -85,6 +85,29 @@
             },
             "renderComponent": {
                 "prefab": "checkerboard"
+            }
+        },
+        {
+            "name": "terrain",
+            "transformComponent": {
+                "position": {
+                    "x": -16.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 2.0,
+                    "y": 1.5,
+                    "z": 2.0
+                }
+            },
+            "renderComponent":{
+                "prefab": "terrain1"
             }
         }
     ]
