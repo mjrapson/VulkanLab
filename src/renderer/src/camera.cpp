@@ -85,7 +85,10 @@ void Camera::setAspectRatio(float aspectRatio)
 
 const glm::mat4 Camera::projection() const
 {
-    return glm::perspective(fieldOfView_, aspectRatio_, nearPlane_, farPlane_);
+    auto projection = glm::perspective(fieldOfView_, aspectRatio_, nearPlane_, farPlane_);
+    projection[1][1] *= -1.0f;
+
+    return projection;
 }
 
 const glm::mat4 Camera::view() const
