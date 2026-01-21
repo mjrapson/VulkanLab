@@ -104,7 +104,7 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
         auto v = core::Vertex{};
         v.position = glm::vec3(positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]);
         v.normal = glm::vec3(normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]);
-        v.textureUV = glm::vec2(texcoords[i * 2 + 0], 1.0f - texcoords[i * 2 + 1]);
+        v.textureUV = glm::vec2(texcoords[i * 2 + 0], texcoords[i * 2 + 1]);
         vertices.push_back(v);
     }
 
