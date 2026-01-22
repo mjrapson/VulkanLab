@@ -10,6 +10,8 @@ namespace renderer
 class Camera
 {
   public:
+    Camera();
+
     const glm::vec3& position() const;
     const glm::vec3& front() const;
     const glm::vec3& up() const;
@@ -40,7 +42,7 @@ class Camera
     float nearPlane_{0.1f};
     float farPlane_{1000.0f};
     float pitch_{0.0f};
-    float yaw_{0.0f};
+    float yaw_{-90.0f};
     float roll_{0.0f};
     float aspectRatio_{1.0f};
 };

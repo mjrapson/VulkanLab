@@ -344,6 +344,8 @@ void VulkanApplication::createSurface()
 void VulkanApplication::updateCamera(float deltaTime)
 {
     const auto speed = 15.0f;
+    const auto turnSpeed = 45.0f;
+
     auto movement = glm::vec3{0.0f};
 
     auto worldUp = glm::vec3(0, 1, 0);
@@ -363,12 +365,12 @@ void VulkanApplication::updateCamera(float deltaTime)
 
     if(inputHandler_->isKeyPressed(GLFW_KEY_A))
     {
-        movement = movement - right;
+        camera_->setYaw(camera_->yaw() - (turnSpeed * deltaTime));
     }
 
     if(inputHandler_->isKeyPressed(GLFW_KEY_D))
     {
-        movement = movement + right;
+         camera_->setYaw(camera_->yaw() + (turnSpeed * deltaTime));
     }
 
     if(inputHandler_->isKeyPressed(GLFW_KEY_E))

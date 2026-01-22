@@ -11,6 +11,11 @@
 
 namespace renderer
 {
+Camera::Camera()
+{
+    normalize();
+}
+
 const glm::vec3& Camera::position() const
 {
     return position_;
