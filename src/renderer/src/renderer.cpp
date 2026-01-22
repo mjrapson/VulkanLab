@@ -36,6 +36,7 @@ struct CameraBufferObject
 struct PushConstants
 {
     glm::mat4 modelTransform;
+    glm::mat4 normalMatrix;
 };
 
 vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth, int windowHeight)
@@ -696,6 +697,7 @@ void Renderer::recordCommands(uint32_t imageIndex,
     {
         auto pushConstants = PushConstants{};
         pushConstants.modelTransform = drawCommand.transform;
+        pushConstants.normalMatrix = glm::transpose(glm::inverse(glm::mat3(drawCommand.transform)));
 
         commandBuffer.pushConstants(pipelineLayout_,
                                     vk::ShaderStageFlagBits::eVertex,
