@@ -26,7 +26,12 @@ class GpuDevice;
 class GpuResourceCache
 {
   public:
-    GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice, int maxFramesInFlight);
+    GpuResourceCache(const assets::AssetDatabase& db,
+                     const GpuDevice& gpuDevice,
+                     int maxFramesInFlight,
+                     const vk::DescriptorSetLayout& materialDescriptorSetLayout,
+                     const vk::ImageView& emptyImageView,
+                     const vk::Sampler& emptyImageSampler);
 
     ~GpuResourceCache() = default;
 
@@ -44,21 +49,30 @@ class GpuResourceCache
     GpuMaterial& gpuMaterial(assets::Material* material);
     GpuMesh& gpuMesh(assets::SubMesh* mesh);
 
+    const std::vector<vk::raii::DescriptorSet>& materialDescriptorSet(assets::Material* material) const;
+
   private:
     void uploadData(const assets::AssetDatabase& db);
     void uploadImageData(const std::vector<assets::Image*>& images);
     void uploadMaterialData(const std::vector<assets::Material*>& materials);
     void uploadMeshData(const assets::AssetDatabase& db);
 
+    void createMaterialDescriptorPools(uint32_t materialCount);
+
   private:
     const GpuDevice& gpuDevice_;
     const int maxFramesInFlight_;
+    const vk::DescriptorSetLayout& materialDescriptorSetLayout_;
+    const vk::ImageView& emptyImageView_;
+    const vk::Sampler& emptyImageSampler_;
 
     vk::raii::Buffer meshVertexBuffer_{nullptr};
     vk::raii::Buffer meshIndexBuffer_{nullptr};
     vk::raii::DeviceMemory meshVertexBufferMemory_{nullptr};
     vk::raii::DeviceMemory meshIndexBufferMemory_{nullptr};
 
+    vk::raii::DescriptorPool materialDescriptorPool_{nullptr};
+    std::unordered_map<assets::Material*, std::vector<vk::raii::DescriptorSet>> materialDescriptorSets_;
     std::vector<vk::raii::Buffer> materialUboBuffers_;
     std::vector<vk::raii::DeviceMemory> materialUboBuffersMemory_;
     std::vector<void*> materialUboMappedMemory_;

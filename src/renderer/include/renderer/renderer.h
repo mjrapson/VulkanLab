@@ -20,6 +20,7 @@ class AssetDatabase;
 namespace renderer
 {
 class Camera;
+class GeometryPass;
 class GpuDevice;
 class GpuResourceCache;
 
@@ -52,7 +53,6 @@ class Renderer
     void createCameraDescriptorPool();
     void createMaterialDescriptorPools(uint32_t materialCount);
     void createDescriptorSetLayouts();
-    void createGraphicsPipeline();
     void createCommandBuffers();
     void createSyncObjects();
     void createCameraBuffers();
@@ -67,6 +67,8 @@ class Renderer
 
     void createDepthBufferImage();
     void createDefaultImage();
+
+    void createRenderPasses();
 
   private:
     const vk::raii::Instance& instance_;
@@ -85,10 +87,7 @@ class Renderer
     std::vector<vk::raii::ImageView> swapchainImageViews_;
     vk::raii::DescriptorPool cameraDescriptorPool_{nullptr};
     vk::raii::DescriptorSetLayout cameraDescriptorSetLayout_{nullptr};
-    vk::raii::DescriptorPool materialDescriptorPool_{nullptr};
     vk::raii::DescriptorSetLayout materialDescriptorSetLayout_{nullptr};
-    vk::raii::PipelineLayout pipelineLayout_{nullptr};
-    vk::raii::Pipeline graphicsPipeline_{nullptr};
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
     std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
@@ -109,6 +108,7 @@ class Renderer
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
 
     std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
-    std::unordered_map<assets::Material*, std::vector<vk::raii::DescriptorSet>> materialDescriptorSets_;
+
+    std::unique_ptr<GeometryPass> geometryPass_{nullptr};
 };
 } // namespace renderer

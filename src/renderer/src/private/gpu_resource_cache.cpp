@@ -14,9 +14,17 @@
 
 namespace renderer
 {
-GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice, int maxFramesInFlight)
+GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db,
+                                   const GpuDevice& gpuDevice,
+                                   int maxFramesInFlight,
+                                   const vk::DescriptorSetLayout& materialDescriptorSetLayout,
+                                   const vk::ImageView& emptyImageView,
+                                   const vk::Sampler& emptyImageSampler)
     : gpuDevice_{gpuDevice},
-      maxFramesInFlight_{maxFramesInFlight}
+      maxFramesInFlight_{maxFramesInFlight},
+      materialDescriptorSetLayout_{materialDescriptorSetLayout},
+      emptyImageView_{emptyImageView},
+      emptyImageSampler_{emptyImageSampler}
 {
     uploadData(db);
 }
@@ -29,16 +37,6 @@ const vk::raii::Buffer& GpuResourceCache::meshVertexBuffer() const
 const vk::raii::Buffer& GpuResourceCache::meshIndexBuffer() const
 {
     return meshIndexBuffer_;
-}
-
-const vk::raii::Buffer& GpuResourceCache::materialUniformBuffer(int frameIndex) const
-{
-    if (frameIndex < 0 || static_cast<size_t>(frameIndex) >= materialUboBuffers_.size())
-    {
-        throw std::runtime_error("Frame index out of bounds");
-    }
-
-    return materialUboBuffers_.at(frameIndex);
 }
 
 GpuImage& GpuResourceCache::gpuImage(assets::Image* image)
@@ -69,6 +67,11 @@ GpuMesh& GpuResourceCache::gpuMesh(assets::SubMesh* mesh)
     }
 
     throw std::runtime_error("Mesh handle not uploaded to GPU");
+}
+
+const std::vector<vk::raii::DescriptorSet>& GpuResourceCache::materialDescriptorSet(assets::Material* material) const
+{
+    return materialDescriptorSets_.at(material);
 }
 
 void GpuResourceCache::uploadData(const assets::AssetDatabase& db)
@@ -164,6 +167,10 @@ void GpuResourceCache::uploadMaterialData(const std::vector<assets::Material*>& 
         return;
     }
 
+    createMaterialDescriptorPools(static_cast<uint32_t>(materials.size()));
+
+    auto layouts = std::vector<vk::DescriptorSetLayout>{maxFramesInFlight_, materialDescriptorSetLayout_};
+
     auto stride = alignMemory(sizeof(GpuMaterialBufferData),
                               gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
 
@@ -206,6 +213,51 @@ void GpuResourceCache::uploadMaterialData(const std::vector<assets::Material*>& 
         }
 
         currentOffset += static_cast<uint32_t>(stride);
+
+        auto allocInfo = vk::DescriptorSetAllocateInfo{};
+        allocInfo.descriptorPool = *materialDescriptorPool_;
+        allocInfo.descriptorSetCount = maxFramesInFlight_;
+        allocInfo.pSetLayouts = layouts.data();
+
+        materialDescriptorSets_[material] = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+
+        for (auto frameIndex = uint32_t{0}; frameIndex < maxFramesInFlight_; ++frameIndex)
+        {
+            auto bufferInfo = vk::DescriptorBufferInfo{};
+            bufferInfo.buffer = materialUboBuffers_.at(frameIndex);
+            bufferInfo.offset = 0;
+            bufferInfo.range = stride;
+
+            auto uboWrite = vk::WriteDescriptorSet{};
+            uboWrite.dstSet = materialDescriptorSets_.at(material).at(frameIndex);
+            uboWrite.dstBinding = 0;
+            uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+            uboWrite.descriptorCount = 1;
+            uboWrite.pBufferInfo = &bufferInfo;
+
+            auto imageInfo = vk::DescriptorImageInfo{};
+            if (material->diffuseTexture)
+            {
+                imageInfo.imageView = gpuImage(material->diffuseTexture).view;
+                imageInfo.sampler = gpuImage(material->diffuseTexture).sampler;
+            }
+            else
+            {
+                imageInfo.imageView = emptyImageView_;
+                imageInfo.sampler = emptyImageSampler_;
+            }
+            imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+            auto textureWrite = vk::WriteDescriptorSet{};
+            textureWrite.dstSet = materialDescriptorSets_.at(material).at(frameIndex);
+            textureWrite.dstBinding = 1;
+            textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+            textureWrite.descriptorCount = 1;
+            textureWrite.pImageInfo = &imageInfo;
+
+            std::array writes{uboWrite, textureWrite};
+            gpuDevice_.device().updateDescriptorSets(writes, {});
+        }
     }
 }
 
@@ -322,5 +374,26 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
                gpuDevice_.graphicsQueue(),
                gpuDevice_.commandPool(),
                indexBufferSize);
+}
+
+void GpuResourceCache::createMaterialDescriptorPools(uint32_t materialCount)
+{
+    auto materialUboPoolSize = vk::DescriptorPoolSize{};
+    materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
+    materialUboPoolSize.descriptorCount = maxFramesInFlight_;
+
+    auto texturePoolSize = vk::DescriptorPoolSize{};
+    texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
+    texturePoolSize.descriptorCount = maxFramesInFlight_;
+
+    auto materialPoolSizes = std::array{materialUboPoolSize, texturePoolSize};
+
+    auto materialPoolInfo = vk::DescriptorPoolCreateInfo{};
+    materialPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    materialPoolInfo.maxSets = maxFramesInFlight_ * materialCount;
+    materialPoolInfo.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size());
+    materialPoolInfo.pPoolSizes = materialPoolSizes.data();
+
+    materialDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), materialPoolInfo};
 }
 } // namespace renderer

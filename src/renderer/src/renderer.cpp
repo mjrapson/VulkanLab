@@ -5,13 +5,12 @@
 #include "private/gpu_resource_cache.h"
 #include "private/image.h"
 #include "private/memory.h"
-#include "private/shader.h"
+#include "render_passes/geometry_pass.h"
 #include "renderer/camera.h"
 #include "renderer/gpu_device.h"
 #include "renderer/vertex_layout.h"
 
 #include <assets/asset_database.h>
-#include <core/file_system.h>
 
 #include <spdlog/spdlog.h>
 
@@ -22,22 +21,13 @@
 
 namespace renderer
 {
-
-constexpr auto maxFramesInFlight = 2;
-
-// To move into a pipeline object
 struct CameraBufferObject
 {
     glm::mat4 view;
     glm::mat4 projection;
 };
 
-// To move into a pipeline object
-struct PushConstants
-{
-    glm::mat4 modelTransform;
-    glm::mat4 normalMatrix;
-};
+constexpr auto maxFramesInFlight = 2;
 
 vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth, int windowHeight)
 {
@@ -102,10 +92,8 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     createSwapchainImageViews();
     createDepthBufferImage();
 
-    spdlog::info("Creating graphics pipeline");
     createCameraDescriptorPool();
     createDescriptorSetLayouts();
-    createGraphicsPipeline();
     createCameraBuffers();
 
     spdlog::info("Creating command buffers");
@@ -115,6 +103,9 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     createSyncObjects();
 
     createDefaultImage();
+
+    spdlog::info("Creating render passes");
+    createRenderPasses();
 }
 
 Renderer::~Renderer() = default;
@@ -206,77 +197,12 @@ void Renderer::windowResized(int width, int height)
 
 void Renderer::setResources(const assets::AssetDatabase& db)
 {
-    // Hack (temp)
-    auto materials = uint32_t{0};
-    for (const auto& prefab : db.prefabs())
-    {
-        for (const auto& material : prefab.second->materials())
-        {
-            materials++;
-        }
-    }
-
-    createMaterialDescriptorPools(materials);
-
-    gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_, maxFramesInFlight);
-
-    // To move into a pipeline object
-    auto layouts = std::vector<vk::DescriptorSetLayout>{maxFramesInFlight, *materialDescriptorSetLayout_};
-
-    auto stride = alignMemory(sizeof(GpuMaterialBufferData),
-                              gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
-
-    for (const auto& prefab : db.prefabs())
-    {
-        for (const auto& material : prefab.second->materials())
-        {
-            auto allocInfo = vk::DescriptorSetAllocateInfo{};
-            allocInfo.descriptorPool = *materialDescriptorPool_;
-            allocInfo.descriptorSetCount = maxFramesInFlight;
-            allocInfo.pSetLayouts = layouts.data();
-
-            materialDescriptorSets_[material.second.get()] = std::move(
-                vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
-
-            for (auto frameIndex = uint32_t{0}; frameIndex < maxFramesInFlight; ++frameIndex)
-            {
-                auto bufferInfo = vk::DescriptorBufferInfo{};
-                bufferInfo.buffer = gpuResources_->materialUniformBuffer(frameIndex);
-                bufferInfo.offset = 0;
-                bufferInfo.range = stride;
-
-                auto uboWrite = vk::WriteDescriptorSet{};
-                uboWrite.dstSet = materialDescriptorSets_.at(material.second.get()).at(frameIndex);
-                uboWrite.dstBinding = 0;
-                uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
-                uboWrite.descriptorCount = 1;
-                uboWrite.pBufferInfo = &bufferInfo;
-
-                auto imageInfo = vk::DescriptorImageInfo{};
-                if (material.second->diffuseTexture)
-                {
-                    imageInfo.imageView = gpuResources_->gpuImage(material.second->diffuseTexture).view;
-                    imageInfo.sampler = gpuResources_->gpuImage(material.second->diffuseTexture).sampler;
-                }
-                else
-                {
-                    imageInfo.imageView = emptyImageView_;
-                    imageInfo.sampler = emptyImageSampler_;
-                }
-                imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-                auto textureWrite = vk::WriteDescriptorSet{};
-                textureWrite.dstSet = materialDescriptorSets_.at(material.second.get()).at(frameIndex);
-                textureWrite.dstBinding = 1;
-                textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-                textureWrite.descriptorCount = 1;
-                textureWrite.pImageInfo = &imageInfo;
-
-                std::array writes{uboWrite, textureWrite};
-                gpuDevice_.device().updateDescriptorSets(writes, {});
-            }
-        }
-    }
+    gpuResources_ = std::make_unique<GpuResourceCache>(db,
+                                                       gpuDevice_,
+                                                       maxFramesInFlight,
+                                                       materialDescriptorSetLayout_,
+                                                       emptyImageView_,
+                                                       emptyImageSampler_);
 }
 
 void Renderer::createSwapchain()
@@ -324,7 +250,6 @@ void Renderer::createSwapchainImageViews()
     }
 }
 
-// To move into a pipeline object
 void Renderer::createCameraDescriptorPool()
 {
     auto cameraPoolSize = vk::DescriptorPoolSize{};
@@ -342,29 +267,6 @@ void Renderer::createCameraDescriptorPool()
     cameraDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), cameraPoolInfo};
 }
 
-// To move into a pipeline object
-void Renderer::createMaterialDescriptorPools(uint32_t materialCount)
-{
-    auto materialUboPoolSize = vk::DescriptorPoolSize{};
-    materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
-    materialUboPoolSize.descriptorCount = maxFramesInFlight;
-
-    auto texturePoolSize = vk::DescriptorPoolSize{};
-    texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
-    texturePoolSize.descriptorCount = maxFramesInFlight;
-
-    auto materialPoolSizes = std::array{materialUboPoolSize, texturePoolSize};
-
-    auto materialPoolInfo = vk::DescriptorPoolCreateInfo{};
-    materialPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    materialPoolInfo.maxSets = maxFramesInFlight * materialCount;
-    materialPoolInfo.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size());
-    materialPoolInfo.pPoolSizes = materialPoolSizes.data();
-
-    materialDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), materialPoolInfo};
-}
-
-// To move into a pipeline object
 void Renderer::createDescriptorSetLayouts()
 {
     // Camera descriptor set layout
@@ -402,126 +304,6 @@ void Renderer::createDescriptorSetLayouts()
     materialLayoutInfo.pBindings = materialLayoutBindings.data();
 
     materialDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), materialLayoutInfo);
-}
-
-// To move into a pipeline object
-void Renderer::createGraphicsPipeline()
-{
-    // Shader-progammable stages
-    auto vertexShaderModule = createShaderModule(gpuDevice_.device(),
-                                                 core::readBinaryFile(core::getShaderDir() / "basic.vert.spv"));
-
-    auto fragmentShaderModule = createShaderModule(gpuDevice_.device(),
-                                                   core::readBinaryFile(core::getShaderDir() / "basic.frag.spv"));
-
-    auto vertShaderStageInfo = vk::PipelineShaderStageCreateInfo{};
-    vertShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
-    vertShaderStageInfo.module = *vertexShaderModule;
-    vertShaderStageInfo.pName = "vertMain";
-
-    auto fragShaderStageInfo = vk::PipelineShaderStageCreateInfo{};
-    fragShaderStageInfo.stage = vk::ShaderStageFlagBits::eFragment;
-    fragShaderStageInfo.module = *fragmentShaderModule;
-    fragShaderStageInfo.pName = "fragMain";
-
-    vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
-
-    // Fixed function stages
-    const auto bindingDescriptions = VertexLayout::bindingDescription();
-    const auto attributeDescriptions = VertexLayout::attributeDescriptions();
-    auto vertexInputInfo = vk::PipelineVertexInputStateCreateInfo{};
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &bindingDescriptions;
-    vertexInputInfo.vertexAttributeDescriptionCount = attributeDescriptions.size();
-    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-    auto inputAssembly = vk::PipelineInputAssemblyStateCreateInfo{};
-    inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
-
-    const auto dynamicStates = std::vector<vk::DynamicState>{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
-
-    auto dynamicState = vk::PipelineDynamicStateCreateInfo{};
-    dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-    dynamicState.pDynamicStates = dynamicStates.data();
-
-    auto viewportState = vk::PipelineViewportStateCreateInfo{};
-    viewportState.viewportCount = 1;
-    viewportState.scissorCount = 1;
-
-    auto rasterizer = vk::PipelineRasterizationStateCreateInfo{};
-    rasterizer.depthClampEnable = vk::False;
-    rasterizer.rasterizerDiscardEnable = vk::False;
-    rasterizer.polygonMode = vk::PolygonMode::eFill;
-    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
-    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
-    rasterizer.depthBiasEnable = vk::False;
-    rasterizer.depthBiasSlopeFactor = 1.0f;
-    rasterizer.lineWidth = 1.0;
-
-    auto multisampling = vk::PipelineMultisampleStateCreateInfo{};
-    multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
-    multisampling.sampleShadingEnable = vk::False;
-
-    auto colorBlendAttachment = vk::PipelineColorBlendAttachmentState{};
-    colorBlendAttachment.blendEnable = vk::False;
-    colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG
-                                          | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-
-    auto colorBlending = vk::PipelineColorBlendStateCreateInfo{};
-    colorBlending.logicOpEnable = vk::False;
-    colorBlending.logicOp = vk::LogicOp::eCopy;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
-
-    auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout_, *materialDescriptorSetLayout_};
-
-    if (gpuDevice_.physicalDevice().getProperties().limits.maxPushConstantsSize < sizeof(PushConstants))
-    {
-        throw std::runtime_error{"Requested push constant size exceeds device limits"};
-    }
-
-    auto pushConstantRange = vk::PushConstantRange{};
-    pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof(PushConstants);
-    pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
-
-    auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo{};
-    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
-    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-
-    pipelineLayout_ = vk::raii::PipelineLayout(gpuDevice_.device(), pipelineLayoutInfo);
-
-    auto depthStencilState = vk::PipelineDepthStencilStateCreateInfo{};
-    depthStencilState.depthTestEnable = true;
-    depthStencilState.depthWriteEnable = true;
-    depthStencilState.depthCompareOp = vk::CompareOp::eLess;
-    depthStencilState.depthBoundsTestEnable = false;
-    depthStencilState.stencilTestEnable = false;
-
-    // Render passes (dynamic rendering)
-    auto pipelineRenderingCreateInfo = vk::PipelineRenderingCreateInfo{};
-    pipelineRenderingCreateInfo.colorAttachmentCount = 1;
-    pipelineRenderingCreateInfo.pColorAttachmentFormats = &surfaceFormat_.format;
-    pipelineRenderingCreateInfo.depthAttachmentFormat = vk::Format::eD32Sfloat;
-
-    auto pipelineInfo = vk::GraphicsPipelineCreateInfo{};
-    pipelineInfo.pNext = &pipelineRenderingCreateInfo;
-    pipelineInfo.stageCount = 2;
-    pipelineInfo.pStages = shaderStages;
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = *pipelineLayout_;
-    pipelineInfo.pDepthStencilState = &depthStencilState;
-    pipelineInfo.renderPass = nullptr;
-
-    graphicsPipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
 }
 
 void Renderer::createCommandBuffers()
@@ -622,114 +404,26 @@ void Renderer::recordCommands(uint32_t imageIndex,
 {
     commandBuffer.begin({});
 
-    transitionImageLayout(swapchainImages_.at(imageIndex),
-                          commandBuffer,
-                          vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eColorAttachmentOptimal,
-                          {}, // srcAccessMask (no need to wait for previous operations)
-                          vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
-                          vk::ImageAspectFlagBits::eColor);
-
-    transitionImageLayout(
-        depthImage_,
-        commandBuffer,
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eDepthAttachmentOptimal,
-        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-        vk::ImageAspectFlagBits::eDepth);
-
-    const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
-    const auto clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
-
-    auto attachmentInfo = vk::RenderingAttachmentInfo{};
-    attachmentInfo.imageView = *swapchainImageViews_.at(imageIndex);
-    attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-    attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
-    attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-    attachmentInfo.clearValue = clearColor;
-
-    auto depthAttachmentInfo = vk::RenderingAttachmentInfo{};
-    depthAttachmentInfo.imageView = depthImageView_;
-    depthAttachmentInfo.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
-    depthAttachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
-    depthAttachmentInfo.storeOp = vk::AttachmentStoreOp::eDontCare;
-    depthAttachmentInfo.clearValue = clearDepth;
-
-    auto renderingInfo = vk::RenderingInfo{};
-    renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
-    renderingInfo.layerCount = 1;
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &attachmentInfo;
-    renderingInfo.pDepthAttachment = &depthAttachmentInfo;
-
-    commandBuffer.beginRendering(renderingInfo);
-    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_);
-    commandBuffer.bindVertexBuffers(0, *gpuResources_->meshVertexBuffer(), {0});
-    commandBuffer.bindIndexBuffer(*gpuResources_->meshIndexBuffer(), 0, vk::IndexType::eUint32);
-
     auto cameraBuffer = CameraBufferObject{};
     cameraBuffer.projection = camera.projection();
     cameraBuffer.view = camera.view();
 
     memcpy(cameraUboMappedMemory_[currentFrameIndex_], &cameraBuffer, sizeof(cameraBuffer));
 
-    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                     pipelineLayout_,
-                                     0,
-                                     *cameraDescriptorSets_.at(currentFrameIndex_),
-                                     nullptr);
+    auto passInfo = RenderPassCommandInfo{
+        .frameIndex = currentFrameIndex_,
+        .colorImage = swapchainImages_[imageIndex],
+        .colorImageView = swapchainImageViews_[imageIndex],
+        .depthImage = depthImage_,
+        .depthImageView = depthImageView_,
+        .extent = swapchainExtent_,
+        .commandBuffer = commandBuffer,
+        .cameraDescriptorSet = cameraDescriptorSets_.at(currentFrameIndex_),
+        .gpuResourceCache = *gpuResources_,
+        .drawCommands = drawCommands,
+    };
 
-    commandBuffer.setViewport(0,
-                              vk::Viewport(0.0f,
-                                           0.0f,
-                                           static_cast<float>(swapchainExtent_.width),
-                                           static_cast<float>(swapchainExtent_.height),
-                                           0.0f,
-                                           1.0f));
-    commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
-
-    for (const auto& drawCommand : drawCommands)
-    {
-        auto pushConstants = PushConstants{};
-        pushConstants.modelTransform = drawCommand.transform;
-        pushConstants.normalMatrix = glm::transpose(glm::inverse(glm::mat3(drawCommand.transform)));
-
-        commandBuffer.pushConstants(pipelineLayout_,
-                                    vk::ShaderStageFlagBits::eVertex,
-                                    0,
-                                    vk::ArrayProxy<const PushConstants>{pushConstants});
-
-        if (drawCommand.subMesh->material)
-        {
-            const auto& gpuMaterial = gpuResources_->gpuMaterial(drawCommand.subMesh->material);
-            commandBuffer.bindDescriptorSets(
-                vk::PipelineBindPoint::eGraphics,
-                pipelineLayout_,
-                1,
-                *materialDescriptorSets_.at(drawCommand.subMesh->material).at(currentFrameIndex_),
-                gpuMaterial.uboOffset);
-        }
-
-        auto& gpuMesh = gpuResources_->gpuMesh(drawCommand.subMesh);
-        commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);
-    }
-
-    commandBuffer.endRendering();
-
-    transitionImageLayout(swapchainImages_.at(imageIndex),
-                          commandBuffer,
-                          vk::ImageLayout::eColorAttachmentOptimal,
-                          vk::ImageLayout::ePresentSrcKHR,
-                          vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
-                          {},                                                 // dstAccessMask
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                          vk::PipelineStageFlagBits2::eBottomOfPipe,          // dstStage
-                          vk::ImageAspectFlagBits::eColor);
+    geometryPass_->recordCommands(passInfo);
 
     commandBuffer.end();
 }
@@ -793,5 +487,14 @@ void Renderer::createDefaultImage()
     samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
 
     emptyImageSampler_ = vk::raii::Sampler{gpuDevice_.device(), samplerInfo};
+}
+
+void Renderer::createRenderPasses()
+{
+    geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_.device(),
+                                                   gpuDevice_.physicalDevice(),
+                                                   surfaceFormat_.format,
+                                                   cameraDescriptorSetLayout_,
+                                                   materialDescriptorSetLayout_);
 }
 } // namespace renderer

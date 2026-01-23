@@ -20,6 +20,8 @@ target_sources(Renderer
         src/private/memory.h
         src/private/shader.cpp
         src/private/shader.h
+        src/render_passes/geometry_pass.cpp
+        src/render_passes/geometry_pass.h
         src/camera.cpp
         src/gpu_device.cpp
         src/renderer.cpp
@@ -28,6 +30,8 @@ target_sources(Renderer
 target_include_directories(Renderer
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(Renderer
