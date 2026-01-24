@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Mark Rapson
 
-#include "image_loader.h"
+#include "assets/image_loader.h"
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -17,12 +17,12 @@
 
 namespace assets
 {
-Image createImageFromPath(const std::filesystem::path& path)
+std::unique_ptr<Image> createImageFromPath(const std::filesystem::path& path)
 {
     int width;
     int height;
     int channels;
-    
+
     stbi_set_flip_vertically_on_load(true);
     auto stbiData = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
     if (!stbiData)
@@ -37,7 +37,7 @@ Image createImageFromPath(const std::filesystem::path& path)
 
     stbi_image_free(stbiData);
 
-    return Image{static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::move(data)};
+    return std::make_unique<Image>(static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::move(data));
 }
 
 std::unique_ptr<Image> createImageFromData(int width, int height, const std::vector<unsigned char>& data)

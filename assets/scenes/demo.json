@@ -17,6 +17,19 @@
             "path": "checkerboard.glb"
         }
     ],
+    "skyboxes": [
+        {
+            "name": "stars",
+            "textures": {
+                "px": "stars/px.png",
+                "py": "stars/py.png",
+                "pz": "stars/pz.png",
+                "nx": "stars/nx.png",
+                "ny": "stars/ny.png",
+                "nz": "stars/nz.png"
+            }
+        }
+    ],
     "entities": [
         {
             "name": "cube",
@@ -106,9 +119,12 @@
                     "z": 1.0
                 }
             },
-            "renderComponent":{
+            "renderComponent": {
                 "prefab": "terrain1"
             }
         }
-    ]
+    ],
+    "camera": {
+        "skybox": "stars"
+    }
 }

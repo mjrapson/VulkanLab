@@ -36,9 +36,27 @@ struct Entity
     std::optional<RenderComponent> renderComponent;
 };
 
+struct Skybox
+{
+    std::string name;
+    std::string pxPath;
+    std::string pyPath;
+    std::string pzPath;
+    std::string nxPath;
+    std::string nyPath;
+    std::string nzPath;
+};
+
+struct Camera
+{
+    std::string skybox;
+};
+
 struct Scene
 {
     std::vector<Prefab> prefabs;
     std::vector<Entity> entities;
+    std::vector<Skybox> skyboxes;
+    Camera camera;
 };
 } // namespace scene

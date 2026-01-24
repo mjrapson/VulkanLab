@@ -5,6 +5,7 @@
 
 #include <assets/asset_database.h>
 #include <assets/gltf_loader.h>
+#include <assets/image_loader.h>
 #include <core/file_system.h>
 #include <core/input_handler.h>
 #include <renderer/camera.h>
@@ -156,6 +157,19 @@ void VulkanApplication::run()
     for (auto& prefabDef : scene->prefabs)
     {
         db.addPrefab(prefabDef.name, assets::loadGLTFModel(core::getPrefabsDir() / prefabDef.path));
+    }
+
+    for (auto& skyboxDef : scene->skyboxes)
+    {
+        auto skybox = std::make_unique<assets::Skybox>();
+        skybox->px = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pxPath);
+        skybox->py = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pyPath);
+        skybox->pz = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pzPath);
+        skybox->nx = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nxPath);
+        skybox->ny = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nyPath);
+        skybox->nz = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nzPath);
+
+        db.addSkybox(skyboxDef.name, std::move(skybox));
     }
 
     renderer_->setResources(db);
@@ -352,38 +366,38 @@ void VulkanApplication::updateCamera(float deltaTime)
     auto forward = glm::normalize(camera_->front());
     auto right = glm::normalize(glm::cross(forward, worldUp));
     auto up = glm::normalize(glm::cross(right, forward));
-    
-    if(inputHandler_->isKeyPressed(GLFW_KEY_W))
+
+    if (inputHandler_->isKeyPressed(GLFW_KEY_W))
     {
         movement = movement + forward;
     }
 
-    if(inputHandler_->isKeyPressed(GLFW_KEY_S))
+    if (inputHandler_->isKeyPressed(GLFW_KEY_S))
     {
         movement = movement - forward;
     }
 
-    if(inputHandler_->isKeyPressed(GLFW_KEY_A))
+    if (inputHandler_->isKeyPressed(GLFW_KEY_A))
     {
         camera_->setYaw(camera_->yaw() - (turnSpeed * deltaTime));
     }
 
-    if(inputHandler_->isKeyPressed(GLFW_KEY_D))
+    if (inputHandler_->isKeyPressed(GLFW_KEY_D))
     {
-         camera_->setYaw(camera_->yaw() + (turnSpeed * deltaTime));
+        camera_->setYaw(camera_->yaw() + (turnSpeed * deltaTime));
     }
 
-    if(inputHandler_->isKeyPressed(GLFW_KEY_E))
+    if (inputHandler_->isKeyPressed(GLFW_KEY_E))
     {
         movement = movement + up;
     }
 
-    if(inputHandler_->isKeyPressed(GLFW_KEY_Q))
+    if (inputHandler_->isKeyPressed(GLFW_KEY_Q))
     {
         movement = movement - up;
     }
 
-    if(glm::length(movement) > 0.0f)
+    if (glm::length(movement) > 0.0f)
     {
         movement = glm::normalize(movement) * speed * deltaTime;
         camera_->setPosition(camera_->position() + movement);

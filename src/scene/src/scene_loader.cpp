@@ -23,8 +23,12 @@ constexpr auto renderComponentKey = "renderComponent";
 constexpr auto prefabKey = "prefab";
 constexpr auto nameKey = "name";
 constexpr auto pathKey = "path";
+constexpr auto cameraKey = "camera";
+constexpr auto skyboxKey = "skybox";
+constexpr auto texturesKey = "textures";
 constexpr auto prefabsKey = "prefabs";
 constexpr auto entitiesKey = "entities";
+constexpr auto skyboxesKey = "skyboxes";
 
 glm::vec3
 loadVec3(const nlohmann::json& json, const std::string& param1, const std::string& param2, const std::string& param3)
@@ -108,6 +112,33 @@ void loadPrefab(const nlohmann::json& json, Scene& scene)
     scene.prefabs.push_back(std::move(prefab));
 }
 
+void loadSkybox(const nlohmann::json& json, Scene& scene)
+{
+    if (!json.contains(nameKey) || !json.contains(texturesKey))
+    {
+        return;
+    }
+
+    auto skybox = Skybox{};
+    skybox.name = json[nameKey];
+    skybox.pxPath = json[texturesKey]["px"];
+    skybox.pyPath = json[texturesKey]["py"];
+    skybox.pzPath = json[texturesKey]["pz"];
+    skybox.nxPath = json[texturesKey]["nx"];
+    skybox.nyPath = json[texturesKey]["ny"];
+    skybox.nzPath = json[texturesKey]["nz"];
+
+    scene.skyboxes.push_back(std::move(skybox));
+}
+
+void loadCamera(const nlohmann::json& json, Scene& scene)
+{
+    if (json.contains(skyboxKey))
+    {
+        scene.camera.skybox = json[skyboxKey];
+    }
+}
+
 std::unique_ptr<Scene> loadScene(const std::filesystem::path& path)
 {
     auto filestream = std::ifstream{path};
@@ -121,9 +152,19 @@ std::unique_ptr<Scene> loadScene(const std::filesystem::path& path)
         loadPrefab(prefabJson, *scene);
     }
 
+    for (const auto& skyboxJson : sceneJson[skyboxesKey])
+    {
+        loadSkybox(skyboxJson, *scene);
+    }
+
     for (const auto& entityJson : sceneJson[entitiesKey])
     {
         loadEntity(entityJson, *scene);
+    }
+
+    if(sceneJson.contains(cameraKey))
+    {
+        loadCamera(sceneJson[cameraKey], *scene);
     }
 
     return scene;

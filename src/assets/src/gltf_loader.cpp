@@ -4,10 +4,10 @@
 #include "assets/gltf_loader.h"
 
 #include "assets/image.h"
+#include "assets/image_loader.h"
 #include "assets/material.h"
 #include "assets/mesh.h"
 #include "assets/prefab.h"
-#include "private/image_loader.h"
 
 #include <core/vertex.h>
 

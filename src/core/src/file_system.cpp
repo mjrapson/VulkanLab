@@ -55,6 +55,16 @@ std::filesystem::path getPrefabsDir()
     return getRootDir() / "prefabs";
 }
 
+std::filesystem::path getTexturesDir()
+{
+    return getRootDir() / "textures";
+}
+
+std::filesystem::path getSkyboxesDir()
+{
+    return getTexturesDir() / "skyboxes";
+}
+
 std::vector<char> readBinaryFile(const std::filesystem::path& filepath)
 {
     auto file = std::ifstream(filepath, std::ios::ate | std::ios::binary);
@@ -72,4 +82,4 @@ std::vector<char> readBinaryFile(const std::filesystem::path& filepath)
 
     return buffer;
 }
-}
+} // namespace core

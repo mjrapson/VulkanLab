@@ -65,6 +65,7 @@ endforeach()
 add_custom_target(post_build ALL 
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/prefabs ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prefabs
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/scenes ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scenes
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/textures ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/textures
 )
 
 add_dependencies(post_build VulkanDemo)
