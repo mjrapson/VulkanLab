@@ -22,6 +22,9 @@ target_sources(Renderer
         src/private/shader.h
         src/render_passes/geometry_pass.cpp
         src/render_passes/geometry_pass.h
+        src/render_passes/render_pass_command_info.h
+        src/render_passes/skybox_pass.cpp
+        src/render_passes/skybox_pass.h
         src/camera.cpp
         src/gpu_device.cpp
         src/renderer.cpp

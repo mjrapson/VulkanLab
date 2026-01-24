@@ -31,6 +31,7 @@ file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 
 set(SHADER_FILENAMES
     basic
+    skybox
 )
 
 function(add_shader SHADER_NAME)

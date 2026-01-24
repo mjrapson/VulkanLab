@@ -3,31 +3,12 @@
 
 #pragma once
 
-#include "renderer/draw_command.h"
+#include "render_pass_command_info.h"
 
 #include <vulkan/vulkan_raii.hpp>
 
-#include <span>
-#include <vector>
-
 namespace renderer
 {
-class GpuResourceCache;
-
-struct RenderPassCommandInfo
-{
-    uint32_t frameIndex;
-    const vk::Image& colorImage;
-    const vk::ImageView& colorImageView;
-    const vk::Image& depthImage;
-    const vk::ImageView& depthImageView;
-    const vk::Extent2D& extent;
-    const vk::raii::CommandBuffer& commandBuffer;
-    const vk::raii::DescriptorSet& cameraDescriptorSet;
-    GpuResourceCache& gpuResourceCache;
-    std::span<const DrawCommand> drawCommands;
-};
-
 class GeometryPass
 {
   public:

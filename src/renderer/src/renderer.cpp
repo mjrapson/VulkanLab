@@ -6,6 +6,7 @@
 #include "private/image.h"
 #include "private/memory.h"
 #include "render_passes/geometry_pass.h"
+#include "render_passes/skybox_pass.h"
 #include "renderer/camera.h"
 #include "renderer/gpu_device.h"
 #include "renderer/vertex_layout.h"
@@ -423,7 +424,28 @@ void Renderer::recordCommands(uint32_t imageIndex,
         .drawCommands = drawCommands,
     };
 
+    transitionImageLayout(swapchainImages_[imageIndex],
+                          commandBuffer,
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eColorAttachmentOptimal,
+                          {},
+                          vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
+                          vk::ImageAspectFlagBits::eColor);
+
+    skyboxPass_->recordCommands(passInfo);
     geometryPass_->recordCommands(passInfo);
+
+    transitionImageLayout(swapchainImages_[imageIndex],
+                          commandBuffer,
+                          vk::ImageLayout::eColorAttachmentOptimal,
+                          vk::ImageLayout::ePresentSrcKHR,
+                          vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
+                          {},                                                 // dstAccessMask
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
+                          vk::PipelineStageFlagBits2::eBottomOfPipe,          // dstStage
+                          vk::ImageAspectFlagBits::eColor);
 
     commandBuffer.end();
 }
@@ -491,6 +513,8 @@ void Renderer::createDefaultImage()
 
 void Renderer::createRenderPasses()
 {
+    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_.device(), surfaceFormat_.format, cameraDescriptorSetLayout_);
+
     geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_.device(),
                                                    gpuDevice_.physicalDevice(),
                                                    surfaceFormat_.format,

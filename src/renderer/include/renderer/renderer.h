@@ -23,6 +23,7 @@ class Camera;
 class GeometryPass;
 class GpuDevice;
 class GpuResourceCache;
+class SkyboxPass;
 
 class Renderer
 {
@@ -109,6 +110,7 @@ class Renderer
 
     std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
 
+    std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};
     std::unique_ptr<GeometryPass> geometryPass_{nullptr};
 };
 } // namespace renderer
