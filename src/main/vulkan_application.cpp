@@ -162,12 +162,12 @@ void VulkanApplication::run()
     for (auto& skyboxDef : scene->skyboxes)
     {
         auto skybox = std::make_unique<assets::Skybox>();
-        skybox->px = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pxPath);
-        skybox->py = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pyPath);
-        skybox->pz = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pzPath);
-        skybox->nx = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nxPath);
-        skybox->ny = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nyPath);
-        skybox->nz = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nzPath);
+        skybox->images[0] = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pxPath);
+        skybox->images[1] = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pyPath);
+        skybox->images[2] = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pzPath);
+        skybox->images[3] = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nxPath);
+        skybox->images[4] = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nyPath);
+        skybox->images[5] = assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nzPath);
 
         db.addSkybox(skyboxDef.name, std::move(skybox));
     }

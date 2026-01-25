@@ -11,11 +11,6 @@ struct Image;
 
 struct Skybox
 {
-    std::unique_ptr<Image> px;
-    std::unique_ptr<Image> py;
-    std::unique_ptr<Image> pz;
-    std::unique_ptr<Image> nx;
-    std::unique_ptr<Image> ny;
-    std::unique_ptr<Image> nz;
+    std::array<std::unique_ptr<Image>, 6> images;
 };
 } // namespace assets
