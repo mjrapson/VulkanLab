@@ -7,11 +7,8 @@ struct CameraData
 [[vk::binding(0, 0)]]
 ConstantBuffer<CameraData> camera;
 
-// [[vk::binding(1, 1)]]
-// SamplerState sampler;
-// 
-// [[vk::binding(1, 2)]]
-// TextureCube texture;
+[[vk::binding(0, 1)]]
+SamplerCube sampler;
 
 struct VertexOutput 
 {
