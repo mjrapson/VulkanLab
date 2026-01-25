@@ -9,21 +9,23 @@
 
 namespace renderer
 {
+class GpuDevice;
+
 class SkyboxPass
 {
   public:
-    SkyboxPass(const vk::raii::Device& device,
+    SkyboxPass(const GpuDevice& gpuDevice,
                const vk::Format& surfaceFormat,
                const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout);
 
     void recordCommands(const RenderPassCommandInfo& passInfo);
 
   private:
-    void createPipeline(const vk::raii::Device& device,
-                        const vk::Format& surfaceFormat,
+    void createPipeline(const vk::Format& surfaceFormat,
                         const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout);
 
   private:
+    const GpuDevice& gpuDevice_;
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline pipeline_{nullptr};
 };

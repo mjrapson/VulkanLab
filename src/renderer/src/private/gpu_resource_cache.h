@@ -10,6 +10,7 @@
 #include <assets/image.h>
 #include <assets/material.h>
 #include <assets/mesh.h>
+#include <assets/skybox.h>
 #include <unordered_map>
 
 #include <vulkan/vulkan_raii.hpp>
@@ -29,9 +30,7 @@ class GpuResourceCache
     GpuResourceCache(const assets::AssetDatabase& db,
                      const GpuDevice& gpuDevice,
                      int maxFramesInFlight,
-                     const vk::DescriptorSetLayout& materialDescriptorSetLayout,
-                     const vk::ImageView& emptyImageView,
-                     const vk::Sampler& emptyImageSampler);
+                     const vk::DescriptorSetLayout& materialDescriptorSetLayout);
 
     ~GpuResourceCache() = default;
 
@@ -48,14 +47,17 @@ class GpuResourceCache
     GpuImage& gpuImage(assets::Image* image);
     GpuMaterial& gpuMaterial(assets::Material* material);
     GpuMesh& gpuMesh(assets::SubMesh* mesh);
+    GpuImage& gpuSkyboxImage(assets::Skybox* skybox);
 
     const std::vector<vk::raii::DescriptorSet>& materialDescriptorSet(assets::Material* material) const;
 
   private:
+    void createDefaultData();
     void uploadData(const assets::AssetDatabase& db);
     void uploadImageData(const std::vector<assets::Image*>& images);
     void uploadMaterialData(const std::vector<assets::Material*>& materials);
     void uploadMeshData(const assets::AssetDatabase& db);
+    void uploadSkyboxImageData(const assets::AssetDatabase& db);
 
     void createMaterialDescriptorPools(uint32_t materialCount);
 
@@ -63,8 +65,7 @@ class GpuResourceCache
     const GpuDevice& gpuDevice_;
     const int maxFramesInFlight_;
     const vk::DescriptorSetLayout& materialDescriptorSetLayout_;
-    const vk::ImageView& emptyImageView_;
-    const vk::Sampler& emptyImageSampler_;
+    GpuImage emptyImage_;
 
     vk::raii::Buffer meshVertexBuffer_{nullptr};
     vk::raii::Buffer meshIndexBuffer_{nullptr};
@@ -80,5 +81,6 @@ class GpuResourceCache
     std::unordered_map<assets::Image*, GpuImage> gpuImages_;
     std::unordered_map<assets::Material*, GpuMaterial> gpuMaterials_;
     std::unordered_map<assets::SubMesh*, GpuMesh> gpuMeshes_;
+    std::unordered_map<assets::Skybox*, GpuImage> gpuSkyboxImages_;
 };
 } // namespace renderer

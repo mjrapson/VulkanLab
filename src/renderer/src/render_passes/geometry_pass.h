@@ -9,11 +9,12 @@
 
 namespace renderer
 {
+class GpuDevice;
+
 class GeometryPass
 {
   public:
-    GeometryPass(const vk::raii::Device& device,
-                 const vk::raii::PhysicalDevice& physicalDevice,
+    GeometryPass(const GpuDevice& gpuDevice,
                  const vk::Format& surfaceFormat,
                  const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout,
                  const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout);
@@ -21,13 +22,12 @@ class GeometryPass
     void recordCommands(const RenderPassCommandInfo& passInfo);
 
   private:
-    void createPipeline(const vk::raii::Device& device,
-                        const vk::raii::PhysicalDevice& physicalDevice,
-                        const vk::Format& surfaceFormat,
+    void createPipeline(const vk::Format& surfaceFormat,
                         const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout,
                         const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout);
 
   private:
+    const GpuDevice& gpuDevice_;
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline pipeline_{nullptr};
 };

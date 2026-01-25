@@ -4,9 +4,9 @@
 #include "geometry_pass.h"
 
 #include "private/gpu_resource_cache.h"
-#include "private/image.h"
 #include "private/shader.h"
 #include "renderer/draw_command.h"
+#include "renderer/gpu_device.h"
 #include "renderer/vertex_layout.h"
 
 #include <core/file_system.h>
@@ -19,18 +19,18 @@ struct PushConstants
     glm::mat4 normalMatrix;
 };
 
-GeometryPass::GeometryPass(const vk::raii::Device& device,
-                           const vk::raii::PhysicalDevice& physicalDevice,
+GeometryPass::GeometryPass(const GpuDevice& gpuDevice,
                            const vk::Format& surfaceFormat,
                            const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout,
                            const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout)
+    : gpuDevice_{gpuDevice}
 {
-    createPipeline(device, physicalDevice, surfaceFormat, cameraDescriptorSetLayout, materialDescriptorSetLayout);
+    createPipeline(surfaceFormat, cameraDescriptorSetLayout, materialDescriptorSetLayout);
 }
 
 void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
 {
-    transitionImageLayout(
+    gpuDevice_.transitionImageLayout(
         passInfo.depthImage,
         passInfo.commandBuffer,
         vk::ImageLayout::eUndefined,
@@ -41,7 +41,7 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
         vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
         vk::ImageAspectFlagBits::eDepth);
 
-    //const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
+    // const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
     const auto clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 
     auto attachmentInfo = vk::RenderingAttachmentInfo{};
@@ -49,7 +49,7 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
     attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
     attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
     attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-    //attachmentInfo.clearValue = clearColor;
+    // attachmentInfo.clearValue = clearColor;
 
     auto depthAttachmentInfo = vk::RenderingAttachmentInfo{};
     depthAttachmentInfo.imageView = passInfo.depthImageView;
@@ -114,16 +114,15 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
     passInfo.commandBuffer.endRendering();
 }
 
-void GeometryPass::createPipeline(const vk::raii::Device& device,
-                                  const vk::raii::PhysicalDevice& physicalDevice,
-                                  const vk::Format& surfaceFormat,
+void GeometryPass::createPipeline(const vk::Format& surfaceFormat,
                                   const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout,
                                   const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout)
 {
     // Shader-progammable stages
-    auto vertexShaderModule = createShaderModule(device, core::readBinaryFile(core::getShaderDir() / "basic.vert.spv"));
+    auto vertexShaderModule = createShaderModule(gpuDevice_.device(),
+                                                 core::readBinaryFile(core::getShaderDir() / "basic.vert.spv"));
 
-    auto fragmentShaderModule = createShaderModule(device,
+    auto fragmentShaderModule = createShaderModule(gpuDevice_.device(),
                                                    core::readBinaryFile(core::getShaderDir() / "basic.frag.spv"));
 
     auto vertShaderStageInfo = vk::PipelineShaderStageCreateInfo{};
@@ -187,7 +186,7 @@ void GeometryPass::createPipeline(const vk::raii::Device& device,
 
     auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout, *materialDescriptorSetLayout};
 
-    if (physicalDevice.getProperties().limits.maxPushConstantsSize < sizeof(PushConstants))
+    if (gpuDevice_.physicalDevice().getProperties().limits.maxPushConstantsSize < sizeof(PushConstants))
     {
         throw std::runtime_error{"Requested push constant size exceeds device limits"};
     }
@@ -203,7 +202,7 @@ void GeometryPass::createPipeline(const vk::raii::Device& device,
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
-    pipelineLayout_ = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+    pipelineLayout_ = vk::raii::PipelineLayout(gpuDevice_.device(), pipelineLayoutInfo);
 
     auto depthStencilState = vk::PipelineDepthStencilStateCreateInfo{};
     depthStencilState.depthTestEnable = true;
@@ -233,6 +232,6 @@ void GeometryPass::createPipeline(const vk::raii::Device& device,
     pipelineInfo.pDepthStencilState = &depthStencilState;
     pipelineInfo.renderPass = nullptr;
 
-    pipeline_ = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+    pipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
 }
 } // namespace renderer

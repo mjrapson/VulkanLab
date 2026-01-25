@@ -7,17 +7,11 @@ target_sources(Renderer
         include/renderer/renderer.h
         include/renderer/vertex_layout.h
     PRIVATE
-        src/private/buffer.cpp
-        src/private/buffer.h
         src/private/gpu_image.h
         src/private/gpu_material.h
         src/private/gpu_mesh.h
         src/private/gpu_resource_cache.cpp
         src/private/gpu_resource_cache.h
-        src/private/image.cpp
-        src/private/image.h
-        src/private/memory.cpp
-        src/private/memory.h
         src/private/shader.cpp
         src/private/shader.h
         src/render_passes/geometry_pass.cpp

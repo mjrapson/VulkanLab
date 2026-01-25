@@ -1,10 +1,7 @@
 #include "renderer/renderer.h"
 
-#include "private/buffer.h"
 #include "private/gpu_material.h"
 #include "private/gpu_resource_cache.h"
-#include "private/image.h"
-#include "private/memory.h"
 #include "render_passes/geometry_pass.h"
 #include "render_passes/skybox_pass.h"
 #include "renderer/camera.h"
@@ -103,8 +100,6 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     spdlog::info("Creating sync objects");
     createSyncObjects();
 
-    createDefaultImage();
-
     spdlog::info("Creating render passes");
     createRenderPasses();
 }
@@ -139,19 +134,15 @@ void Renderer::renderFrame(const renderer::Camera& camera, const std::vector<Dra
 
     recordCommands(imageIndex, commandBuffer, camera, drawCommands);
 
-    const auto waitDestinationStageMask = vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-
-    auto submitInfo = vk::SubmitInfo{};
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = &*presentCompleteSemaphores_.at(currentFrameIndex_);
-    submitInfo.pWaitDstStageMask = &waitDestinationStageMask;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &*commandBuffer;
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &*renderFinishedSemaphores_.at(imageIndex);
+    auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
+    auto signalSemaphores = std::array{*renderFinishedSemaphores_.at(imageIndex)};
 
     gpuDevice_.device().resetFences(*drawFences_.at(currentFrameIndex_));
-    gpuDevice_.graphicsQueue().submit(submitInfo, *drawFences_.at(currentFrameIndex_));
+    gpuDevice_.submitCommandBuffer(commandBuffer,
+                                   waitSemaphores,
+                                   vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput),
+                                   signalSemaphores,
+                                   *drawFences_.at(currentFrameIndex_));
 
     auto presentInfo = vk::PresentInfoKHR{};
     presentInfo.waitSemaphoreCount = 1;
@@ -198,12 +189,7 @@ void Renderer::windowResized(int width, int height)
 
 void Renderer::setResources(const assets::AssetDatabase& db)
 {
-    gpuResources_ = std::make_unique<GpuResourceCache>(db,
-                                                       gpuDevice_,
-                                                       maxFramesInFlight,
-                                                       materialDescriptorSetLayout_,
-                                                       emptyImageView_,
-                                                       emptyImageSampler_);
+    gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_, maxFramesInFlight, materialDescriptorSetLayout_);
 }
 
 void Renderer::createSwapchain()
@@ -309,12 +295,7 @@ void Renderer::createDescriptorSetLayouts()
 
 void Renderer::createCommandBuffers()
 {
-    auto allocInfo = vk::CommandBufferAllocateInfo{};
-    allocInfo.commandPool = *gpuDevice_.commandPool();
-    allocInfo.level = vk::CommandBufferLevel::ePrimary;
-    allocInfo.commandBufferCount = maxFramesInFlight;
-
-    commandBuffers_ = vk::raii::CommandBuffers(gpuDevice_.device(), allocInfo);
+    commandBuffers_ = gpuDevice_.createCommandBuffers(maxFramesInFlight);
 }
 
 void Renderer::createSyncObjects()
@@ -347,16 +328,13 @@ void Renderer::createCameraBuffers()
 
     for (auto frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex)
     {
-        auto buffer = createBuffer(gpuDevice_.device(),
-                                   sizeof(CameraBufferObject),
-                                   vk::BufferUsageFlagBits::eUniformBuffer,
-                                   vk::SharingMode::eExclusive);
+        auto buffer = gpuDevice_.createBuffer(sizeof(CameraBufferObject),
+                                              vk::BufferUsageFlagBits::eUniformBuffer,
+                                              vk::SharingMode::eExclusive);
 
-        auto memory = allocateBufferMemory(gpuDevice_.device(),
-                                           gpuDevice_.physicalDevice(),
-                                           buffer,
-                                           vk::MemoryPropertyFlagBits::eHostVisible
-                                               | vk::MemoryPropertyFlagBits::eHostCoherent);
+        auto memory = gpuDevice_.allocateBufferMemory(buffer,
+                                                      vk::MemoryPropertyFlagBits::eHostVisible
+                                                          | vk::MemoryPropertyFlagBits::eHostCoherent);
 
         auto mappedMemory = memory.mapMemory(0, VK_WHOLE_SIZE);
 
@@ -424,99 +402,44 @@ void Renderer::recordCommands(uint32_t imageIndex,
         .drawCommands = drawCommands,
     };
 
-    transitionImageLayout(swapchainImages_[imageIndex],
-                          commandBuffer,
-                          vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eColorAttachmentOptimal,
-                          {},
-                          vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
-                          vk::ImageAspectFlagBits::eColor);
+    gpuDevice_.transitionImageLayout(swapchainImages_[imageIndex],
+                                     commandBuffer,
+                                     vk::ImageLayout::eUndefined,
+                                     vk::ImageLayout::eColorAttachmentOptimal,
+                                     {},
+                                     vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
+                                     vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
+                                     vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
+                                     vk::ImageAspectFlagBits::eColor);
 
     skyboxPass_->recordCommands(passInfo);
     geometryPass_->recordCommands(passInfo);
 
-    transitionImageLayout(swapchainImages_[imageIndex],
-                          commandBuffer,
-                          vk::ImageLayout::eColorAttachmentOptimal,
-                          vk::ImageLayout::ePresentSrcKHR,
-                          vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
-                          {},                                                 // dstAccessMask
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                          vk::PipelineStageFlagBits2::eBottomOfPipe,          // dstStage
-                          vk::ImageAspectFlagBits::eColor);
+    gpuDevice_.transitionImageLayout(swapchainImages_[imageIndex],
+                                     commandBuffer,
+                                     vk::ImageLayout::eColorAttachmentOptimal,
+                                     vk::ImageLayout::ePresentSrcKHR,
+                                     vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
+                                     {},                                                 // dstAccessMask
+                                     vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
+                                     vk::PipelineStageFlagBits2::eBottomOfPipe,          // dstStage
+                                     vk::ImageAspectFlagBits::eColor);
 
     commandBuffer.end();
 }
 
 void Renderer::createDepthBufferImage()
 {
-    depthImage_ = createDepthImage(gpuDevice_.device(), swapchainExtent_.width, swapchainExtent_.height);
-    depthImageMemory_ = allocateImageMemory(gpuDevice_.device(),
-                                            gpuDevice_.physicalDevice(),
-                                            depthImage_,
-                                            vk::MemoryPropertyFlagBits::eDeviceLocal);
-    depthImageView_ =
-        createImageView(gpuDevice_.device(), depthImage_, vk::Format::eD32Sfloat, vk::ImageAspectFlagBits::eDepth);
-}
-
-void Renderer::createDefaultImage()
-{
-    emptyImage_ = createImage(gpuDevice_.device(), 1, 1);
-    emptyImageMemory_ = allocateImageMemory(gpuDevice_.device(),
-                                            gpuDevice_.physicalDevice(),
-                                            emptyImage_,
-                                            vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    const auto imageSize = 4; //  RGBA8
-    auto stagingBuffer = createBuffer(gpuDevice_.device(),
-                                      imageSize,
-                                      vk::BufferUsageFlagBits::eTransferSrc,
-                                      vk::SharingMode::eExclusive);
-
-    auto stagingMemory = allocateBufferMemory(gpuDevice_.device(),
-                                              gpuDevice_.physicalDevice(),
-                                              stagingBuffer,
-                                              vk::MemoryPropertyFlagBits::eHostVisible
-                                                  | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-    auto imageData = std::vector<std::byte>{std::byte{1}, std::byte{1}, std::byte{1}, std::byte{1}};
-    void* data = stagingMemory.mapMemory(0, imageSize);
-    std::memcpy(data, imageData.data(), imageSize);
-    stagingMemory.unmapMemory();
-
-    copyBufferToImage(gpuDevice_.device(),
-                      stagingBuffer,
-                      emptyImage_,
-                      gpuDevice_.graphicsQueue(),
-                      gpuDevice_.commandPool(),
-                      1,
-                      1,
-                      vk::ImageAspectFlagBits::eColor);
-
-    emptyImageView_ =
-        createImageView(gpuDevice_.device(), emptyImage_, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
-
-    auto samplerInfo = vk::SamplerCreateInfo{};
-    samplerInfo.magFilter = vk::Filter::eLinear, samplerInfo.minFilter = vk::Filter::eLinear;
-    samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
-    samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
-    samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
-    samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
-
-    emptyImageSampler_ = vk::raii::Sampler{gpuDevice_.device(), samplerInfo};
+    depthImage_ = gpuDevice_.createDepthImage(swapchainExtent_.width, swapchainExtent_.height);
+    depthImageMemory_ = gpuDevice_.allocateImageMemory(depthImage_, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    depthImageView_ = gpuDevice_.createDepthImageView(depthImage_);
 }
 
 void Renderer::createRenderPasses()
 {
-    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_.device(), surfaceFormat_.format, cameraDescriptorSetLayout_);
+    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_, surfaceFormat_.format, cameraDescriptorSetLayout_);
 
-    geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_.device(),
-                                                   gpuDevice_.physicalDevice(),
+    geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_,
                                                    surfaceFormat_.format,
                                                    cameraDescriptorSetLayout_,
                                                    materialDescriptorSetLayout_);

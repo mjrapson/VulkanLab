@@ -4,18 +4,19 @@
 #include "skybox_pass.h"
 
 #include "private/gpu_resource_cache.h"
-#include "private/image.h"
 #include "private/shader.h"
+#include "renderer/gpu_device.h"
 
 #include <core/file_system.h>
 
 namespace renderer
 {
-SkyboxPass::SkyboxPass(const vk::raii::Device& device,
+SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice,
                        const vk::Format& surfaceFormat,
                        const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout)
+    : gpuDevice_{gpuDevice}
 {
-    createPipeline(device, surfaceFormat, cameraDescriptorSetLayout);
+    createPipeline(surfaceFormat, cameraDescriptorSetLayout);
 }
 
 void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
@@ -56,15 +57,14 @@ void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
     passInfo.commandBuffer.endRendering();
 }
 
-void SkyboxPass::createPipeline(const vk::raii::Device& device,
-                                const vk::Format& surfaceFormat,
+void SkyboxPass::createPipeline(const vk::Format& surfaceFormat,
                                 const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout)
 {
     // Shader-progammable stages
-    auto vertexShaderModule = createShaderModule(device,
+    auto vertexShaderModule = createShaderModule(gpuDevice_.device(),
                                                  core::readBinaryFile(core::getShaderDir() / "skybox.vert.spv"));
 
-    auto fragmentShaderModule = createShaderModule(device,
+    auto fragmentShaderModule = createShaderModule(gpuDevice_.device(),
                                                    core::readBinaryFile(core::getShaderDir() / "skybox.frag.spv"));
 
     auto vertShaderStageInfo = vk::PipelineShaderStageCreateInfo{};
@@ -126,7 +126,7 @@ void SkyboxPass::createPipeline(const vk::raii::Device& device,
     pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
 
-    pipelineLayout_ = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+    pipelineLayout_ = vk::raii::PipelineLayout(gpuDevice_.device(), pipelineLayoutInfo);
 
     auto depthStencilState = vk::PipelineDepthStencilStateCreateInfo{};
     depthStencilState.depthTestEnable = true;
@@ -156,6 +156,6 @@ void SkyboxPass::createPipeline(const vk::raii::Device& device,
     pipelineInfo.pDepthStencilState = &depthStencilState;
     pipelineInfo.renderPass = nullptr;
 
-    pipeline_ = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+    pipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
 }
 } // namespace renderer

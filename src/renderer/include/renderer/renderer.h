@@ -67,8 +67,6 @@ class Renderer
                         const std::vector<DrawCommand>& drawCommands);
 
     void createDepthBufferImage();
-    void createDefaultImage();
-
     void createRenderPasses();
 
   private:
@@ -95,10 +93,6 @@ class Renderer
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
 
-    vk::raii::Image emptyImage_{nullptr};
-    vk::raii::DeviceMemory emptyImageMemory_{nullptr};
-    vk::raii::ImageView emptyImageView_{nullptr};
-    vk::raii::Sampler emptyImageSampler_{nullptr};
     vk::raii::Image depthImage_{nullptr};
     vk::raii::DeviceMemory depthImageMemory_{nullptr};
     vk::raii::ImageView depthImageView_{nullptr};
