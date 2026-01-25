@@ -13,6 +13,8 @@
 #pragma GCC diagnostic pop
 #endif
 
+#include <spdlog/spdlog.h>
+
 #include <cstring>
 
 namespace assets
@@ -22,6 +24,8 @@ std::unique_ptr<Image> createImageFromPath(const std::filesystem::path& path)
     int width;
     int height;
     int channels;
+
+    spdlog::info("Loading image {}", path.string());
 
     stbi_set_flip_vertically_on_load(true);
     auto stbiData = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);

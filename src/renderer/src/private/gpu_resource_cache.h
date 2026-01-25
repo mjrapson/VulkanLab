@@ -30,7 +30,8 @@ class GpuResourceCache
     GpuResourceCache(const assets::AssetDatabase& db,
                      const GpuDevice& gpuDevice,
                      int maxFramesInFlight,
-                     const vk::DescriptorSetLayout& materialDescriptorSetLayout);
+                     const vk::DescriptorSetLayout& materialDescriptorSetLayout,
+                     const vk::DescriptorSetLayout& skyboxDescriptorSetLayout);
 
     ~GpuResourceCache() = default;
 
@@ -50,6 +51,7 @@ class GpuResourceCache
     GpuImage& gpuSkyboxImage(assets::Skybox* skybox);
 
     const std::vector<vk::raii::DescriptorSet>& materialDescriptorSet(assets::Material* material) const;
+    const std::vector<vk::raii::DescriptorSet>& skyboxDescriptorSet(assets::Skybox* skybox) const;
 
   private:
     void createDefaultData();
@@ -60,11 +62,13 @@ class GpuResourceCache
     void uploadSkyboxImageData(const assets::AssetDatabase& db);
 
     void createMaterialDescriptorPools(uint32_t materialCount);
+    void createSkyboxDescriptorPools(uint32_t skyboxCount);
 
   private:
     const GpuDevice& gpuDevice_;
     const int maxFramesInFlight_;
     const vk::DescriptorSetLayout& materialDescriptorSetLayout_;
+    const vk::DescriptorSetLayout& skyboxDescriptorSetLayout_;
     GpuImage emptyImage_;
 
     vk::raii::Buffer meshVertexBuffer_{nullptr};
@@ -73,7 +77,9 @@ class GpuResourceCache
     vk::raii::DeviceMemory meshIndexBufferMemory_{nullptr};
 
     vk::raii::DescriptorPool materialDescriptorPool_{nullptr};
+    vk::raii::DescriptorPool skyboxDescriptorPool_{nullptr};
     std::unordered_map<assets::Material*, std::vector<vk::raii::DescriptorSet>> materialDescriptorSets_;
+    std::unordered_map<assets::Skybox*, std::vector<vk::raii::DescriptorSet>> skyboxDescriptorSets_;
     std::vector<vk::raii::Buffer> materialUboBuffers_;
     std::vector<vk::raii::DeviceMemory> materialUboBuffersMemory_;
     std::vector<void*> materialUboMappedMemory_;

@@ -24,10 +24,12 @@ vk::DeviceSize alignMemory(vk::DeviceSize data, vk::DeviceSize alignment)
 GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db,
                                    const GpuDevice& gpuDevice,
                                    int maxFramesInFlight,
-                                   const vk::DescriptorSetLayout& materialDescriptorSetLayout)
+                                   const vk::DescriptorSetLayout& materialDescriptorSetLayout,
+                                   const vk::DescriptorSetLayout& skyboxDescriptorSetLayout)
     : gpuDevice_{gpuDevice},
       maxFramesInFlight_{maxFramesInFlight},
-      materialDescriptorSetLayout_{materialDescriptorSetLayout}
+      materialDescriptorSetLayout_{materialDescriptorSetLayout},
+      skyboxDescriptorSetLayout_{skyboxDescriptorSetLayout}
 {
     createDefaultData();
 
@@ -87,6 +89,11 @@ GpuImage& GpuResourceCache::gpuSkyboxImage(assets::Skybox* skybox)
 const std::vector<vk::raii::DescriptorSet>& GpuResourceCache::materialDescriptorSet(assets::Material* material) const
 {
     return materialDescriptorSets_.at(material);
+}
+
+const std::vector<vk::raii::DescriptorSet>& GpuResourceCache::skyboxDescriptorSet(assets::Skybox* skybox) const
+{
+    return skyboxDescriptorSets_.at(skybox);
 }
 
 void GpuResourceCache::createDefaultData()
@@ -421,6 +428,11 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
 
 void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
 {
+    createSkyboxDescriptorPools(static_cast<uint32_t>(db.skyboxes().size()));
+
+    auto layouts = std::vector<vk::DescriptorSetLayout>{static_cast<size_t>(maxFramesInFlight_),
+                                                        skyboxDescriptorSetLayout_};
+
     for (const auto& skybox : db.skyboxes())
     {
         // Assume all faces equal dimensions
@@ -481,6 +493,32 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
         gpuImage.view = gpuDevice_.createCubemapImageView(gpuImage.image);
         gpuImage.sampler = gpuDevice_.createSampler();
 
+        auto allocInfo = vk::DescriptorSetAllocateInfo{};
+        allocInfo.descriptorPool = *skyboxDescriptorPool_;
+        allocInfo.descriptorSetCount = maxFramesInFlight_;
+        allocInfo.pSetLayouts = layouts.data();
+
+        skyboxDescriptorSets_[skybox.second.get()] = std::move(
+            vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+
+        for (auto frameIndex = uint32_t{0}; frameIndex < static_cast<uint32_t>(maxFramesInFlight_); ++frameIndex)
+        {
+            auto imageInfo = vk::DescriptorImageInfo{};
+            imageInfo.imageView = gpuImage.view;
+            imageInfo.sampler = gpuImage.sampler;
+            imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+            auto textureWrite = vk::WriteDescriptorSet{};
+            textureWrite.dstSet = *skyboxDescriptorSets_.at(skybox.second.get()).at(frameIndex);
+            textureWrite.dstBinding = 0;
+            textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+            textureWrite.descriptorCount = 1;
+            textureWrite.pImageInfo = &imageInfo;
+
+            std::array writes{textureWrite};
+            gpuDevice_.device().updateDescriptorSets(writes, {});
+        }
+
         gpuSkyboxImages_.emplace(skybox.second.get(), std::move(gpuImage));
     }
 }
@@ -504,5 +542,22 @@ void GpuResourceCache::createMaterialDescriptorPools(uint32_t materialCount)
     materialPoolInfo.pPoolSizes = materialPoolSizes.data();
 
     materialDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), materialPoolInfo};
+}
+
+void GpuResourceCache::createSkyboxDescriptorPools(uint32_t skyboxCount)
+{
+    auto texturePoolSize = vk::DescriptorPoolSize{};
+    texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
+    texturePoolSize.descriptorCount = maxFramesInFlight_;
+
+    auto poolSizes = std::array{texturePoolSize};
+
+    auto poolInfo = vk::DescriptorPoolCreateInfo{};
+    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    poolInfo.maxSets = maxFramesInFlight_ * skyboxCount;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
+
+    skyboxDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), poolInfo};
 }
 } // namespace renderer

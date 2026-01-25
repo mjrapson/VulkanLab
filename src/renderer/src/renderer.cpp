@@ -106,7 +106,9 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
 Renderer::~Renderer() = default;
 
-void Renderer::renderFrame(const renderer::Camera& camera, const std::vector<DrawCommand>& drawCommands)
+void Renderer::renderFrame(const renderer::Camera& camera,
+                           assets::Skybox* skybox,
+                           const std::vector<DrawCommand>& drawCommands)
 {
     if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
         != vk::Result::eSuccess)
@@ -132,7 +134,7 @@ void Renderer::renderFrame(const renderer::Camera& camera, const std::vector<Dra
     auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
     commandBuffer.reset();
 
-    recordCommands(imageIndex, commandBuffer, camera, drawCommands);
+    recordCommands(imageIndex, commandBuffer, camera, skybox, drawCommands);
 
     auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
     auto signalSemaphores = std::array{*renderFinishedSemaphores_.at(imageIndex)};
@@ -189,7 +191,11 @@ void Renderer::windowResized(int width, int height)
 
 void Renderer::setResources(const assets::AssetDatabase& db)
 {
-    gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_, maxFramesInFlight, materialDescriptorSetLayout_);
+    gpuResources_ = std::make_unique<GpuResourceCache>(db,
+                                                       gpuDevice_,
+                                                       maxFramesInFlight,
+                                                       materialDescriptorSetLayout_,
+                                                       skyboxDescriptorSetLayout_);
 }
 
 void Renderer::createSwapchain()
@@ -291,6 +297,19 @@ void Renderer::createDescriptorSetLayouts()
     materialLayoutInfo.pBindings = materialLayoutBindings.data();
 
     materialDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), materialLayoutInfo);
+
+    // Skybox descriptor set layout
+    auto skyboxTextureBinding = vk::DescriptorSetLayoutBinding{};
+    skyboxTextureBinding.binding = 0;
+    skyboxTextureBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    skyboxTextureBinding.descriptorCount = 1;
+    skyboxTextureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+    auto skyboxLayoutInfo = vk::DescriptorSetLayoutCreateInfo{};
+    skyboxLayoutInfo.bindingCount = 1;
+    skyboxLayoutInfo.pBindings = &skyboxTextureBinding;
+
+    skyboxDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), skyboxLayoutInfo);
 }
 
 void Renderer::createCommandBuffers()
@@ -379,6 +398,7 @@ void Renderer::recreateSwapchain()
 void Renderer::recordCommands(uint32_t imageIndex,
                               const vk::raii::CommandBuffer& commandBuffer,
                               const renderer::Camera& camera,
+                              assets::Skybox* skybox,
                               const std::vector<DrawCommand>& drawCommands)
 {
     commandBuffer.begin({});
@@ -398,6 +418,7 @@ void Renderer::recordCommands(uint32_t imageIndex,
         .extent = swapchainExtent_,
         .commandBuffer = commandBuffer,
         .cameraDescriptorSet = cameraDescriptorSets_.at(currentFrameIndex_),
+        .skybox = skybox,
         .gpuResourceCache = *gpuResources_,
         .drawCommands = drawCommands,
     };
@@ -437,7 +458,10 @@ void Renderer::createDepthBufferImage()
 
 void Renderer::createRenderPasses()
 {
-    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_, surfaceFormat_.format, cameraDescriptorSetLayout_);
+    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_,
+                                               surfaceFormat_.format,
+                                               cameraDescriptorSetLayout_,
+                                               skyboxDescriptorSetLayout_);
 
     geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_,
                                                    surfaceFormat_.format,

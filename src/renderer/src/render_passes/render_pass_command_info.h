@@ -5,7 +5,13 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
+#include <optional>
 #include <span>
+
+namespace assets
+{
+struct Skybox;
+}
 
 namespace renderer
 {
@@ -22,6 +28,7 @@ struct RenderPassCommandInfo
     const vk::Extent2D& extent;
     const vk::raii::CommandBuffer& commandBuffer;
     const vk::raii::DescriptorSet& cameraDescriptorSet;
+    assets::Skybox* skybox{nullptr};
     GpuResourceCache& gpuResourceCache;
     std::span<const DrawCommand> drawCommands;
 };

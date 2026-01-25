@@ -13,10 +13,11 @@ namespace renderer
 {
 SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice,
                        const vk::Format& surfaceFormat,
-                       const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout)
+                       const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout,
+                       const vk::raii::DescriptorSetLayout& skyboxDescriptorSetLayout)
     : gpuDevice_{gpuDevice}
 {
-    createPipeline(surfaceFormat, cameraDescriptorSetLayout);
+    createPipeline(surfaceFormat, cameraDescriptorSetLayout, skyboxDescriptorSetLayout);
 }
 
 void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
@@ -43,6 +44,17 @@ void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                               0,
                                               *passInfo.cameraDescriptorSet,
                                               nullptr);
+
+    if (passInfo.skybox)
+    {
+        passInfo.commandBuffer.bindDescriptorSets(
+            vk::PipelineBindPoint::eGraphics,
+            pipelineLayout_,
+            1,
+            *passInfo.gpuResourceCache.skyboxDescriptorSet(passInfo.skybox).at(passInfo.frameIndex),
+            nullptr);
+    }
+
     passInfo.commandBuffer.setViewport(0,
                                        vk::Viewport(0.0f,
                                                     0.0f,
@@ -58,7 +70,8 @@ void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
 }
 
 void SkyboxPass::createPipeline(const vk::Format& surfaceFormat,
-                                const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout)
+                                const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout,
+                                const vk::raii::DescriptorSetLayout& skyboxDescriptorSetLayout)
 {
     // Shader-progammable stages
     auto vertexShaderModule = createShaderModule(gpuDevice_.device(),
@@ -120,7 +133,7 @@ void SkyboxPass::createPipeline(const vk::Format& surfaceFormat,
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout};
+    auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout, *skyboxDescriptorSetLayout};
 
     auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo{};
     pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size());

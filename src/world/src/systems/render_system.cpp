@@ -64,6 +64,6 @@ void RenderSystem::update(const renderer::Camera& camera)
         }
     }
 
-    renderer_.renderFrame(camera, commands);
+    renderer_.renderFrame(camera, world_.activeSkybox(), commands);
 }
 } // namespace world

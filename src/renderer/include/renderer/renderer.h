@@ -15,7 +15,8 @@
 namespace assets
 {
 class AssetDatabase;
-}
+struct Skybox;
+} // namespace assets
 
 namespace renderer
 {
@@ -42,7 +43,10 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
-    void renderFrame(const renderer::Camera& camera, const std::vector<DrawCommand>& drawCommands);
+    void renderFrame(const renderer::Camera& camera,
+                     assets::Skybox* skybox,
+                     const std::vector<DrawCommand>& drawCommands);
+
     void windowResized(int width, int height);
 
     void setResources(const assets::AssetDatabase& db);
@@ -52,7 +56,6 @@ class Renderer
     void createSwapchainImageViews();
 
     void createCameraDescriptorPool();
-    void createMaterialDescriptorPools(uint32_t materialCount);
     void createDescriptorSetLayouts();
     void createCommandBuffers();
     void createSyncObjects();
@@ -64,6 +67,7 @@ class Renderer
     void recordCommands(uint32_t imageIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
                         const renderer::Camera& camera,
+                        assets::Skybox* skybox,
                         const std::vector<DrawCommand>& drawCommands);
 
     void createDepthBufferImage();
@@ -87,6 +91,7 @@ class Renderer
     vk::raii::DescriptorPool cameraDescriptorPool_{nullptr};
     vk::raii::DescriptorSetLayout cameraDescriptorSetLayout_{nullptr};
     vk::raii::DescriptorSetLayout materialDescriptorSetLayout_{nullptr};
+    vk::raii::DescriptorSetLayout skyboxDescriptorSetLayout_{nullptr};
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
     std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
