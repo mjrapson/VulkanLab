@@ -173,13 +173,13 @@ void GpuDevice::copyBufferToImage(const vk::CommandBuffer& cmd,
                                   const vk::Image& destination,
                                   uint32_t width,
                                   uint32_t height,
-                                  uint32_t baseArrayLayer) const
+                                  uint32_t layers) const
 {
     auto region = vk::BufferImageCopy{};
     region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
     region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = baseArrayLayer;
-    region.imageSubresource.layerCount = 1;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = layers;
     region.imageExtent = vk::Extent3D{width, height, 1};
 
     cmd.copyBufferToImage(source, destination, vk::ImageLayout::eTransferDstOptimal, region);

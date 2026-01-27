@@ -64,7 +64,7 @@ void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                                     1.0f));
     passInfo.commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), passInfo.extent));
 
-    passInfo.commandBuffer.draw(3, 1, 0, 0);
+    passInfo.commandBuffer.draw(36, 1, 0, 0);
 
     passInfo.commandBuffer.endRendering();
 }

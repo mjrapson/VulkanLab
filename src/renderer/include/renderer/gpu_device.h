@@ -40,7 +40,7 @@ class GpuDevice
                            const vk::Image& destination,
                            uint32_t width,
                            uint32_t height,
-                           uint32_t baseArrayLayer = 0) const;
+                           uint32_t layers = 1) const;
 
     vk::raii::Image createImage(uint32_t width, uint32_t height) const;
     vk::raii::Image createCubemapImage(uint32_t width, uint32_t height) const;

@@ -444,7 +444,7 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
         gpuImage.image = gpuDevice_.createCubemapImage(width, height);
         gpuImage.memory = gpuDevice_.allocateImageMemory(gpuImage.image, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-        auto stagingBuffer = gpuDevice_.createBuffer(imageSize,
+        auto stagingBuffer = gpuDevice_.createBuffer(imageSize * 6,
                                                      vk::BufferUsageFlagBits::eTransferSrc,
                                                      vk::SharingMode::eExclusive);
 
@@ -466,16 +466,13 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
                                          vk::PipelineStageFlagBits2::eTransfer,
                                          vk::ImageAspectFlagBits::eColor,
                                          6);
-
+        void* data = stagingMemory.mapMemory(0, imageSize * 6);
         for (auto face = uint32_t{0}; face < 6; ++face)
         {
-            void* data = stagingMemory.mapMemory(0, imageSize);
-            std::memcpy(data, skybox.second->images[face]->data.data(), imageSize);
-            stagingMemory.unmapMemory();
-
-            gpuDevice_.copyBufferToImage(*cmd, *stagingBuffer, *gpuImage.image, width, height, face);
+            std::memcpy(data + (face * imageSize), skybox.second->images[face]->data.data(), imageSize);
         }
-
+        stagingMemory.unmapMemory();
+        gpuDevice_.copyBufferToImage(*cmd, *stagingBuffer, *gpuImage.image, width, height, 6);
         gpuDevice_.transitionImageLayout(*gpuImage.image,
                                          *cmd,
                                          vk::ImageLayout::eTransferDstOptimal,
