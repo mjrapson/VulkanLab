@@ -396,11 +396,6 @@ uint32_t GpuDevice::graphicsQueueFamilyIndex() const
     return graphicsQueueFamilyIndex_;
 }
 
-const vk::raii::CommandPool& GpuDevice::commandPool() const
-{
-    return commandPool_;
-}
-
 void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)
 {
     const auto devices = instance.enumeratePhysicalDevices();
