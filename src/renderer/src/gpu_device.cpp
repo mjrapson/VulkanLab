@@ -391,11 +391,6 @@ const vk::raii::Queue& GpuDevice::presentQueue() const
     return presentQueue_;
 }
 
-uint32_t GpuDevice::graphicsQueueFamilyIndex() const
-{
-    return graphicsQueueFamilyIndex_;
-}
-
 void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)
 {
     const auto devices = instance.enumeratePhysicalDevices();
