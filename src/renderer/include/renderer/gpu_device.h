@@ -71,7 +71,6 @@ class GpuDevice
 
     const vk::raii::Device& device() const;
     const vk::raii::PhysicalDevice& physicalDevice() const;
-    const vk::raii::Queue& graphicsQueue() const;
 
   private:
     void pickPhysicalDevice(const vk::raii::Instance& instance);
