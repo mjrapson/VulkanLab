@@ -371,6 +371,11 @@ vk::raii::DeviceMemory GpuDevice::allocateImageMemory(const vk::raii::Image& ima
     return memory;
 }
 
+vk::Result GpuDevice::present(const vk::PresentInfoKHR& info) const
+{
+    return presentQueue_.presentKHR(info);
+}
+
 const vk::raii::Device& GpuDevice::device() const
 {
     return device_;
@@ -384,11 +389,6 @@ const vk::raii::PhysicalDevice& GpuDevice::physicalDevice() const
 const vk::raii::Queue& GpuDevice::graphicsQueue() const
 {
     return graphicsQueue_;
-}
-
-const vk::raii::Queue& GpuDevice::presentQueue() const
-{
-    return presentQueue_;
 }
 
 void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)

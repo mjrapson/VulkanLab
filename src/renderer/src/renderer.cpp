@@ -155,7 +155,7 @@ void Renderer::renderFrame(const renderer::Camera& camera,
 
     try
     {
-        result = gpuDevice_.presentQueue().presentKHR(presentInfo);
+        result = gpuDevice_.present(presentInfo);
     }
     catch (const vk::OutOfDateKHRError&)
     {

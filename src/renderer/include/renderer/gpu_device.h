@@ -67,10 +67,11 @@ class GpuDevice
                                                 vk::MemoryPropertyFlags properties) const;
     vk::raii::DeviceMemory allocateImageMemory(const vk::raii::Image& image, vk::MemoryPropertyFlags properties) const;
 
+    vk::Result present(const vk::PresentInfoKHR& info) const;
+
     const vk::raii::Device& device() const;
     const vk::raii::PhysicalDevice& physicalDevice() const;
     const vk::raii::Queue& graphicsQueue() const;
-    const vk::raii::Queue& presentQueue() const;
 
   private:
     void pickPhysicalDevice(const vk::raii::Instance& instance);
