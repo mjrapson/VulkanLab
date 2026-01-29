@@ -4,7 +4,6 @@
 #include "geometry_pass.h"
 
 #include "private/gpu_resource_cache.h"
-#include "private/shader.h"
 #include "renderer/draw_command.h"
 #include "renderer/gpu_device.h"
 #include "renderer/vertex_layout.h"
@@ -119,11 +118,8 @@ void GeometryPass::createPipeline(const vk::Format& surfaceFormat,
                                   const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout)
 {
     // Shader-progammable stages
-    auto vertexShaderModule = createShaderModule(gpuDevice_.device(),
-                                                 core::readBinaryFile(core::getShaderDir() / "basic.vert.spv"));
-
-    auto fragmentShaderModule = createShaderModule(gpuDevice_.device(),
-                                                   core::readBinaryFile(core::getShaderDir() / "basic.frag.spv"));
+    auto vertexShaderModule = gpuDevice_.createShaderModule(core::getShaderDir() / "basic.vert.spv");
+    auto fragmentShaderModule = gpuDevice_.createShaderModule(core::getShaderDir() / "basic.frag.spv");
 
     auto vertShaderStageInfo = vk::PipelineShaderStageCreateInfo{};
     vertShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;

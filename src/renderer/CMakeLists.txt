@@ -12,8 +12,6 @@ target_sources(Renderer
         src/private/gpu_mesh.h
         src/private/gpu_resource_cache.cpp
         src/private/gpu_resource_cache.h
-        src/private/shader.cpp
-        src/private/shader.h
         src/render_passes/geometry_pass.cpp
         src/render_passes/geometry_pass.h
         src/render_passes/render_pass_command_info.h

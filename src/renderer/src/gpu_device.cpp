@@ -3,6 +3,8 @@
 
 #include "renderer/gpu_device.h"
 
+#include <core/file_system.h>
+
 #include <spdlog/spdlog.h>
 
 #include <ranges>
@@ -148,6 +150,17 @@ GpuDevice::createDescriptorSetLayout(const std::span<vk::DescriptorSetLayoutBind
     createInfo.pBindings = bindings.data();
 
     return vk::raii::DescriptorSetLayout{device_, createInfo};
+}
+
+vk::raii::ShaderModule GpuDevice::createShaderModule(const std::filesystem::path& filePath) const
+{
+    const auto code = core::readBinaryFile(filePath);
+
+    auto createInfo = vk::ShaderModuleCreateInfo{};
+    createInfo.codeSize = code.size() * sizeof(char);
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+    return vk::raii::ShaderModule{device_, createInfo};
 }
 
 vk::raii::Buffer GpuDevice::createBuffer(const vk::DeviceSize& size,

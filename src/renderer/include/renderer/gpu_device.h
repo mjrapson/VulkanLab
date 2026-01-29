@@ -5,6 +5,7 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
+#include <filesystem>
 #include <span>
 
 namespace renderer
@@ -30,6 +31,8 @@ class GpuDevice
 
     vk::raii::DescriptorSetLayout
     createDescriptorSetLayout(const std::span<vk::DescriptorSetLayoutBinding>& bindings) const;
+
+    vk::raii::ShaderModule createShaderModule(const std::filesystem::path& filePath) const;
 
     vk::raii::Buffer createBuffer(const vk::DeviceSize& size,
                                   const vk::BufferUsageFlags& usage,

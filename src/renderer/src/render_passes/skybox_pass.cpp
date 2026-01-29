@@ -4,7 +4,6 @@
 #include "skybox_pass.h"
 
 #include "private/gpu_resource_cache.h"
-#include "private/shader.h"
 #include "renderer/gpu_device.h"
 
 #include <core/file_system.h>
@@ -74,11 +73,8 @@ void SkyboxPass::createPipeline(const vk::Format& surfaceFormat,
                                 const vk::raii::DescriptorSetLayout& skyboxDescriptorSetLayout)
 {
     // Shader-progammable stages
-    auto vertexShaderModule = createShaderModule(gpuDevice_.device(),
-                                                 core::readBinaryFile(core::getShaderDir() / "skybox.vert.spv"));
-
-    auto fragmentShaderModule = createShaderModule(gpuDevice_.device(),
-                                                   core::readBinaryFile(core::getShaderDir() / "skybox.frag.spv"));
+    auto vertexShaderModule = gpuDevice_.createShaderModule(core::getShaderDir() / "skybox.vert.spv");
+    auto fragmentShaderModule = gpuDevice_.createShaderModule(core::getShaderDir() / "skybox.frag.spv");
 
     auto vertShaderStageInfo = vk::PipelineShaderStageCreateInfo{};
     vertShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
