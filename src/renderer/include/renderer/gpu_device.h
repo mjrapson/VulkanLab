@@ -67,6 +67,8 @@ class GpuDevice
                                                 vk::MemoryPropertyFlags properties) const;
     vk::raii::DeviceMemory allocateImageMemory(const vk::raii::Image& image, vk::MemoryPropertyFlags properties) const;
 
+    vk::SurfaceFormatKHR getSurfaceFormat(const vk::SurfaceKHR& surface) const;
+
     vk::Result present(const vk::PresentInfoKHR& info) const;
 
     const vk::raii::Device& device() const;

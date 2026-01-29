@@ -371,6 +371,29 @@ vk::raii::DeviceMemory GpuDevice::allocateImageMemory(const vk::raii::Image& ima
     return memory;
 }
 
+vk::SurfaceFormatKHR GpuDevice::getSurfaceFormat(const vk::SurfaceKHR& surface) const
+{
+    const auto formats = physicalDevice_.getSurfaceFormatsKHR(surface);
+
+    if (formats.empty())
+    {
+        throw std::runtime_error("No available surface formats");
+    }
+
+    if (auto itr = std::ranges::find_if(formats,
+                                        [](const vk::SurfaceFormatKHR& format)
+                                        {
+                                            return format.format == vk::Format::eB8G8R8A8Srgb
+                                                   && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+                                        });
+        itr != formats.end())
+    {
+        return *itr;
+    }
+
+    return formats.at(0);
+}
+
 vk::Result GpuDevice::present(const vk::PresentInfoKHR& info) const
 {
     return presentQueue_.presentKHR(info);

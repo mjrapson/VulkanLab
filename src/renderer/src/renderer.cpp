@@ -50,28 +50,6 @@ uint32_t getSurfaceMinImageCount(const vk::SurfaceCapabilitiesKHR& surfaceCapabi
     return std::min(desiredImageCount, surfaceCapabilities.maxImageCount);
 }
 
-bool isPreferredSurfaceFormat(const vk::SurfaceFormatKHR& format)
-{
-    return format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
-}
-
-vk::SurfaceFormatKHR getSurfaceFormat(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface)
-{
-    const auto formats = device.getSurfaceFormatsKHR(surface);
-
-    if (formats.empty())
-    {
-        throw std::runtime_error("No available surface formats");
-    }
-
-    if (auto itr = std::ranges::find_if(formats, isPreferredSurfaceFormat); itr != formats.end())
-    {
-        return *itr;
-    }
-
-    return formats.at(0);
-}
-
 Renderer::Renderer(const vk::raii::Instance& instance,
                    const vk::raii::SurfaceKHR& surface,
                    const GpuDevice& gpuDevice,
@@ -202,7 +180,7 @@ void Renderer::createSwapchain()
 {
     const auto surfaceCapabilities = gpuDevice_.physicalDevice().getSurfaceCapabilitiesKHR(*surface_);
     swapchainExtent_ = getSwapchainExtent(surfaceCapabilities, windowWidth_, windowHeight_);
-    surfaceFormat_ = getSurfaceFormat(*gpuDevice_.physicalDevice(), *surface_);
+    surfaceFormat_ = gpuDevice_.getSurfaceFormat(*surface_);
 
     auto swapChainCreateInfo = vk::SwapchainCreateInfoKHR{};
     swapChainCreateInfo.surface = *surface_;
