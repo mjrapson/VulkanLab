@@ -28,6 +28,9 @@ class GpuDevice
                              std::span<vk::Semaphore> signalSemaphores,
                              const vk::Fence& fence) const;
 
+    vk::raii::DescriptorSetLayout
+    createDescriptorSetLayout(const std::span<vk::DescriptorSetLayoutBinding>& bindings) const;
+
     vk::raii::Buffer createBuffer(const vk::DeviceSize& size,
                                   const vk::BufferUsageFlags& usage,
                                   const vk::SharingMode& sharingMode) const;

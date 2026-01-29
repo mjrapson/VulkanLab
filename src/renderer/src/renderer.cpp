@@ -248,12 +248,7 @@ void Renderer::createDescriptorSetLayouts()
     cameraLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
 
     auto cameraLayoutBindings = std::array{cameraLayoutBinding};
-
-    auto cameraLayoutInfo = vk::DescriptorSetLayoutCreateInfo{};
-    cameraLayoutInfo.bindingCount = static_cast<uint32_t>(cameraLayoutBindings.size());
-    cameraLayoutInfo.pBindings = cameraLayoutBindings.data();
-
-    cameraDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), cameraLayoutInfo);
+    cameraDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(cameraLayoutBindings);
 
     // Material descriptor set layout
     auto materialUboLayoutBinding = vk::DescriptorSetLayoutBinding{};
@@ -269,12 +264,7 @@ void Renderer::createDescriptorSetLayouts()
     textureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
     auto materialLayoutBindings = std::array{materialUboLayoutBinding, textureBinding};
-
-    auto materialLayoutInfo = vk::DescriptorSetLayoutCreateInfo{};
-    materialLayoutInfo.bindingCount = static_cast<uint32_t>(materialLayoutBindings.size());
-    materialLayoutInfo.pBindings = materialLayoutBindings.data();
-
-    materialDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), materialLayoutInfo);
+    materialDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(materialLayoutBindings);
 
     // Skybox descriptor set layout
     auto skyboxTextureBinding = vk::DescriptorSetLayoutBinding{};
@@ -283,11 +273,8 @@ void Renderer::createDescriptorSetLayouts()
     skyboxTextureBinding.descriptorCount = 1;
     skyboxTextureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-    auto skyboxLayoutInfo = vk::DescriptorSetLayoutCreateInfo{};
-    skyboxLayoutInfo.bindingCount = 1;
-    skyboxLayoutInfo.pBindings = &skyboxTextureBinding;
-
-    skyboxDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(gpuDevice_.device(), skyboxLayoutInfo);
+    auto skyboxLayoutBindings = std::array{skyboxTextureBinding};
+    skyboxDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(skyboxLayoutBindings);
 }
 
 void Renderer::createCommandBuffers()

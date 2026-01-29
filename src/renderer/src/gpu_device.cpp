@@ -140,6 +140,16 @@ void GpuDevice::submitCommandBuffer(const vk::CommandBuffer& cmd,
     graphicsQueue_.submit(submitInfo, fence);
 }
 
+vk::raii::DescriptorSetLayout
+GpuDevice::createDescriptorSetLayout(const std::span<vk::DescriptorSetLayoutBinding>& bindings) const
+{
+    auto createInfo = vk::DescriptorSetLayoutCreateInfo{};
+    createInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    createInfo.pBindings = bindings.data();
+
+    return vk::raii::DescriptorSetLayout{device_, createInfo};
+}
+
 vk::raii::Buffer GpuDevice::createBuffer(const vk::DeviceSize& size,
                                          const vk::BufferUsageFlags& usage,
                                          const vk::SharingMode& sharingMode) const
