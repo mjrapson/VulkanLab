@@ -42,7 +42,6 @@ class GpuResourceCache
 
     const vk::raii::Buffer& meshVertexBuffer() const;
     const vk::raii::Buffer& meshIndexBuffer() const;
-    const vk::raii::Buffer& materialUniformBuffer(int frameIndex) const;
 
     GpuImage& gpuImage(uint32_t handle);
     GpuMaterial& gpuMaterial(uint32_t handle);
