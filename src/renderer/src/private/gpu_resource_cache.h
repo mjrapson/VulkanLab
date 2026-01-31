@@ -37,8 +37,8 @@ class GpuResourceCache
     GpuResourceCache(const GpuResourceCache&) = delete;
     GpuResourceCache& operator=(const GpuResourceCache&) = delete;
 
-    GpuResourceCache(GpuResourceCache&& other) = default;
-    GpuResourceCache& operator=(GpuResourceCache&& other) = default;
+    GpuResourceCache(GpuResourceCache&& other) = delete;
+    GpuResourceCache& operator=(GpuResourceCache&& other) = delete;
 
     const vk::raii::Buffer& meshVertexBuffer() const;
     const vk::raii::Buffer& meshIndexBuffer() const;
