@@ -11,16 +11,6 @@
 
 namespace renderer
 {
-vk::DeviceSize alignMemory(vk::DeviceSize data, vk::DeviceSize alignment)
-{
-    if (data < alignment || data == alignment)
-    {
-        return alignment;
-    }
-
-    return data + (alignment - (data % alignment));
-}
-
 GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db,
                                    const GpuDevice& gpuDevice,
                                    const vk::DescriptorSetLayout& materialDescriptorSetLayout,
