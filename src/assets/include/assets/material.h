@@ -5,15 +5,29 @@
 
 #include <glm/glm.hpp>
 
+#include <optional>
+
 namespace assets
 {
-struct Image;
-
-struct Material
+class Material
 {
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-    Image* diffuseTexture;
+  public:
+    Material();
+
+    uint32_t uid() const;
+
+    void setDiffuse(const glm::vec3& diffuse);
+    void setDiffuseTextureUid(uint32_t uid);
+
+    const glm::vec3& diffuse() const;
+    const std::optional<uint32_t>& diffuseTextureUid() const;
+
+  private:
+    static uint32_t nextUid();
+
+  private:
+    uint32_t uid_;
+    glm::vec3 diffuse_{glm::vec3{0.0f}};
+    std::optional<uint32_t> diffuseTextureUid_;
 };
 } // namespace assets

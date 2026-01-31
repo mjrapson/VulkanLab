@@ -85,7 +85,7 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 Renderer::~Renderer() = default;
 
 void Renderer::renderFrame(const renderer::Camera& camera,
-                           assets::Skybox* skybox,
+                           const std::optional<uint32_t>& skyboxUid,
                            const std::vector<DrawCommand>& drawCommands)
 {
     if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
@@ -112,7 +112,7 @@ void Renderer::renderFrame(const renderer::Camera& camera,
     auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
     commandBuffer.reset();
 
-    recordCommands(imageIndex, commandBuffer, camera, skybox, drawCommands);
+    recordCommands(imageIndex, commandBuffer, camera, skyboxUid, drawCommands);
 
     auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
     auto signalSemaphores = std::array{*renderFinishedSemaphores_.at(imageIndex)};
@@ -363,7 +363,7 @@ void Renderer::recreateSwapchain()
 void Renderer::recordCommands(uint32_t imageIndex,
                               const vk::raii::CommandBuffer& commandBuffer,
                               const renderer::Camera& camera,
-                              assets::Skybox* skybox,
+                              const std::optional<uint32_t>& skyboxUid,
                               const std::vector<DrawCommand>& drawCommands)
 {
     commandBuffer.begin({});
@@ -383,7 +383,7 @@ void Renderer::recordCommands(uint32_t imageIndex,
         .extent = swapchainExtent_,
         .commandBuffer = commandBuffer,
         .cameraDescriptorSet = cameraDescriptorSets_.at(currentFrameIndex_),
-        .skybox = skybox,
+        .skyboxUid = skyboxUid,
         .gpuResourceCache = *gpuResources_,
         .drawCommands = drawCommands,
     };

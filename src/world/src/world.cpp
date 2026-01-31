@@ -33,7 +33,7 @@ World::World(const scene::Scene& scene, const assets::AssetDatabase& assetDataba
             transformComponent.scale = sceneEntity.transformComponent->scale;
         }
 
-        activeSkybox_ = assetDatabase.skyboxes().at(scene.camera.skybox).get();
+        activeSkybox_ = assetDatabase.skyboxes().at(scene.camera.skybox)->uid;
     }
 }
 
@@ -48,12 +48,7 @@ void World::destroyEntity(Entity entity)
     transformComponents_.erase(entity);
 }
 
-void World::setActiveSkybox(assets::Skybox* skybox)
-{
-    activeSkybox_ = skybox;
-}
-
-assets::Skybox* World::activeSkybox() const
+const std::optional<uint32_t>& World::activeSkybox() const
 {
     return activeSkybox_;
 }

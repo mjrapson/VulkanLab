@@ -111,18 +111,11 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
     return vertices;
 }
 
-Image* readBaseColorTexture(tinygltf::Material& material, tinygltf::Model& model, Prefab& prefab)
-{
-    const auto texIndex = material.pbrMetallicRoughness.baseColorTexture.index;
-    if (texIndex < 0)
-    {
-        return nullptr;
-    }
-
-    return prefab.getImage(model.images[model.textures[texIndex].source].name);
-}
-
-void parseNode(int index, tinygltf::Model& model, const glm::mat4& parentTransform, Prefab& prefab)
+void parseNode(int index,
+               tinygltf::Model& model,
+               const glm::mat4& parentTransform,
+               Prefab& prefab,
+               const std::vector<uint32_t>& meshHandles)
 {
     const auto& node = model.nodes[index];
 
@@ -158,18 +151,15 @@ void parseNode(int index, tinygltf::Model& model, const glm::mat4& parentTransfo
 
     if (node.mesh >= 0)
     {
-        if (auto mesh = prefab.getMesh(node.mesh))
-        {
-            auto meshInstance = MeshInstance{};
-            meshInstance.mesh = mesh;
-            meshInstance.transform = nodeToPrefab;
-            prefab.addMeshInstance(std::move(meshInstance));
-        }
+        auto meshInstance = MeshInstance{};
+        meshInstance.meshUid = meshHandles.at(node.mesh);
+        meshInstance.transform = nodeToPrefab;
+        prefab.addMeshInstance(std::move(meshInstance));
     }
 
     for (const auto& childIndex : node.children)
     {
-        parseNode(childIndex, model, nodeToPrefab, prefab);
+        parseNode(childIndex, model, nodeToPrefab, prefab, meshHandles);
     }
 }
 
@@ -203,31 +193,47 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
         return nullptr;
     }
 
+    auto imageHandles = std::unordered_map<std::string, uint32_t>{};
+    auto materialHandles = std::unordered_map<std::string, uint32_t>{};
+    auto meshHandles = std::vector<uint32_t>{};
+
     auto prefab = std::make_unique<Prefab>();
 
-    for (auto& image : model.images)
+    for (const auto& tinyGltfImage : model.images)
     {
-        prefab->addImage(image.name, createImageFromData(image.width, image.height, image.image));
+        auto image = createImageFromData(tinyGltfImage.width, tinyGltfImage.height, tinyGltfImage.image);
+        imageHandles[tinyGltfImage.name] = image->uid();
+
+        prefab->addImage(std::move(image));
     }
 
     for (auto& gltfMaterial : model.materials)
     {
         auto material = std::make_unique<Material>();
-        material->diffuse = readColor(gltfMaterial.pbrMetallicRoughness.baseColorFactor);
-        material->diffuseTexture = readBaseColorTexture(gltfMaterial, model, *prefab);
-        prefab->addMaterial(gltfMaterial.name, std::move(material));
+        materialHandles[gltfMaterial.name] = material->uid();
+
+        material->setDiffuse(readColor(gltfMaterial.pbrMetallicRoughness.baseColorFactor));
+
+        if (const auto index = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index; index >= 0)
+        {
+            material->setDiffuseTextureUid(imageHandles.at(model.images[model.textures[index].source].name));
+        }
+
+        prefab->addMaterial(std::move(material));
     }
 
     for (auto& gltfMesh : model.meshes)
     {
         auto mesh = std::make_unique<Mesh>();
+        meshHandles.push_back(mesh->uid());
+
         for (auto& primitive : gltfMesh.primitives)
         {
             auto subMesh = std::make_unique<SubMesh>();
             subMesh->vertices = readVertices(primitive, model);
             subMesh->indices = readIndices(primitive, model);
-            subMesh->material = prefab->getMaterial(model.materials[primitive.material].name);
-            mesh->subMeshes.emplace_back(std::move(subMesh));
+            subMesh->materialUid = materialHandles.at(model.materials[primitive.material].name);
+            mesh->append(std::move(subMesh));
         }
         prefab->addMesh(std::move(mesh));
     }
@@ -236,7 +242,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
 
     for (auto& nodeIndex : gltfScene.nodes)
     {
-        parseNode(nodeIndex, model, glm::mat4{1.0f}, *prefab);
+        parseNode(nodeIndex, model, glm::mat4{1.0f}, *prefab, meshHandles);
     }
 
     return prefab;

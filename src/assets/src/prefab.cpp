@@ -5,14 +5,14 @@
 
 namespace assets
 {
-void Prefab::addMaterial(const std::string& name, std::unique_ptr<Material> material)
+void Prefab::addMaterial(std::unique_ptr<Material> material)
 {
     if (!material)
     {
         return;
     }
 
-    materials_[name] = std::move(material);
+    materials_[material->uid()] = std::move(material);
 }
 
 void Prefab::addMesh(std::unique_ptr<Mesh> mesh)
@@ -22,66 +22,46 @@ void Prefab::addMesh(std::unique_ptr<Mesh> mesh)
         return;
     }
 
-    meshes_.emplace_back(std::move(mesh));
+    meshes_[mesh->uid()] = std::move(mesh);
 }
 
-void Prefab::addImage(const std::string& name, std::unique_ptr<Image> image)
+void Prefab::addImage(std::unique_ptr<Image> image)
 {
     if (!image)
     {
         return;
     }
 
-    images_[name] = std::move(image);
+    images_[image->uid()] = std::move(image);
 }
 
 void Prefab::addMeshInstance(MeshInstance&& instance)
 {
-    meshInstances_.emplace_back(std::move(instance));
+    meshInstances_.push_back(std::move(instance));
 }
 
-Material* Prefab::getMaterial(const std::string& name) const
+uint32_t Prefab::vertexCount() const
 {
-    if (!materials_.contains(name))
-    {
-        return nullptr;
-    }
-
-    return materials_.at(name).get();
+    return static_cast<uint32_t>(std::ranges::fold_left(meshes_,
+                                                        size_t{0},
+                                                        [](size_t n, const auto& mesh)
+                                                        {
+                                                            return n + mesh.second->vertexCount();
+                                                        }));
 }
 
-Mesh* Prefab::getMesh(int index) const
+uint32_t Prefab::indexCount() const
 {
-    return meshes_.at(index).get();
+    return static_cast<uint32_t>(std::ranges::fold_left(meshes_,
+                                                        size_t{0},
+                                                        [](size_t n, const auto& mesh)
+                                                        {
+                                                            return n + mesh.second->indexCount();
+                                                        }));
 }
 
-Image* Prefab::getImage(const std::string& name) const
+Mesh* Prefab::mesh(uint32_t handle) const
 {
-    if (!images_.contains(name))
-    {
-        return nullptr;
-    }
-
-    return images_.at(name).get();
-}
-
-const std::unordered_map<std::string, std::unique_ptr<Material>>& Prefab::materials() const
-{
-    return materials_;
-}
-
-const std::vector<std::unique_ptr<Mesh>>& Prefab::meshes() const
-{
-    return meshes_;
-}
-
-const std::unordered_map<std::string, std::unique_ptr<Image>>& Prefab::images() const
-{
-    return images_;
-}
-
-const std::vector<MeshInstance>& Prefab::meshInstances() const
-{
-    return meshInstances_;
+    return meshes_.at(handle).get();
 }
 } // namespace assets

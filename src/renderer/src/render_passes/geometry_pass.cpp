@@ -95,18 +95,15 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                              0,
                                              vk::ArrayProxy<const PushConstants>{pushConstants});
 
-        if (drawCommand.subMesh->material)
-        {
-            const auto& gpuMaterial = passInfo.gpuResourceCache.gpuMaterial(drawCommand.subMesh->material);
-            passInfo.commandBuffer.bindDescriptorSets(
-                vk::PipelineBindPoint::eGraphics,
-                pipelineLayout_,
-                1,
-                *passInfo.gpuResourceCache.materialDescriptorSet(drawCommand.subMesh->material).at(passInfo.frameIndex),
-                gpuMaterial.uboOffset);
-        }
+        const auto& gpuMaterial = passInfo.gpuResourceCache.gpuMaterial(drawCommand.materialUid);
+        passInfo.commandBuffer.bindDescriptorSets(
+            vk::PipelineBindPoint::eGraphics,
+            pipelineLayout_,
+            1,
+            *passInfo.gpuResourceCache.materialDescriptorSet(drawCommand.materialUid),
+            gpuMaterial.uboOffset);
 
-        auto& gpuMesh = passInfo.gpuResourceCache.gpuMesh(drawCommand.subMesh);
+        auto& gpuMesh = passInfo.gpuResourceCache.gpuMesh(drawCommand.subMeshUid);
         passInfo.commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);
     }
 

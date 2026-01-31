@@ -20,6 +20,12 @@ class AssetDatabase
     void addPrefab(const std::string& name, std::unique_ptr<Prefab> prefab);
     void addSkybox(const std::string& name, std::unique_ptr<Skybox> skybox);
 
+    uint32_t vertexCount() const;
+    uint32_t indexCount() const;
+    uint32_t materialCount() const;
+    uint32_t imageCount() const;
+    uint32_t skyboxCount() const;
+
     const AssetStorage<Prefab>& prefabs() const;
     const AssetStorage<Skybox>& skyboxes() const;
 

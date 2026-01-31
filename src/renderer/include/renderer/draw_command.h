@@ -5,16 +5,12 @@
 
 #include <glm/glm.hpp>
 
-namespace assets
-{
-struct SubMesh;
-} // namespace assets
-
 namespace renderer
 {
 struct DrawCommand
 {
-    assets::SubMesh* subMesh;
+    uint32_t subMeshUid;
+    uint32_t materialUid;
     glm::mat4 transform;
 };
 } // namespace renderer

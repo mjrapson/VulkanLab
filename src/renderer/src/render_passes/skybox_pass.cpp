@@ -44,13 +44,13 @@ void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                               *passInfo.cameraDescriptorSet,
                                               nullptr);
 
-    if (passInfo.skybox)
+    if (passInfo.skyboxUid)
     {
         passInfo.commandBuffer.bindDescriptorSets(
             vk::PipelineBindPoint::eGraphics,
             pipelineLayout_,
             1,
-            *passInfo.gpuResourceCache.skyboxDescriptorSet(passInfo.skybox).at(passInfo.frameIndex),
+            *passInfo.gpuResourceCache.skyboxDescriptorSet(passInfo.skyboxUid.value()),
             nullptr);
     }
 

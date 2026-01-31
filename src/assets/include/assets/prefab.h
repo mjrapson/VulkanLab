@@ -9,7 +9,7 @@
 #include "mesh_instance.h"
 
 #include <memory>
-#include <string>
+#include <ranges>
 #include <unordered_map>
 #include <vector>
 
@@ -18,26 +18,55 @@ namespace assets
 class Prefab
 {
   public:
-    void addMaterial(const std::string& name, std::unique_ptr<Material> material);
+    void addMaterial(std::unique_ptr<Material> material);
     void addMesh(std::unique_ptr<Mesh> mesh);
-    void addImage(const std::string& name, std::unique_ptr<Image> image);
-
+    void addImage(std::unique_ptr<Image> image);
     void addMeshInstance(MeshInstance&& instance);
 
-    Material* getMaterial(const std::string& name) const;
-    Mesh* getMesh(int index) const;
-    Image* getImage(const std::string& name) const;
+    uint32_t vertexCount() const;
+    uint32_t indexCount() const;
 
-    const std::unordered_map<std::string, std::unique_ptr<Material>>& materials() const;
-    const std::vector<std::unique_ptr<Mesh>>& meshes() const;
-    const std::unordered_map<std::string, std::unique_ptr<Image>>& images() const;
+    Mesh* mesh(uint32_t handle) const;
 
-    const std::vector<MeshInstance>& meshInstances() const;
+    auto materials() const
+    {
+        return materials_
+               | std::views::transform(
+                   [](const auto& ptr) -> const Material&
+                   {
+                       return *ptr.second;
+                   });
+    }
+
+    auto meshes() const
+    {
+        return meshes_
+               | std::views::transform(
+                   [](const auto& ptr) -> const Mesh&
+                   {
+                       return *ptr.second;
+                   });
+    }
+
+    auto images() const
+    {
+        return images_
+               | std::views::transform(
+                   [](const auto& ptr) -> const Image&
+                   {
+                       return *ptr.second;
+                   });
+    }
+
+    auto meshInstances() const
+    {
+        return std::views::all(meshInstances_);
+    }
 
   private:
-    std::unordered_map<std::string, std::unique_ptr<Material>> materials_;
-    std::vector<std::unique_ptr<Mesh>> meshes_;
-    std::unordered_map<std::string, std::unique_ptr<Image>> images_;
+    std::unordered_map<uint32_t, std::unique_ptr<Material>> materials_;
+    std::unordered_map<uint32_t, std::unique_ptr<Mesh>> meshes_;
+    std::unordered_map<uint32_t, std::unique_ptr<Image>> images_;
     std::vector<MeshInstance> meshInstances_;
 };
 } // namespace assets

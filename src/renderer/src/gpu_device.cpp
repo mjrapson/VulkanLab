@@ -175,9 +175,34 @@ vk::raii::Buffer GpuDevice::createBuffer(const vk::DeviceSize& size,
     return vk::raii::Buffer(device_, bufferInfo);
 }
 
+vk::raii::Buffer GpuDevice::createVertexBuffer(const vk::DeviceSize& size) const
+{
+    return createBuffer(size,
+                        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+                        vk::SharingMode::eExclusive);
+}
+
+vk::raii::Buffer GpuDevice::createIndexBuffer(const vk::DeviceSize& size) const
+{
+    return createBuffer(size,
+                        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+                        vk::SharingMode::eExclusive);
+}
+
+vk::raii::Buffer GpuDevice::createStagingBuffer(const vk::DeviceSize& size) const
+{
+    return createBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive);
+}
+
+vk::raii::Buffer GpuDevice::createUniformBuffer(const vk::DeviceSize& size) const
+{
+    return createBuffer(size, vk::BufferUsageFlagBits::eUniformBuffer, vk::SharingMode::eExclusive);
+}
+
 void GpuDevice::copyBuffer(const vk::raii::Buffer& source,
                            const vk::raii::Buffer& destination,
-                           const vk::DeviceSize& size) const
+                           const vk::DeviceSize& size,
+                           const vk::DeviceSize& destinationOffset) const
 {
     auto commandBuffers = createCommandBuffers(1);
     auto& commandCopyBuffer = commandBuffers[0];
@@ -185,7 +210,7 @@ void GpuDevice::copyBuffer(const vk::raii::Buffer& source,
     auto commandBufferBeginInfo = vk::CommandBufferBeginInfo{};
     commandBufferBeginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
     commandCopyBuffer.begin(commandBufferBeginInfo);
-    commandCopyBuffer.copyBuffer(*source, *destination, vk::BufferCopy(0, 0, size));
+    commandCopyBuffer.copyBuffer(*source, *destination, vk::BufferCopy(0, destinationOffset, size));
     commandCopyBuffer.end();
 
     submitCommandBuffer(*commandCopyBuffer);
@@ -380,6 +405,17 @@ vk::raii::DeviceMemory GpuDevice::allocateBufferMemory(const vk::raii::Buffer& b
     return memory;
 }
 
+vk::raii::DeviceMemory GpuDevice::allocateDeviceBufferMemory(const vk::raii::Buffer& buffer) const
+{
+    return allocateBufferMemory(buffer, vk::MemoryPropertyFlagBits::eDeviceLocal);
+}
+
+vk::raii::DeviceMemory GpuDevice::allocateStagingBufferMemory(const vk::raii::Buffer& buffer) const
+{
+    return allocateBufferMemory(buffer,
+                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+}
+
 vk::raii::DeviceMemory GpuDevice::allocateImageMemory(const vk::raii::Image& image,
                                                       vk::MemoryPropertyFlags properties) const
 {
@@ -420,6 +456,18 @@ vk::SurfaceFormatKHR GpuDevice::getSurfaceFormat(const vk::SurfaceKHR& surface) 
 vk::Result GpuDevice::present(const vk::PresentInfoKHR& info) const
 {
     return presentQueue_.presentKHR(info);
+}
+
+vk::DeviceSize GpuDevice::calculateAlignedUboStride(size_t uboSize) const
+{
+    const auto alignment = physicalDevice_.getProperties().limits.minUniformBufferOffsetAlignment;
+
+    if (uboSize < alignment || uboSize == alignment)
+    {
+        return alignment;
+    }
+
+    return uboSize + (alignment - (uboSize % alignment));
 }
 
 const vk::raii::Device& GpuDevice::device() const

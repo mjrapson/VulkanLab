@@ -49,15 +49,18 @@ void RenderSystem::update(const renderer::Camera& camera)
 
         for (const auto& instance : prefab->meshInstances())
         {
-            if (!instance.mesh)
+
+            auto mesh = prefab->mesh(instance.meshUid);
+            if (!mesh)
             {
                 continue;
             }
 
-            for (const auto& subMesh : instance.mesh->subMeshes)
+            for (const auto& subMesh : mesh->subMeshes())
             {
                 auto drawCommand = renderer::DrawCommand{};
-                drawCommand.subMesh = subMesh.get();
+                drawCommand.subMeshUid = subMesh.uid;
+                drawCommand.materialUid = subMesh.materialUid;
                 drawCommand.transform = transformMatrix * instance.transform;
                 commands.push_back(drawCommand);
             }

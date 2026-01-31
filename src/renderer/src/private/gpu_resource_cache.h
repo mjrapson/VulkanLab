@@ -45,19 +45,19 @@ class GpuResourceCache
     const vk::raii::Buffer& meshIndexBuffer() const;
     const vk::raii::Buffer& materialUniformBuffer(int frameIndex) const;
 
-    GpuImage& gpuImage(assets::Image* image);
-    GpuMaterial& gpuMaterial(assets::Material* material);
-    GpuMesh& gpuMesh(assets::SubMesh* mesh);
-    GpuImage& gpuSkyboxImage(assets::Skybox* skybox);
+    GpuImage& gpuImage(uint32_t handle);
+    GpuMaterial& gpuMaterial(uint32_t handle);
+    GpuMesh& gpuMesh(uint32_t handle);
+    GpuImage& gpuSkyboxImage(uint32_t handle);
 
-    const std::vector<vk::raii::DescriptorSet>& materialDescriptorSet(assets::Material* material) const;
-    const std::vector<vk::raii::DescriptorSet>& skyboxDescriptorSet(assets::Skybox* skybox) const;
+    const vk::raii::DescriptorSet& materialDescriptorSet(uint32_t handle) const;
+    const vk::raii::DescriptorSet& skyboxDescriptorSet(uint32_t handle) const;
 
   private:
     void createDefaultData();
     void uploadData(const assets::AssetDatabase& db);
-    void uploadImageData(const std::vector<assets::Image*>& images);
-    void uploadMaterialData(const std::vector<assets::Material*>& materials);
+    void uploadImageData(const assets::AssetDatabase& db);
+    void uploadMaterialData(const assets::AssetDatabase& db);
     void uploadMeshData(const assets::AssetDatabase& db);
     void uploadSkyboxImageData(const assets::AssetDatabase& db);
 
@@ -78,15 +78,15 @@ class GpuResourceCache
 
     vk::raii::DescriptorPool materialDescriptorPool_{nullptr};
     vk::raii::DescriptorPool skyboxDescriptorPool_{nullptr};
-    std::unordered_map<assets::Material*, std::vector<vk::raii::DescriptorSet>> materialDescriptorSets_;
-    std::unordered_map<assets::Skybox*, std::vector<vk::raii::DescriptorSet>> skyboxDescriptorSets_;
-    std::vector<vk::raii::Buffer> materialUboBuffers_;
-    std::vector<vk::raii::DeviceMemory> materialUboBuffersMemory_;
-    std::vector<void*> materialUboMappedMemory_;
+    std::unordered_map<uint32_t, vk::raii::DescriptorSet> materialDescriptorSets_;
+    std::unordered_map<uint32_t, vk::raii::DescriptorSet> skyboxDescriptorSets_;
+    vk::raii::Buffer materialUboBuffer_{nullptr};
+    vk::raii::DeviceMemory materialUboBufferMemory_{nullptr};
+    void* materialUboMappedMemory_{nullptr};
 
-    std::unordered_map<assets::Image*, GpuImage> gpuImages_;
-    std::unordered_map<assets::Material*, GpuMaterial> gpuMaterials_;
-    std::unordered_map<assets::SubMesh*, GpuMesh> gpuMeshes_;
-    std::unordered_map<assets::Skybox*, GpuImage> gpuSkyboxImages_;
+    std::unordered_map<uint32_t, GpuImage> gpuImages_;
+    std::unordered_map<uint32_t, GpuMaterial> gpuMaterials_;
+    std::unordered_map<uint32_t, GpuMesh> gpuMeshes_;
+    std::unordered_map<uint32_t, GpuImage> gpuSkyboxImages_;
 };
 } // namespace renderer

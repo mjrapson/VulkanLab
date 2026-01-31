@@ -5,6 +5,9 @@ target_sources(Assets
         src/asset_database.cpp
         src/gltf_loader.cpp
         src/image_loader.cpp
+        src/image.cpp
+        src/material.cpp
+        src/mesh.cpp
         src/prefab.cpp
     PUBLIC
         include/assets/asset_database.h

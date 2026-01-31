@@ -38,9 +38,15 @@ class GpuDevice
                                   const vk::BufferUsageFlags& usage,
                                   const vk::SharingMode& sharingMode) const;
 
+    vk::raii::Buffer createVertexBuffer(const vk::DeviceSize& size) const;
+    vk::raii::Buffer createIndexBuffer(const vk::DeviceSize& size) const;
+    vk::raii::Buffer createStagingBuffer(const vk::DeviceSize& size) const;
+    vk::raii::Buffer createUniformBuffer(const vk::DeviceSize& size) const;
+
     void copyBuffer(const vk::raii::Buffer& source,
                     const vk::raii::Buffer& destination,
-                    const vk::DeviceSize& size) const;
+                    const vk::DeviceSize& size,
+                    const vk::DeviceSize& destinationOffset = 0) const;
     void copyBufferToImage(const vk::CommandBuffer& cmd,
                            const vk::Buffer& source,
                            const vk::Image& destination,
@@ -71,11 +77,15 @@ class GpuDevice
 
     vk::raii::DeviceMemory allocateBufferMemory(const vk::raii::Buffer& buffer,
                                                 vk::MemoryPropertyFlags properties) const;
+    vk::raii::DeviceMemory allocateDeviceBufferMemory(const vk::raii::Buffer& buffer) const;
+    vk::raii::DeviceMemory allocateStagingBufferMemory(const vk::raii::Buffer& buffer) const;
     vk::raii::DeviceMemory allocateImageMemory(const vk::raii::Image& image, vk::MemoryPropertyFlags properties) const;
 
     vk::SurfaceFormatKHR getSurfaceFormat(const vk::SurfaceKHR& surface) const;
 
     vk::Result present(const vk::PresentInfoKHR& info) const;
+
+    vk::DeviceSize calculateAlignedUboStride(size_t uboSize) const;
 
     const vk::raii::Device& device() const;
     const vk::raii::PhysicalDevice& physicalDevice() const;

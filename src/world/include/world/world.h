@@ -20,7 +20,6 @@ struct Scene;
 namespace assets
 {
 class AssetDatabase;
-struct Skybox;
 } // namespace assets
 
 namespace renderer
@@ -46,8 +45,7 @@ class World
     Entity createEntity();
     void destroyEntity(Entity entity);
 
-    void setActiveSkybox(assets::Skybox* skybox);
-    assets::Skybox* activeSkybox() const;
+    const std::optional<uint32_t>& activeSkybox() const;
 
     void update(const renderer::Camera& camera);
 
@@ -114,7 +112,7 @@ class World
   private:
     std::unordered_map<Entity, RenderComponent> renderComponents_;
     std::unordered_map<Entity, TransformComponent> transformComponents_;
-    assets::Skybox* activeSkybox_{nullptr};
+    std::optional<uint32_t> activeSkybox_;
 
   private:
     Entity nextEntity{0};

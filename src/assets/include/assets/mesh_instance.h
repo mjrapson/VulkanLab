@@ -7,11 +7,9 @@
 
 namespace assets
 {
-struct Mesh;
-
 struct MeshInstance
 {
-    Mesh* mesh;
+    uint32_t meshUid;
     glm::mat4 transform;
 };
 } // namespace assets

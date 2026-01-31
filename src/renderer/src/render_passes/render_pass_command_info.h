@@ -8,11 +8,6 @@
 #include <optional>
 #include <span>
 
-namespace assets
-{
-struct Skybox;
-}
-
 namespace renderer
 {
 struct DrawCommand;
@@ -28,7 +23,7 @@ struct RenderPassCommandInfo
     const vk::Extent2D& extent;
     const vk::raii::CommandBuffer& commandBuffer;
     const vk::raii::DescriptorSet& cameraDescriptorSet;
-    assets::Skybox* skybox{nullptr};
+    std::optional<uint32_t> skyboxUid;
     GpuResourceCache& gpuResourceCache;
     std::span<const DrawCommand> drawCommands;
 };

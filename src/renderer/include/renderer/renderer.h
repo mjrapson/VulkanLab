@@ -15,7 +15,6 @@
 namespace assets
 {
 class AssetDatabase;
-struct Skybox;
 } // namespace assets
 
 namespace renderer
@@ -44,7 +43,7 @@ class Renderer
     Renderer& operator=(Renderer&& other) = delete;
 
     void renderFrame(const renderer::Camera& camera,
-                     assets::Skybox* skybox,
+                     const std::optional<uint32_t>& skyboxUid,
                      const std::vector<DrawCommand>& drawCommands);
 
     void windowResized(int width, int height);
@@ -67,7 +66,7 @@ class Renderer
     void recordCommands(uint32_t imageIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
                         const renderer::Camera& camera,
-                        assets::Skybox* skybox,
+                        const std::optional<uint32_t>& skyboxUid,
                         const std::vector<DrawCommand>& drawCommands);
 
     void createDepthBufferImage();

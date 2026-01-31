@@ -46,9 +46,9 @@ const vk::raii::Buffer& GpuResourceCache::meshIndexBuffer() const
     return meshIndexBuffer_;
 }
 
-GpuImage& GpuResourceCache::gpuImage(assets::Image* image)
+GpuImage& GpuResourceCache::gpuImage(uint32_t handle)
 {
-    if (auto itr = gpuImages_.find(image); itr != gpuImages_.end())
+    if (auto itr = gpuImages_.find(handle); itr != gpuImages_.end())
     {
         return itr->second;
     }
@@ -56,9 +56,9 @@ GpuImage& GpuResourceCache::gpuImage(assets::Image* image)
     throw std::runtime_error("Image handle not uploaded to GPU");
 }
 
-GpuMaterial& GpuResourceCache::gpuMaterial(assets::Material* material)
+GpuMaterial& GpuResourceCache::gpuMaterial(uint32_t handle)
 {
-    if (auto itr = gpuMaterials_.find(material); itr != gpuMaterials_.end())
+    if (auto itr = gpuMaterials_.find(handle); itr != gpuMaterials_.end())
     {
         return itr->second;
     }
@@ -66,9 +66,9 @@ GpuMaterial& GpuResourceCache::gpuMaterial(assets::Material* material)
     throw std::runtime_error("Material handle not uploaded to GPU");
 }
 
-GpuMesh& GpuResourceCache::gpuMesh(assets::SubMesh* mesh)
+GpuMesh& GpuResourceCache::gpuMesh(uint32_t handle)
 {
-    if (auto itr = gpuMeshes_.find(mesh); itr != gpuMeshes_.end())
+    if (auto itr = gpuMeshes_.find(handle); itr != gpuMeshes_.end())
     {
         return itr->second;
     }
@@ -76,9 +76,9 @@ GpuMesh& GpuResourceCache::gpuMesh(assets::SubMesh* mesh)
     throw std::runtime_error("Mesh handle not uploaded to GPU");
 }
 
-GpuImage& GpuResourceCache::gpuSkyboxImage(assets::Skybox* skybox)
+GpuImage& GpuResourceCache::gpuSkyboxImage(uint32_t handle)
 {
-    if (auto itr = gpuSkyboxImages_.find(skybox); itr != gpuSkyboxImages_.end())
+    if (auto itr = gpuSkyboxImages_.find(handle); itr != gpuSkyboxImages_.end())
     {
         return itr->second;
     }
@@ -86,14 +86,14 @@ GpuImage& GpuResourceCache::gpuSkyboxImage(assets::Skybox* skybox)
     throw std::runtime_error("Skybox handle not uploaded to GPU");
 }
 
-const std::vector<vk::raii::DescriptorSet>& GpuResourceCache::materialDescriptorSet(assets::Material* material) const
+const vk::raii::DescriptorSet& GpuResourceCache::materialDescriptorSet(uint32_t handle) const
 {
-    return materialDescriptorSets_.at(material);
+    return materialDescriptorSets_.at(handle);
 }
 
-const std::vector<vk::raii::DescriptorSet>& GpuResourceCache::skyboxDescriptorSet(assets::Skybox* skybox) const
+const vk::raii::DescriptorSet& GpuResourceCache::skyboxDescriptorSet(uint32_t handle) const
 {
-    return skyboxDescriptorSets_.at(skybox);
+    return skyboxDescriptorSets_.at(handle);
 }
 
 void GpuResourceCache::createDefaultData()
@@ -150,167 +150,128 @@ void GpuResourceCache::createDefaultData()
 
 void GpuResourceCache::uploadData(const assets::AssetDatabase& db)
 {
-    auto images = std::vector<assets::Image*>{};
+    uploadImageData(db);
+    uploadMaterialData(db);
+    uploadMeshData(db);
+    uploadSkyboxImageData(db);
+}
+
+void GpuResourceCache::uploadImageData(const assets::AssetDatabase& db)
+{
     for (const auto& prefab : db.prefabs())
     {
         for (const auto& image : prefab.second->images())
         {
-            images.push_back(image.second.get());
+            const auto imageSize = image.width() * image.height() * 4; //  RGBA8
+
+            auto gpuImage = GpuImage{};
+            gpuImage.image = gpuDevice_.createImage(image.width(), image.height());
+            gpuImage.memory = gpuDevice_.allocateImageMemory(gpuImage.image, vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+            auto stagingBuffer = gpuDevice_.createStagingBuffer(imageSize);
+
+            auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
+
+            void* data = stagingMemory.mapMemory(0, imageSize);
+            std::memcpy(data, image.data().data(), imageSize);
+            stagingMemory.unmapMemory();
+
+            auto commandBuffers = gpuDevice_.createCommandBuffers(1);
+            auto& cmd = commandBuffers[0];
+            cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+
+            gpuDevice_.transitionImageLayout(*gpuImage.image,
+                                             *cmd,
+                                             vk::ImageLayout::eUndefined,
+                                             vk::ImageLayout::eTransferDstOptimal,
+                                             {}, // srcAccess
+                                             vk::AccessFlagBits2::eTransferWrite,
+                                             vk::PipelineStageFlagBits2::eTopOfPipe,
+                                             vk::PipelineStageFlagBits2::eTransfer,
+                                             vk::ImageAspectFlagBits::eColor);
+
+            gpuDevice_.copyBufferToImage(*cmd, *stagingBuffer, *gpuImage.image, image.width(), image.height());
+
+            gpuDevice_.transitionImageLayout(*gpuImage.image,
+                                             *cmd,
+                                             vk::ImageLayout::eTransferDstOptimal,
+                                             vk::ImageLayout::eShaderReadOnlyOptimal,
+                                             vk::AccessFlagBits2::eTransferWrite,
+                                             vk::AccessFlagBits2::eShaderRead,
+                                             vk::PipelineStageFlagBits2::eTransfer,
+                                             vk::PipelineStageFlagBits2::eFragmentShader,
+                                             vk::ImageAspectFlagBits::eColor);
+
+            cmd.end();
+            gpuDevice_.submitCommandBuffer(*cmd);
+
+            gpuImage.view = gpuDevice_.createImageView(gpuImage.image);
+            gpuImage.sampler = gpuDevice_.createSampler();
+
+            gpuImages_.emplace(image.uid(), std::move(gpuImage));
         }
-    }
-    uploadImageData(images);
-
-    auto materials = std::vector<assets::Material*>{};
-    for (const auto& prefab : db.prefabs())
-    {
-        for (const auto& material : prefab.second->materials())
-        {
-            materials.push_back(material.second.get());
-        }
-    }
-    uploadMaterialData(materials);
-
-    uploadMeshData(db);
-
-    uploadSkyboxImageData(db);
-}
-
-void GpuResourceCache::uploadImageData(const std::vector<assets::Image*>& images)
-{
-    for (const auto& image : images)
-    {
-        const auto imageSize = image->width * image->height * 4; //  RGBA8
-
-        auto gpuImage = GpuImage{};
-        gpuImage.image = gpuDevice_.createImage(image->width, image->height);
-        gpuImage.memory = gpuDevice_.allocateImageMemory(gpuImage.image, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-        auto stagingBuffer = gpuDevice_.createBuffer(imageSize,
-                                                     vk::BufferUsageFlagBits::eTransferSrc,
-                                                     vk::SharingMode::eExclusive);
-
-        auto stagingMemory = gpuDevice_.allocateBufferMemory(stagingBuffer,
-                                                             vk::MemoryPropertyFlagBits::eHostVisible
-                                                                 | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-        void* data = stagingMemory.mapMemory(0, imageSize);
-        std::memcpy(data, image->data.data(), imageSize);
-        stagingMemory.unmapMemory();
-
-        auto commandBuffers = gpuDevice_.createCommandBuffers(1);
-        auto& cmd = commandBuffers[0];
-        cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-
-        gpuDevice_.transitionImageLayout(*gpuImage.image,
-                                         *cmd,
-                                         vk::ImageLayout::eUndefined,
-                                         vk::ImageLayout::eTransferDstOptimal,
-                                         {}, // srcAccess
-                                         vk::AccessFlagBits2::eTransferWrite,
-                                         vk::PipelineStageFlagBits2::eTopOfPipe,
-                                         vk::PipelineStageFlagBits2::eTransfer,
-                                         vk::ImageAspectFlagBits::eColor);
-
-        gpuDevice_.copyBufferToImage(*cmd, *stagingBuffer, *gpuImage.image, image->width, image->height);
-
-        gpuDevice_.transitionImageLayout(*gpuImage.image,
-                                         *cmd,
-                                         vk::ImageLayout::eTransferDstOptimal,
-                                         vk::ImageLayout::eShaderReadOnlyOptimal,
-                                         vk::AccessFlagBits2::eTransferWrite,
-                                         vk::AccessFlagBits2::eShaderRead,
-                                         vk::PipelineStageFlagBits2::eTransfer,
-                                         vk::PipelineStageFlagBits2::eFragmentShader,
-                                         vk::ImageAspectFlagBits::eColor);
-
-        cmd.end();
-        gpuDevice_.submitCommandBuffer(*cmd);
-
-        gpuImage.view = gpuDevice_.createImageView(gpuImage.image);
-        gpuImage.sampler = gpuDevice_.createSampler();
-
-        gpuImages_.emplace(image, std::move(gpuImage));
     }
 }
 
-void GpuResourceCache::uploadMaterialData(const std::vector<assets::Material*>& materials)
+void GpuResourceCache::uploadMaterialData(const assets::AssetDatabase& db)
 {
-    if (materials.empty())
+    if (db.materialCount() == 0)
     {
         return;
     }
 
-    createMaterialDescriptorPools(static_cast<uint32_t>(materials.size()));
+    createMaterialDescriptorPools(db.materialCount());
 
-    auto layouts = std::vector<vk::DescriptorSetLayout>{static_cast<size_t>(maxFramesInFlight_),
-                                                        materialDescriptorSetLayout_};
+    const auto stride = gpuDevice_.calculateAlignedUboStride(sizeof(GpuMaterialBufferData));
 
-    auto stride = alignMemory(sizeof(GpuMaterialBufferData),
-                              gpuDevice_.physicalDevice().getProperties().limits.minUniformBufferOffsetAlignment);
-
-    for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
-    {
-        auto buffer = gpuDevice_.createBuffer(stride * materials.size(),
-                                              vk::BufferUsageFlagBits::eUniformBuffer,
-                                              vk::SharingMode::eExclusive);
-
-        auto memory = gpuDevice_.allocateBufferMemory(buffer,
-                                                      vk::MemoryPropertyFlagBits::eHostVisible
-                                                          | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-        auto mappedMemory = memory.mapMemory(0, VK_WHOLE_SIZE);
-
-        materialUboBuffers_.emplace_back(std::move(buffer));
-        materialUboBuffersMemory_.emplace_back(std::move(memory));
-        materialUboMappedMemory_.emplace_back(std::move(mappedMemory));
-    }
+    materialUboBuffer_ = gpuDevice_.createUniformBuffer(stride * db.materialCount());
+    materialUboBufferMemory_ = gpuDevice_.allocateStagingBufferMemory(materialUboBuffer_);
+    materialUboMappedMemory_ = materialUboBufferMemory_.mapMemory(0, VK_WHOLE_SIZE);
 
     auto currentOffset = uint32_t{0};
-    for (const auto& material : materials)
+    for (const auto& prefab : db.prefabs())
     {
-        auto gpuMaterial = GpuMaterial{};
-        gpuMaterial.uboOffset = currentOffset;
-        gpuMaterials_.emplace(material, std::move(gpuMaterial));
-
-        auto uboData = GpuMaterialBufferData{};
-        uboData.diffuseColor = glm::vec4{material->diffuse, 1.0f};
-        uboData.hasDiffuseTexture = material->diffuseTexture ? 1 : 0;
-
-        for (auto frameIndex = 0; frameIndex < maxFramesInFlight_; ++frameIndex)
+        for (const auto& material : prefab.second->materials())
         {
+            auto gpuMaterial = GpuMaterial{};
+            gpuMaterial.uboOffset = currentOffset;
+            gpuMaterials_.emplace(material.uid(), std::move(gpuMaterial));
 
-            auto data = materialUboMappedMemory_.at(frameIndex);
-            std::memcpy(static_cast<std::byte*>(data) + currentOffset, &uboData, sizeof(GpuMaterialBufferData));
-        }
+            auto uboData = GpuMaterialBufferData{};
+            uboData.diffuseColor = glm::vec4{material.diffuse(), 1.0f};
+            uboData.hasDiffuseTexture = material.diffuseTextureUid() ? 1 : 0;
 
-        currentOffset += static_cast<uint32_t>(stride);
+            std::memcpy(static_cast<std::byte*>(materialUboMappedMemory_) + currentOffset,
+                        &uboData,
+                        sizeof(GpuMaterialBufferData));
 
-        auto allocInfo = vk::DescriptorSetAllocateInfo{};
-        allocInfo.descriptorPool = *materialDescriptorPool_;
-        allocInfo.descriptorSetCount = maxFramesInFlight_;
-        allocInfo.pSetLayouts = layouts.data();
+            currentOffset += static_cast<uint32_t>(stride);
 
-        materialDescriptorSets_[material] = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+            auto allocInfo = vk::DescriptorSetAllocateInfo{};
+            allocInfo.descriptorPool = *materialDescriptorPool_;
+            allocInfo.descriptorSetCount = 1;
+            allocInfo.pSetLayouts = &materialDescriptorSetLayout_;
 
-        for (auto frameIndex = uint32_t{0}; frameIndex < static_cast<uint32_t>(maxFramesInFlight_); ++frameIndex)
-        {
+            auto sets = vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo};
+            materialDescriptorSets_.emplace(material.uid(), std::move(sets[0]));
+
             auto bufferInfo = vk::DescriptorBufferInfo{};
-            bufferInfo.buffer = *materialUboBuffers_.at(frameIndex);
+            bufferInfo.buffer = *materialUboBuffer_;
             bufferInfo.offset = 0;
             bufferInfo.range = stride;
 
             auto uboWrite = vk::WriteDescriptorSet{};
-            uboWrite.dstSet = *materialDescriptorSets_.at(material).at(frameIndex);
+            uboWrite.dstSet = *materialDescriptorSets_.at(material.uid());
             uboWrite.dstBinding = 0;
             uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
             uboWrite.descriptorCount = 1;
             uboWrite.pBufferInfo = &bufferInfo;
 
             auto imageInfo = vk::DescriptorImageInfo{};
-            if (material->diffuseTexture)
+            if (material.diffuseTextureUid())
             {
-                imageInfo.imageView = *gpuImage(material->diffuseTexture).view;
-                imageInfo.sampler = *gpuImage(material->diffuseTexture).sampler;
+                imageInfo.imageView = *gpuImage(material.diffuseTextureUid().value()).view;
+                imageInfo.sampler = *gpuImage(material.diffuseTextureUid().value()).sampler;
             }
             else
             {
@@ -320,7 +281,7 @@ void GpuResourceCache::uploadMaterialData(const std::vector<assets::Material*>& 
             imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
             auto textureWrite = vk::WriteDescriptorSet{};
-            textureWrite.dstSet = *materialDescriptorSets_.at(material).at(frameIndex);
+            textureWrite.dstSet = *materialDescriptorSets_.at(material.uid());
             textureWrite.dstBinding = 1;
             textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
             textureWrite.descriptorCount = 1;
@@ -334,87 +295,56 @@ void GpuResourceCache::uploadMaterialData(const std::vector<assets::Material*>& 
 
 void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
 {
-    auto totalVertices = size_t{0};
-    auto totalIndices = size_t{0};
-
-    for (const auto& [_, prefab] : db.prefabs())
-    {
-        for (const auto& mesh : prefab->meshes())
-        {
-            for (const auto& subMesh : mesh->subMeshes)
-            {
-                totalVertices += subMesh->vertices.size();
-                totalIndices += subMesh->indices.size();
-            }
-        }
-    }
+    auto totalVertices = db.vertexCount();
+    auto totalIndices = db.indexCount();
 
     const auto vertexBufferSize = sizeof(core::Vertex) * totalVertices;
-    meshVertexBuffer_ = gpuDevice_.createBuffer(vertexBufferSize,
-                                                vk::BufferUsageFlagBits::eVertexBuffer
-                                                    | vk::BufferUsageFlagBits::eTransferDst,
-                                                vk::SharingMode::eExclusive);
 
-    meshVertexBufferMemory_ = gpuDevice_.allocateBufferMemory(meshVertexBuffer_,
-                                                              vk::MemoryPropertyFlagBits::eDeviceLocal);
+    meshVertexBuffer_ = gpuDevice_.createVertexBuffer(vertexBufferSize);
+    meshVertexBufferMemory_ = gpuDevice_.allocateDeviceBufferMemory(meshVertexBuffer_);
 
-    auto vertexStagingBuffer = gpuDevice_.createBuffer(vertexBufferSize,
-                                                       vk::BufferUsageFlagBits::eTransferSrc,
-                                                       vk::SharingMode::eExclusive);
-
-    auto vertexStagingBufferMemory = gpuDevice_.allocateBufferMemory(vertexStagingBuffer,
-                                                                     vk::MemoryPropertyFlagBits::eHostVisible
-                                                                         | vk::MemoryPropertyFlagBits::eHostCoherent);
+    auto vertexStagingBuffer = gpuDevice_.createStagingBuffer(vertexBufferSize);
+    auto vertexStagingBufferMemory = gpuDevice_.allocateStagingBufferMemory(vertexStagingBuffer);
 
     const auto indexBufferSize = sizeof(uint32_t) * totalIndices;
-    meshIndexBuffer_ = gpuDevice_.createBuffer(indexBufferSize,
-                                               vk::BufferUsageFlagBits::eIndexBuffer
-                                                   | vk::BufferUsageFlagBits::eTransferDst,
-                                               vk::SharingMode::eExclusive);
+    meshIndexBuffer_ = gpuDevice_.createIndexBuffer(indexBufferSize);
+    meshIndexBufferMemory_ = gpuDevice_.allocateDeviceBufferMemory(meshIndexBuffer_);
 
-    meshIndexBufferMemory_ = gpuDevice_.allocateBufferMemory(meshIndexBuffer_,
-                                                             vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    auto indexStagingBuffer = gpuDevice_.createBuffer(indexBufferSize,
-                                                      vk::BufferUsageFlagBits::eTransferSrc,
-                                                      vk::SharingMode::eExclusive);
-
-    auto indexStagingBufferMemory = gpuDevice_.allocateBufferMemory(indexStagingBuffer,
-                                                                    vk::MemoryPropertyFlagBits::eHostVisible
-                                                                        | vk::MemoryPropertyFlagBits::eHostCoherent);
+    auto indexStagingBuffer = gpuDevice_.createStagingBuffer(indexBufferSize);
+    auto indexStagingBufferMemory = gpuDevice_.allocateStagingBufferMemory(indexStagingBuffer);
 
     void* vertexStagingMemory = vertexStagingBufferMemory.mapMemory(0, vertexBufferSize);
     void* indexStagingMemory = indexStagingBufferMemory.mapMemory(0, indexBufferSize);
 
     auto currentVertexOffset = size_t{0};
     auto currentIndexOffset = size_t{0};
-    for (const auto& [_, prefab] : db.prefabs())
+    for (const auto& prefab : db.prefabs())
     {
-        for (const auto& mesh : prefab->meshes())
+        for (const auto& mesh : prefab.second->meshes())
         {
-            for (const auto& subMesh : mesh->subMeshes)
+            for (const auto& subMesh : mesh.subMeshes())
             {
                 auto gpuMesh = GpuMesh{};
-                gpuMesh.vertexCount = static_cast<uint32_t>(subMesh->vertices.size());
-                gpuMesh.indexCount = static_cast<uint32_t>(subMesh->indices.size());
+                gpuMesh.vertexCount = static_cast<uint32_t>(subMesh.vertices.size());
+                gpuMesh.indexCount = static_cast<uint32_t>(subMesh.indices.size());
                 gpuMesh.vertexOffset = static_cast<uint32_t>(currentVertexOffset);
                 gpuMesh.indexOffset = static_cast<uint32_t>(currentIndexOffset);
 
-                const auto vertexSize = subMesh->vertices.size() * sizeof(core::Vertex);
-                const auto indexSize = subMesh->indices.size() * sizeof(uint32_t);
+                const auto vertexSize = subMesh.vertices.size() * sizeof(core::Vertex);
+                const auto indexSize = subMesh.indices.size() * sizeof(uint32_t);
 
                 std::memcpy(static_cast<std::byte*>(vertexStagingMemory) + currentVertexOffset * sizeof(core::Vertex),
-                            subMesh->vertices.data(),
+                            subMesh.vertices.data(),
                             vertexSize);
 
                 std::memcpy(static_cast<std::byte*>(indexStagingMemory) + currentIndexOffset * sizeof(uint32_t),
-                            subMesh->indices.data(),
+                            subMesh.indices.data(),
                             indexSize);
 
-                currentVertexOffset += subMesh->vertices.size();
-                currentIndexOffset += subMesh->indices.size();
+                currentVertexOffset += subMesh.vertices.size();
+                currentIndexOffset += subMesh.indices.size();
 
-                gpuMeshes_.emplace(subMesh.get(), std::move(gpuMesh));
+                gpuMeshes_.emplace(subMesh.uid, std::move(gpuMesh));
             }
         }
     }
@@ -428,29 +358,21 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
 
 void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
 {
-    createSkyboxDescriptorPools(static_cast<uint32_t>(db.skyboxes().size()));
-
-    auto layouts = std::vector<vk::DescriptorSetLayout>{static_cast<size_t>(maxFramesInFlight_),
-                                                        skyboxDescriptorSetLayout_};
+    createSkyboxDescriptorPools(db.skyboxCount());
 
     for (const auto& skybox : db.skyboxes())
     {
         // Assume all faces equal dimensions
-        const auto width = skybox.second->images[0]->width;
-        const auto height = skybox.second->images[0]->height;
+        const auto width = skybox.second->images[0]->width();
+        const auto height = skybox.second->images[0]->height();
         const auto imageSize = width * height * 4; // RGBA8
 
         auto gpuImage = GpuImage{};
         gpuImage.image = gpuDevice_.createCubemapImage(width, height);
         gpuImage.memory = gpuDevice_.allocateImageMemory(gpuImage.image, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-        auto stagingBuffer = gpuDevice_.createBuffer(imageSize * 6,
-                                                     vk::BufferUsageFlagBits::eTransferSrc,
-                                                     vk::SharingMode::eExclusive);
-
-        auto stagingMemory = gpuDevice_.allocateBufferMemory(stagingBuffer,
-                                                             vk::MemoryPropertyFlagBits::eHostVisible
-                                                                 | vk::MemoryPropertyFlagBits::eHostCoherent);
+        auto stagingBuffer = gpuDevice_.createStagingBuffer(imageSize * 6);
+        auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
 
         auto commandBuffers = gpuDevice_.createCommandBuffers(1);
         auto& cmd = commandBuffers[0];
@@ -469,7 +391,7 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
         void* data = stagingMemory.mapMemory(0, imageSize * 6);
         for (auto face = uint32_t{0}; face < 6; ++face)
         {
-            std::memcpy(data + (face * imageSize), skybox.second->images[face]->data.data(), imageSize);
+            std::memcpy(data + (face * imageSize), skybox.second->images[face]->data().data(), imageSize);
         }
         stagingMemory.unmapMemory();
         gpuDevice_.copyBufferToImage(*cmd, *stagingBuffer, *gpuImage.image, width, height, 6);
@@ -492,31 +414,28 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
 
         auto allocInfo = vk::DescriptorSetAllocateInfo{};
         allocInfo.descriptorPool = *skyboxDescriptorPool_;
-        allocInfo.descriptorSetCount = maxFramesInFlight_;
-        allocInfo.pSetLayouts = layouts.data();
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &skyboxDescriptorSetLayout_;
 
-        skyboxDescriptorSets_[skybox.second.get()] = std::move(
-            vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+        auto sets = vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo};
+        skyboxDescriptorSets_.emplace(skybox.second->uid, std::move(sets[0]));
 
-        for (auto frameIndex = uint32_t{0}; frameIndex < static_cast<uint32_t>(maxFramesInFlight_); ++frameIndex)
-        {
-            auto imageInfo = vk::DescriptorImageInfo{};
-            imageInfo.imageView = gpuImage.view;
-            imageInfo.sampler = gpuImage.sampler;
-            imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+        auto imageInfo = vk::DescriptorImageInfo{};
+        imageInfo.imageView = gpuImage.view;
+        imageInfo.sampler = gpuImage.sampler;
+        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
-            auto textureWrite = vk::WriteDescriptorSet{};
-            textureWrite.dstSet = *skyboxDescriptorSets_.at(skybox.second.get()).at(frameIndex);
-            textureWrite.dstBinding = 0;
-            textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-            textureWrite.descriptorCount = 1;
-            textureWrite.pImageInfo = &imageInfo;
+        auto textureWrite = vk::WriteDescriptorSet{};
+        textureWrite.dstSet = *skyboxDescriptorSets_.at(skybox.second->uid);
+        textureWrite.dstBinding = 0;
+        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        textureWrite.descriptorCount = 1;
+        textureWrite.pImageInfo = &imageInfo;
 
-            std::array writes{textureWrite};
-            gpuDevice_.device().updateDescriptorSets(writes, {});
-        }
+        std::array writes{textureWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
 
-        gpuSkyboxImages_.emplace(skybox.second.get(), std::move(gpuImage));
+        gpuSkyboxImages_.emplace(skybox.second->uid, std::move(gpuImage));
     }
 }
 

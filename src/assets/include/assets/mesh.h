@@ -6,21 +6,60 @@
 #include <core/vertex.h>
 
 #include <memory>
+#include <optional>
+#include <ranges>
 #include <vector>
 
 namespace assets
 {
-struct Material;
-
 struct SubMesh
 {
+    SubMesh()
+        : uid{nextUid()}
+    {
+    }
+
+    uint32_t uid;
     std::vector<core::Vertex> vertices;
     std::vector<uint32_t> indices;
-    Material* material{nullptr};
+    uint32_t materialUid;
+
+  private:
+    static uint32_t nextUid()
+    {
+        static uint32_t nextUid = 0;
+        return nextUid++;
+    }
 };
 
-struct Mesh
+class Mesh
 {
-    std::vector<std::unique_ptr<SubMesh>> subMeshes;
+  public:
+    Mesh();
+
+    uint32_t uid() const;
+
+    void append(std::unique_ptr<SubMesh> subMesh);
+
+    size_t subMeshCount() const;
+    size_t vertexCount() const;
+    size_t indexCount() const;
+
+    auto subMeshes() const
+    {
+        return subMeshes_
+               | std::views::transform(
+                   [](const auto& ptr)
+                   {
+                       return *ptr;
+                   });
+    }
+
+  private:
+    static uint32_t nextUid();
+
+  private:
+    uint32_t uid_;
+    std::vector<std::unique_ptr<SubMesh>> subMeshes_;
 };
 } // namespace assets

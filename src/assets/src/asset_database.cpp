@@ -15,6 +15,55 @@ void AssetDatabase::addSkybox(const std::string& name, std::unique_ptr<Skybox> s
     skyboxes_[name] = std::move(skybox);
 }
 
+uint32_t AssetDatabase::vertexCount() const
+{
+    auto count = size_t{0};
+    for (const auto& prefabItr : prefabs_)
+    {
+        count += prefabItr.second->vertexCount();
+    }
+
+    return static_cast<uint32_t>(count);
+}
+
+uint32_t AssetDatabase::indexCount() const
+{
+    auto count = size_t{0};
+    for (const auto& prefabItr : prefabs_)
+    {
+        count += prefabItr.second->indexCount();
+    }
+
+    return static_cast<uint32_t>(count);
+}
+
+uint32_t AssetDatabase::materialCount() const
+{
+    auto count = size_t{0};
+    for (const auto& prefabItr : prefabs_)
+    {
+        count += prefabItr.second->materials().size();
+    }
+
+    return static_cast<uint32_t>(count);
+}
+
+uint32_t AssetDatabase::imageCount() const
+{
+    auto count = size_t{0};
+    for (const auto& prefabItr : prefabs_)
+    {
+        count += prefabItr.second->images().size();
+    }
+
+    return static_cast<uint32_t>(count);
+}
+
+uint32_t AssetDatabase::skyboxCount() const
+{
+    return static_cast<uint32_t>(skyboxes_.size());
+}
+
 const AssetDatabase::AssetStorage<Prefab>& AssetDatabase::prefabs() const
 {
     return prefabs_;
