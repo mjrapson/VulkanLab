@@ -29,7 +29,6 @@ class GpuResourceCache
   public:
     GpuResourceCache(const assets::AssetDatabase& db,
                      const GpuDevice& gpuDevice,
-                     int maxFramesInFlight,
                      const vk::DescriptorSetLayout& materialDescriptorSetLayout,
                      const vk::DescriptorSetLayout& skyboxDescriptorSetLayout);
 
@@ -66,7 +65,6 @@ class GpuResourceCache
 
   private:
     const GpuDevice& gpuDevice_;
-    const int maxFramesInFlight_;
     const vk::DescriptorSetLayout& materialDescriptorSetLayout_;
     const vk::DescriptorSetLayout& skyboxDescriptorSetLayout_;
     GpuImage emptyImage_;

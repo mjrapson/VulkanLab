@@ -23,11 +23,9 @@ vk::DeviceSize alignMemory(vk::DeviceSize data, vk::DeviceSize alignment)
 
 GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db,
                                    const GpuDevice& gpuDevice,
-                                   int maxFramesInFlight,
                                    const vk::DescriptorSetLayout& materialDescriptorSetLayout,
                                    const vk::DescriptorSetLayout& skyboxDescriptorSetLayout)
     : gpuDevice_{gpuDevice},
-      maxFramesInFlight_{maxFramesInFlight},
       materialDescriptorSetLayout_{materialDescriptorSetLayout},
       skyboxDescriptorSetLayout_{skyboxDescriptorSetLayout}
 {
@@ -443,17 +441,17 @@ void GpuResourceCache::createMaterialDescriptorPools(uint32_t materialCount)
 {
     auto materialUboPoolSize = vk::DescriptorPoolSize{};
     materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
-    materialUboPoolSize.descriptorCount = maxFramesInFlight_;
+    materialUboPoolSize.descriptorCount = 1;
 
     auto texturePoolSize = vk::DescriptorPoolSize{};
     texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
-    texturePoolSize.descriptorCount = maxFramesInFlight_;
+    texturePoolSize.descriptorCount = 1;
 
     auto materialPoolSizes = std::array{materialUboPoolSize, texturePoolSize};
 
     auto materialPoolInfo = vk::DescriptorPoolCreateInfo{};
     materialPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    materialPoolInfo.maxSets = maxFramesInFlight_ * materialCount;
+    materialPoolInfo.maxSets = materialCount;
     materialPoolInfo.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size());
     materialPoolInfo.pPoolSizes = materialPoolSizes.data();
 
@@ -464,15 +462,13 @@ void GpuResourceCache::createSkyboxDescriptorPools(uint32_t skyboxCount)
 {
     auto texturePoolSize = vk::DescriptorPoolSize{};
     texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
-    texturePoolSize.descriptorCount = maxFramesInFlight_;
-
-    auto poolSizes = std::array{texturePoolSize};
+    texturePoolSize.descriptorCount = 1;
 
     auto poolInfo = vk::DescriptorPoolCreateInfo{};
     poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    poolInfo.maxSets = maxFramesInFlight_ * skyboxCount;
-    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-    poolInfo.pPoolSizes = poolSizes.data();
+    poolInfo.maxSets = skyboxCount;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &texturePoolSize;
 
     skyboxDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), poolInfo};
 }

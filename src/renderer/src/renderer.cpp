@@ -169,11 +169,8 @@ void Renderer::windowResized(int width, int height)
 
 void Renderer::setResources(const assets::AssetDatabase& db)
 {
-    gpuResources_ = std::make_unique<GpuResourceCache>(db,
-                                                       gpuDevice_,
-                                                       maxFramesInFlight,
-                                                       materialDescriptorSetLayout_,
-                                                       skyboxDescriptorSetLayout_);
+    gpuResources_ =
+        std::make_unique<GpuResourceCache>(db, gpuDevice_, materialDescriptorSetLayout_, skyboxDescriptorSetLayout_);
 }
 
 void Renderer::createSwapchain()
