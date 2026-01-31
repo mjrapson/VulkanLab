@@ -42,9 +42,10 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
+    void queueMeshDraw(uint32_t submeshUid, uint32_t materialUid, const glm::mat4& transform);
+
     void renderFrame(const renderer::Camera& camera,
-                     const std::optional<uint32_t>& skyboxUid,
-                     const std::vector<DrawCommand>& drawCommands);
+                     const std::optional<uint32_t>& skyboxUid);
 
     void windowResized(int width, int height);
 
@@ -66,8 +67,7 @@ class Renderer
     void recordCommands(uint32_t imageIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
                         const renderer::Camera& camera,
-                        const std::optional<uint32_t>& skyboxUid,
-                        const std::vector<DrawCommand>& drawCommands);
+                        const std::optional<uint32_t>& skyboxUid);
 
     void createDepthBufferImage();
     void createRenderPasses();
@@ -107,6 +107,8 @@ class Renderer
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
 
     std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
+
+    std::vector<DrawCommand> drawCommands_;
 
     std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};
     std::unique_ptr<GeometryPass> geometryPass_{nullptr};

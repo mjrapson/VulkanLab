@@ -84,9 +84,17 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
 Renderer::~Renderer() = default;
 
-void Renderer::renderFrame(const renderer::Camera& camera,
-                           const std::optional<uint32_t>& skyboxUid,
-                           const std::vector<DrawCommand>& drawCommands)
+void Renderer::queueMeshDraw(uint32_t submeshUid, uint32_t materialUid, const glm::mat4& transform)
+{
+    auto drawCommand = DrawCommand{};
+    drawCommand.subMeshUid = submeshUid;
+    drawCommand.materialUid = materialUid;
+    drawCommand.transform = transform;
+
+    drawCommands_.push_back(drawCommand);
+}
+
+void Renderer::renderFrame(const renderer::Camera& camera, const std::optional<uint32_t>& skyboxUid)
 {
     if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
         != vk::Result::eSuccess)
@@ -112,7 +120,8 @@ void Renderer::renderFrame(const renderer::Camera& camera,
     auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
     commandBuffer.reset();
 
-    recordCommands(imageIndex, commandBuffer, camera, skyboxUid, drawCommands);
+    recordCommands(imageIndex, commandBuffer, camera, skyboxUid);
+    drawCommands_.clear();
 
     auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
     auto signalSemaphores = std::array{*renderFinishedSemaphores_.at(imageIndex)};
@@ -360,8 +369,7 @@ void Renderer::recreateSwapchain()
 void Renderer::recordCommands(uint32_t imageIndex,
                               const vk::raii::CommandBuffer& commandBuffer,
                               const renderer::Camera& camera,
-                              const std::optional<uint32_t>& skyboxUid,
-                              const std::vector<DrawCommand>& drawCommands)
+                              const std::optional<uint32_t>& skyboxUid)
 {
     commandBuffer.begin({});
 
@@ -382,7 +390,7 @@ void Renderer::recordCommands(uint32_t imageIndex,
         .cameraDescriptorSet = cameraDescriptorSets_.at(currentFrameIndex_),
         .skyboxUid = skyboxUid,
         .gpuResourceCache = *gpuResources_,
-        .drawCommands = drawCommands,
+        .drawCommands = drawCommands_,
     };
 
     gpuDevice_.transitionImageLayout(swapchainImages_[imageIndex],

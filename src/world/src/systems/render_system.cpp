@@ -23,7 +23,6 @@ RenderSystem::RenderSystem(renderer::Renderer& renderer, World& world)
 
 void RenderSystem::update(const renderer::Camera& camera)
 {
-    auto commands = std::vector<renderer::DrawCommand>{};
     for (auto& [entity, renderComponent] : world_.getAllComponents<RenderComponent>())
     {
         auto prefab = renderComponent.prefab;
@@ -58,15 +57,11 @@ void RenderSystem::update(const renderer::Camera& camera)
 
             for (const auto& subMesh : mesh->subMeshes())
             {
-                auto drawCommand = renderer::DrawCommand{};
-                drawCommand.subMeshUid = subMesh.uid;
-                drawCommand.materialUid = subMesh.materialUid;
-                drawCommand.transform = transformMatrix * instance.transform;
-                commands.push_back(drawCommand);
+                renderer_.queueMeshDraw(subMesh.uid, subMesh.materialUid, transformMatrix * instance.transform);
             }
         }
     }
 
-    renderer_.renderFrame(camera, world_.activeSkybox(), commands);
+    renderer_.renderFrame(camera, world_.activeSkybox());
 }
 } // namespace world
