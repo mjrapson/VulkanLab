@@ -5,6 +5,7 @@ target_sources(Renderer
         include/renderer/camera.h
         include/renderer/gpu_device.h
         include/renderer/renderer.h
+        include/renderer/swapchain.h
         include/renderer/vertex_layout.h
     PRIVATE
         src/private/gpu_image.h

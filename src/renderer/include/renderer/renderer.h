@@ -4,6 +4,7 @@
 #pragma once
 
 #include "renderer/draw_command.h"
+#include "renderer/swapchain.h"
 
 #include <assets/handles.h>
 
@@ -54,8 +55,6 @@ class Renderer
 
   private:
     void createSwapchain();
-    void createSwapchainImageViews();
-
     void createCommandBuffers();
     void createSyncObjects();
     void createCameraBuffers();
@@ -77,16 +76,13 @@ class Renderer
     bool windowResized_{false};
     bool windowMinimized_{false};
 
-    vk::raii::SwapchainKHR swapchain_{nullptr};
-    vk::Extent2D swapchainExtent_;
-    vk::SurfaceFormatKHR surfaceFormat_;
-    std::vector<vk::Image> swapchainImages_;
-    std::vector<vk::raii::ImageView> swapchainImageViews_;
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
     std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
+
+    Swapchain swapchain_;
 
     std::vector<vk::raii::Buffer> cameraUboBuffers_;
     std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;

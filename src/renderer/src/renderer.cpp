@@ -27,29 +27,6 @@ struct CameraBufferObject
 
 constexpr auto maxFramesInFlight = 2;
 
-vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth, int windowHeight)
-{
-    if (capabilities.currentExtent.width != 0xFFFFFFFF)
-    {
-        return capabilities.currentExtent;
-    }
-
-    return {std::clamp<uint32_t>(windowWidth, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-            std::clamp<uint32_t>(windowHeight, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)};
-}
-
-uint32_t getSurfaceMinImageCount(const vk::SurfaceCapabilitiesKHR& surfaceCapabilities)
-{
-    const auto desiredImageCount = surfaceCapabilities.minImageCount + 1;
-
-    if (surfaceCapabilities.maxImageCount == 0) // no maximum
-    {
-        return desiredImageCount;
-    }
-
-    return std::min(desiredImageCount, surfaceCapabilities.maxImageCount);
-}
-
 Renderer::Renderer(const vk::raii::Instance& instance,
                    const vk::raii::SurfaceKHR& surface,
                    const GpuDevice& gpuDevice,
@@ -63,9 +40,6 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 {
     spdlog::info("Creating swapchain");
     createSwapchain();
-
-    spdlog::info("Creating swapchain image views");
-    createSwapchainImageViews();
 
     createCameraBuffers();
 
@@ -106,9 +80,10 @@ void Renderer::renderFrame(const renderer::Camera& camera, const std::optional<a
 
     try
     {
-        std::tie(result, imageIndex) = swapchain_.acquireNextImage(UINT64_MAX,
-                                                                   *presentCompleteSemaphores_.at(currentFrameIndex_),
-                                                                   nullptr);
+        std::tie(result,
+                 imageIndex) = swapchain_.swapchain.acquireNextImage(UINT64_MAX,
+                                                                     *presentCompleteSemaphores_.at(currentFrameIndex_),
+                                                                     nullptr);
     }
     catch (const vk::OutOfDateKHRError&)
     {
@@ -136,7 +111,7 @@ void Renderer::renderFrame(const renderer::Camera& camera, const std::optional<a
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = &*renderFinishedSemaphores_.at(imageIndex);
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &*swapchain_;
+    presentInfo.pSwapchains = &*swapchain_.swapchain;
     presentInfo.pImageIndices = &imageIndex;
 
     try
@@ -185,47 +160,7 @@ void Renderer::setResources(const assets::AssetDatabase& db)
 
 void Renderer::createSwapchain()
 {
-    const auto surfaceCapabilities = gpuDevice_.physicalDevice().getSurfaceCapabilitiesKHR(*surface_);
-    swapchainExtent_ = getSwapchainExtent(surfaceCapabilities, windowWidth_, windowHeight_);
-    surfaceFormat_ = gpuDevice_.getSurfaceFormat(*surface_);
-
-    auto swapChainCreateInfo = vk::SwapchainCreateInfoKHR{};
-    swapChainCreateInfo.surface = *surface_;
-    swapChainCreateInfo.minImageCount = getSurfaceMinImageCount(surfaceCapabilities);
-    swapChainCreateInfo.imageFormat = surfaceFormat_.format;
-    swapChainCreateInfo.imageColorSpace = surfaceFormat_.colorSpace;
-    swapChainCreateInfo.imageExtent = swapchainExtent_, swapChainCreateInfo.imageArrayLayers = 1;
-    swapChainCreateInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
-    swapChainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive;
-    swapChainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
-    swapChainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
-    swapChainCreateInfo.presentMode = vk::PresentModeKHR::eFifo, swapChainCreateInfo.clipped = true;
-
-    swapchain_ = vk::raii::SwapchainKHR(gpuDevice_.device(), swapChainCreateInfo);
-    swapchainImages_ = swapchain_.getImages();
-}
-
-void Renderer::createSwapchainImageViews()
-{
-    swapchainImageViews_.clear();
-
-    auto subresourceRange = vk::ImageSubresourceRange{};
-    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = 1;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = 1;
-
-    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
-    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
-    imageViewCreateInfo.format = surfaceFormat_.format;
-    imageViewCreateInfo.subresourceRange = subresourceRange;
-
-    for (const auto& image : swapchainImages_)
-    {
-        imageViewCreateInfo.image = image;
-        swapchainImageViews_.emplace_back(gpuDevice_.device(), imageViewCreateInfo);
-    }
+    swapchain_ = gpuDevice_.createSwapchain(surface_, windowWidth_, windowHeight_);
 }
 
 void Renderer::createCommandBuffers()
@@ -235,7 +170,7 @@ void Renderer::createCommandBuffers()
 
 void Renderer::createSyncObjects()
 {
-    for ([[maybe_unused]] auto _ : std::views::repeat(0, swapchainImages_.size()))
+    for ([[maybe_unused]] auto _ : std::views::repeat(0, swapchain_.images.size()))
     {
         renderFinishedSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
     }
@@ -274,14 +209,11 @@ void Renderer::recreateSwapchain()
 
     gpuDevice_.device().waitIdle();
 
-    swapchain_ = nullptr;
-
+    swapchain_ = Swapchain{};
     createSwapchain();
-    swapchainImageViews_.clear();
-    createSwapchainImageViews();
 
-    skyboxPass_->resize(swapchainExtent_);
-    geometryPass_->resize(swapchainExtent_);
+    skyboxPass_->resize(swapchain_.extent);
+    geometryPass_->resize(swapchain_.extent);
 }
 
 void Renderer::recordCommands(uint32_t imageIndex,
@@ -305,7 +237,7 @@ void Renderer::recordCommands(uint32_t imageIndex,
         .drawCommands = drawCommands_,
     };
 
-    gpuDevice_.transitionImageLayout(swapchainImages_[imageIndex],
+    gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
                                      commandBuffer,
                                      vk::ImageLayout::eUndefined,
                                      vk::ImageLayout::eColorAttachmentOptimal,
@@ -315,10 +247,10 @@ void Renderer::recordCommands(uint32_t imageIndex,
                                      vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
                                      vk::ImageAspectFlagBits::eColor);
 
-    skyboxPass_->recordCommands(passInfo, swapchainImageViews_[imageIndex]);
-    geometryPass_->recordCommands(passInfo, swapchainImageViews_[imageIndex]);
+    skyboxPass_->recordCommands(passInfo, swapchain_.views[imageIndex]);
+    geometryPass_->recordCommands(passInfo, swapchain_.views[imageIndex]);
 
-    gpuDevice_.transitionImageLayout(swapchainImages_[imageIndex],
+    gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
                                      commandBuffer,
                                      vk::ImageLayout::eColorAttachmentOptimal,
                                      vk::ImageLayout::ePresentSrcKHR,
@@ -334,9 +266,9 @@ void Renderer::recordCommands(uint32_t imageIndex,
 void Renderer::createRenderPasses()
 {
     skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_);
-    skyboxPass_->initialize(swapchainExtent_, surfaceFormat_.format, maxFramesInFlight, cameraUboBuffers_);
+    skyboxPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight, cameraUboBuffers_);
 
     geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_);
-    geometryPass_->initialize(swapchainExtent_, surfaceFormat_.format, maxFramesInFlight, cameraUboBuffers_);
+    geometryPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight, cameraUboBuffers_);
 }
 } // namespace renderer

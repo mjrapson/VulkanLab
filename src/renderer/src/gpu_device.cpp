@@ -92,6 +92,29 @@ uint32_t findMemoryType(const vk::raii::PhysicalDevice& device, uint32_t typeFil
     throw std::runtime_error("No suitable memory type found");
 }
 
+vk::Extent2D getSwapchainExtent(const vk::SurfaceCapabilitiesKHR& capabilities, int windowWidth, int windowHeight)
+{
+    if (capabilities.currentExtent.width != 0xFFFFFFFF)
+    {
+        return capabilities.currentExtent;
+    }
+
+    return {std::clamp<uint32_t>(windowWidth, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+            std::clamp<uint32_t>(windowHeight, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)};
+}
+
+uint32_t getSurfaceMinImageCount(const vk::SurfaceCapabilitiesKHR& surfaceCapabilities)
+{
+    const auto desiredImageCount = surfaceCapabilities.minImageCount + 1;
+
+    if (surfaceCapabilities.maxImageCount == 0) // no maximum
+    {
+        return desiredImageCount;
+    }
+
+    return std::min(desiredImageCount, surfaceCapabilities.maxImageCount);
+}
+
 GpuDevice::GpuDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface)
 {
     spdlog::info("Finding physical GPU device");
@@ -102,6 +125,51 @@ GpuDevice::GpuDevice(const vk::raii::Instance& instance, const vk::raii::Surface
 
     spdlog::info("Creating command pool");
     createCommandPool();
+}
+
+Swapchain GpuDevice::createSwapchain(const vk::raii::SurfaceKHR& surface, uint32_t width, uint32_t height) const
+{
+    auto swapchain = Swapchain{};
+
+    const auto surfaceCapabilities = physicalDevice_.getSurfaceCapabilitiesKHR(*surface);
+    swapchain.extent = getSwapchainExtent(surfaceCapabilities, width, height);
+    swapchain.surfaceFormat = getSurfaceFormat(*surface);
+
+    auto swapChainCreateInfo = vk::SwapchainCreateInfoKHR{};
+    swapChainCreateInfo.surface = *surface;
+    swapChainCreateInfo.minImageCount = getSurfaceMinImageCount(surfaceCapabilities);
+    swapChainCreateInfo.imageFormat = swapchain.surfaceFormat.format;
+    swapChainCreateInfo.imageColorSpace = swapchain.surfaceFormat.colorSpace;
+    swapChainCreateInfo.imageExtent = swapchain.extent;
+    swapChainCreateInfo.imageArrayLayers = 1;
+    swapChainCreateInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
+    swapChainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive;
+    swapChainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+    swapChainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+    swapChainCreateInfo.presentMode = vk::PresentModeKHR::eFifo, swapChainCreateInfo.clipped = true;
+
+    swapchain.swapchain = vk::raii::SwapchainKHR(device_, swapChainCreateInfo);
+    swapchain.images = swapchain.swapchain.getImages();
+
+    auto subresourceRange = vk::ImageSubresourceRange{};
+    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = 1;
+
+    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
+    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
+    imageViewCreateInfo.format = swapchain.surfaceFormat.format;
+    imageViewCreateInfo.subresourceRange = subresourceRange;
+
+    for (const auto& image : swapchain.images)
+    {
+        imageViewCreateInfo.image = image;
+        swapchain.views.emplace_back(device_, imageViewCreateInfo);
+    }
+
+    return swapchain;
 }
 
 vk::raii::CommandBuffers GpuDevice::createCommandBuffers(uint32_t count) const
@@ -470,14 +538,14 @@ vk::DeviceSize GpuDevice::calculateAlignedUboStride(size_t uboSize) const
     return uboSize + (alignment - (uboSize % alignment));
 }
 
+bool GpuDevice::exceedsPushConstantLimit(size_t size) const
+{
+    return size > physicalDevice_.getProperties().limits.maxPushConstantsSize;
+}
+
 const vk::raii::Device& GpuDevice::device() const
 {
     return device_;
-}
-
-const vk::raii::PhysicalDevice& GpuDevice::physicalDevice() const
-{
-    return physicalDevice_;
 }
 
 void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)

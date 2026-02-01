@@ -270,7 +270,7 @@ void GeometryPass::createPipeline(const vk::Format& surfaceFormat)
 
     auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout_, *materialDescriptorSetLayout_};
 
-    if (gpuDevice_.physicalDevice().getProperties().limits.maxPushConstantsSize < sizeof(PushConstants))
+    if (gpuDevice_.exceedsPushConstantLimit(sizeof(PushConstants)))
     {
         throw std::runtime_error{"Requested push constant size exceeds device limits"};
     }

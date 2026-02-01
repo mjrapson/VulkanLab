@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "renderer/swapchain.h"
+
 #include <vulkan/vulkan_raii.hpp>
 
 #include <filesystem>
@@ -20,6 +22,8 @@ class GpuDevice
 
     GpuDevice(GpuDevice&& other) = delete;
     GpuDevice& operator=(GpuDevice&& other) = delete;
+
+    Swapchain createSwapchain(const vk::raii::SurfaceKHR& surface, uint32_t width, uint32_t height) const;
 
     vk::raii::CommandBuffers createCommandBuffers(uint32_t count) const;
     void submitCommandBuffer(const vk::CommandBuffer& cmd) const;
@@ -87,8 +91,9 @@ class GpuDevice
 
     vk::DeviceSize calculateAlignedUboStride(size_t uboSize) const;
 
+    bool exceedsPushConstantLimit(size_t size) const;
+
     const vk::raii::Device& device() const;
-    const vk::raii::PhysicalDevice& physicalDevice() const;
 
   private:
     void pickPhysicalDevice(const vk::raii::Instance& instance);
