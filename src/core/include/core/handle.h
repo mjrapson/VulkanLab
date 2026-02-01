@@ -18,3 +18,15 @@ struct Handle
     }
 };
 } // namespace core
+
+namespace std
+{
+template <typename HandleType>
+struct hash<core::Handle<HandleType>>
+{
+    std::size_t operator()(const core::Handle<HandleType>& handle) const noexcept
+    {
+        return std::hash<uint32_t>{}(handle.uid);
+    }
+};
+} // namespace std

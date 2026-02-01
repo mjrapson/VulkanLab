@@ -26,7 +26,7 @@ class Prefab
     uint32_t vertexCount() const;
     uint32_t indexCount() const;
 
-    Mesh* mesh(uint32_t handle) const;
+    Mesh* mesh(MeshHandle handle) const;
 
     auto materials() const
     {
@@ -65,7 +65,7 @@ class Prefab
 
   private:
     std::unordered_map<uint32_t, std::unique_ptr<Material>> materials_;
-    std::unordered_map<uint32_t, std::unique_ptr<Mesh>> meshes_;
+    std::unordered_map<MeshHandle, std::unique_ptr<Mesh>> meshes_;
     std::unordered_map<uint32_t, std::unique_ptr<Image>> images_;
     std::vector<MeshInstance> meshInstances_;
 };

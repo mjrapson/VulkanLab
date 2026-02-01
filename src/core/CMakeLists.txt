@@ -3,6 +3,7 @@ add_library(Core STATIC)
 target_sources(Core
     PUBLIC
         include/core/file_system.h
+        include/core/handle.h
         include/core/input_handler.h
         include/core/vertex.h
     PRIVATE

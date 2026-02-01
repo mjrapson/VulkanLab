@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "assets/handles.h"
+
 #include <core/vertex.h>
 
 #include <memory>
@@ -37,7 +39,7 @@ class Mesh
   public:
     Mesh();
 
-    uint32_t uid() const;
+    MeshHandle handle() const;
 
     void append(std::unique_ptr<SubMesh> subMesh);
 
@@ -59,7 +61,7 @@ class Mesh
     static uint32_t nextUid();
 
   private:
-    uint32_t uid_;
+    MeshHandle handle_;
     std::vector<std::unique_ptr<SubMesh>> subMeshes_;
 };
 } // namespace assets

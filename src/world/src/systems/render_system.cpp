@@ -49,7 +49,7 @@ void RenderSystem::update(const renderer::Camera& camera)
         for (const auto& instance : prefab->meshInstances())
         {
 
-            auto mesh = prefab->mesh(instance.meshUid);
+            auto mesh = prefab->mesh(instance.meshHandle);
             if (!mesh)
             {
                 continue;

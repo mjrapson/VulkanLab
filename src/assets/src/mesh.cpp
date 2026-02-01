@@ -8,13 +8,13 @@
 namespace assets
 {
 Mesh::Mesh()
-    : uid_{nextUid()}
+    : handle_{nextUid()}
 {
 }
 
-uint32_t Mesh::uid() const
+MeshHandle Mesh::handle() const
 {
-    return uid_;
+    return handle_;
 }
 
 void Mesh::append(std::unique_ptr<SubMesh> subMesh)

@@ -12,6 +12,7 @@ target_sources(Assets
     PUBLIC
         include/assets/asset_database.h
         include/assets/gltf_loader.h
+        include/assets/handles.h
         include/assets/image.h
         include/assets/image_loader.h
         include/assets/material.h

@@ -22,7 +22,7 @@ void Prefab::addMesh(std::unique_ptr<Mesh> mesh)
         return;
     }
 
-    meshes_[mesh->uid()] = std::move(mesh);
+    meshes_[mesh->handle()] = std::move(mesh);
 }
 
 void Prefab::addImage(std::unique_ptr<Image> image)
@@ -60,7 +60,7 @@ uint32_t Prefab::indexCount() const
                                                         }));
 }
 
-Mesh* Prefab::mesh(uint32_t handle) const
+Mesh* Prefab::mesh(MeshHandle handle) const
 {
     return meshes_.at(handle).get();
 }

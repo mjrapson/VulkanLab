@@ -115,7 +115,7 @@ void parseNode(int index,
                tinygltf::Model& model,
                const glm::mat4& parentTransform,
                Prefab& prefab,
-               const std::vector<uint32_t>& meshHandles)
+               const std::vector<MeshHandle>& meshHandles)
 {
     const auto& node = model.nodes[index];
 
@@ -152,7 +152,7 @@ void parseNode(int index,
     if (node.mesh >= 0)
     {
         auto meshInstance = MeshInstance{};
-        meshInstance.meshUid = meshHandles.at(node.mesh);
+        meshInstance.meshHandle = meshHandles.at(node.mesh);
         meshInstance.transform = nodeToPrefab;
         prefab.addMeshInstance(std::move(meshInstance));
     }
@@ -195,7 +195,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
 
     auto imageHandles = std::unordered_map<std::string, uint32_t>{};
     auto materialHandles = std::unordered_map<std::string, uint32_t>{};
-    auto meshHandles = std::vector<uint32_t>{};
+    auto meshHandles = std::vector<MeshHandle>{};
 
     auto prefab = std::make_unique<Prefab>();
 
@@ -225,7 +225,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
     for (auto& gltfMesh : model.meshes)
     {
         auto mesh = std::make_unique<Mesh>();
-        meshHandles.push_back(mesh->uid());
+        meshHandles.push_back(mesh->handle());
 
         for (auto& primitive : gltfMesh.primitives)
         {

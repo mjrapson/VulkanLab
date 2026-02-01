@@ -3,13 +3,15 @@
 
 #pragma once
 
+#include "assets/handles.h"
+
 #include <glm/glm.hpp>
 
 namespace assets
 {
 struct MeshInstance
 {
-    uint32_t meshUid;
+    MeshHandle meshHandle;
     glm::mat4 transform;
 };
 } // namespace assets
