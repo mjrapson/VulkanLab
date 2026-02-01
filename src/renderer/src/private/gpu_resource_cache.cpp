@@ -217,7 +217,7 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetDatabase& db)
 
     materialUboBuffer_ = gpuDevice_.createUniformBuffer(stride * db.materialCount());
     materialUboBufferMemory_ = gpuDevice_.allocateStagingBufferMemory(materialUboBuffer_);
-    materialUboMappedMemory_ = materialUboBufferMemory_.mapMemory(0, VK_WHOLE_SIZE);
+    auto mappedMemory = materialUboBufferMemory_.mapMemory(0, VK_WHOLE_SIZE);
 
     auto currentOffset = uint32_t{0};
     for (const auto& prefab : db.prefabs())
@@ -233,13 +233,13 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetDatabase& db)
             uboData.diffuseColor = glm::vec4{material.diffuse(), 1.0f};
             uboData.hasDiffuseTexture = material.diffuseTextureUid() ? 1 : 0;
 
-            std::memcpy(static_cast<std::byte*>(materialUboMappedMemory_) + currentOffset,
-                        &uboData,
-                        sizeof(GpuMaterialBufferData));
+            std::memcpy(static_cast<std::byte*>(mappedMemory) + currentOffset, &uboData, sizeof(GpuMaterialBufferData));
 
             currentOffset += static_cast<uint32_t>(stride);
         }
     }
+
+    materialUboBufferMemory_.unmapMemory();
 }
 
 void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)

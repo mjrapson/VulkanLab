@@ -65,7 +65,6 @@ class GpuResourceCache
 
     vk::raii::Buffer materialUboBuffer_{nullptr};
     vk::raii::DeviceMemory materialUboBufferMemory_{nullptr};
-    void* materialUboMappedMemory_{nullptr};
 
     std::unordered_map<uint32_t, GpuImage> gpuImages_;
     std::unordered_map<uint32_t, GpuMaterial> gpuMaterials_;
