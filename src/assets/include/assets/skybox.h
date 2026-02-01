@@ -3,27 +3,33 @@
 
 #pragma once
 
+#include "assets/handles.h"
+
+#include <array>
 #include <memory>
 
 namespace assets
 {
 struct Image;
 
-struct Skybox
+class Skybox
 {
-    Skybox()
-        : uid{nextUid()}
-    {
-    }
+  public:
+    Skybox();
 
-    uint32_t uid;
-    std::array<std::unique_ptr<Image>, 6> images;
+    uint32_t uid() const;
+
+    uint32_t width() const;
+    uint32_t height() const;
+    uint32_t faceCount() const;
+
+    void setImage(int face, std::unique_ptr<Image> image);
+    Image* imageAt(int face) const;
+
+    static uint32_t nextUid();
 
   private:
-    static uint32_t nextUid()
-    {
-        static uint32_t nextUid = 0;
-        return nextUid++;
-    }
+    uint32_t uid_;
+    std::array<std::unique_ptr<Image>, 6> images_;
 };
 } // namespace assets

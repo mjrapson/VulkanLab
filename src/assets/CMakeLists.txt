@@ -9,6 +9,7 @@ target_sources(Assets
         src/material.cpp
         src/mesh.cpp
         src/prefab.cpp
+        src/skybox.cpp
     PUBLIC
         include/assets/asset_database.h
         include/assets/gltf_loader.h

@@ -33,7 +33,7 @@ World::World(const scene::Scene& scene, const assets::AssetDatabase& assetDataba
             transformComponent.scale = sceneEntity.transformComponent->scale;
         }
 
-        activeSkybox_ = assetDatabase.skyboxes().at(scene.camera.skybox)->uid;
+        activeSkybox_ = assetDatabase.skyboxes().at(scene.camera.skybox)->uid();
     }
 }
 
