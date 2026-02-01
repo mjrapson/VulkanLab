@@ -54,7 +54,7 @@ const GpuMaterial& GpuResourceCache::gpuMaterial(assets::MaterialHandle handle) 
     throw std::runtime_error("Material handle not uploaded to GPU");
 }
 
-const GpuMesh& GpuResourceCache::gpuMesh(uint32_t handle) const
+const GpuMesh& GpuResourceCache::gpuMesh(assets::SubMeshHandle handle) const
 {
     if (auto itr = gpuMeshes_.find(handle); itr != gpuMeshes_.end())
     {
@@ -293,7 +293,7 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
                 currentVertexOffset += subMesh.vertices.size();
                 currentIndexOffset += subMesh.indices.size();
 
-                gpuMeshes_.emplace(subMesh.uid, std::move(gpuMesh));
+                gpuMeshes_.emplace(subMesh.handle, std::move(gpuMesh));
             }
         }
     }

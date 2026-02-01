@@ -42,7 +42,9 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
-    void queueMeshDraw(uint32_t submeshUid, assets::MaterialHandle materialHandle, const glm::mat4& transform);
+    void queueMeshDraw(assets::SubMeshHandle subMeshHandle,
+                       assets::MaterialHandle materialHandle,
+                       const glm::mat4& transform);
 
     void renderFrame(const renderer::Camera& camera, const std::optional<assets::SkyboxHandle>& skyboxHandle);
 

@@ -41,7 +41,7 @@ class GpuResourceCache
 
     const GpuImage& gpuImage(assets::ImageHandle handle) const;
     const GpuMaterial& gpuMaterial(assets::MaterialHandle handle) const;
-    const GpuMesh& gpuMesh(uint32_t handle) const;
+    const GpuMesh& gpuMesh(assets::SubMeshHandle handle) const;
     const GpuImage& gpuSkyboxImage(assets::SkyboxHandle handle) const;
 
     const GpuImage& emptyImage() const;
@@ -71,7 +71,7 @@ class GpuResourceCache
 
     std::unordered_map<assets::ImageHandle, GpuImage> gpuImages_;
     std::unordered_map<assets::MaterialHandle, GpuMaterial> gpuMaterials_;
-    std::unordered_map<uint32_t, GpuMesh> gpuMeshes_;
+    std::unordered_map<assets::SubMeshHandle, GpuMesh> gpuMeshes_;
     std::unordered_map<assets::SkyboxHandle, GpuImage> gpuSkyboxImages_;
 };
 } // namespace renderer

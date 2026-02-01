@@ -11,7 +11,7 @@ namespace renderer
 {
 struct DrawCommand
 {
-    uint32_t subMeshUid;
+    assets::SubMeshHandle subMeshHandle;
     assets::MaterialHandle materialHandle;
     glm::mat4 transform;
 };

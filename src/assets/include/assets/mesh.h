@@ -17,11 +17,11 @@ namespace assets
 struct SubMesh
 {
     SubMesh()
-        : uid{nextUid()}
+        : handle{nextUid()}
     {
     }
 
-    uint32_t uid;
+    SubMeshHandle handle;
     std::vector<core::Vertex> vertices;
     std::vector<uint32_t> indices;
     MaterialHandle materialHandle;

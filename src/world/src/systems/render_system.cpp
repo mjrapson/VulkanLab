@@ -57,7 +57,7 @@ void RenderSystem::update(const renderer::Camera& camera)
 
             for (const auto& subMesh : mesh->subMeshes())
             {
-                renderer_.queueMeshDraw(subMesh.uid, subMesh.materialHandle, transformMatrix * instance.transform);
+                renderer_.queueMeshDraw(subMesh.handle, subMesh.materialHandle, transformMatrix * instance.transform);
             }
         }
     }

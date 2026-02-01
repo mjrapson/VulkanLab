@@ -113,7 +113,7 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                                   *materialDescriptorSets_.at(drawCommand.materialHandle),
                                                   gpuMaterial.uboOffset);
 
-        auto& gpuMesh = passInfo.gpuResourceCache.gpuMesh(drawCommand.subMeshUid);
+        auto& gpuMesh = passInfo.gpuResourceCache.gpuMesh(drawCommand.subMeshHandle);
         passInfo.commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);
     }
 
