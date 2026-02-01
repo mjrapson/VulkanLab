@@ -18,11 +18,6 @@ class GpuResourceCache;
 struct RenderPassCommandInfo
 {
     uint32_t frameIndex;
-    const vk::Image& colorImage;
-    const vk::ImageView& colorImageView;
-    const vk::Image& depthImage;
-    const vk::ImageView& depthImageView;
-    const vk::Extent2D& extent;
     const vk::raii::CommandBuffer& commandBuffer;
     std::optional<assets::SkyboxHandle> skyboxHandle;
     GpuResourceCache& gpuResourceCache;

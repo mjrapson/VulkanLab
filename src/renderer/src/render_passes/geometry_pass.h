@@ -19,14 +19,18 @@ class GpuDevice;
 class GeometryPass
 {
   public:
-    GeometryPass(const GpuDevice& gpuDevice,
-                 const vk::Format& surfaceFormat,
-                 uint32_t maxFramesInFlight,
-                 const std::vector<vk::raii::Buffer>& cameraBuffers);
+    explicit GeometryPass(const GpuDevice& gpuDevice);
+
+    void initialize(const vk::Extent2D& extent,
+                    const vk::Format& surfaceFormat,
+                    uint32_t maxFramesInFlight,
+                    const std::vector<vk::raii::Buffer>& cameraBuffers);
+
+    void resize(const vk::Extent2D& extent);
 
     void rebuild(const GpuResourceCache& resourceCache);
 
-    void recordCommands(const RenderPassCommandInfo& passInfo);
+    void recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView);
 
   private:
     void createDescriptorSetLayouts();
@@ -41,8 +45,14 @@ class GeometryPass
   private:
     const GpuDevice& gpuDevice_;
 
+    vk::Extent2D extent_;
+
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline pipeline_{nullptr};
+
+    vk::raii::Image depthImage_{nullptr};
+    vk::raii::DeviceMemory depthImageMemory_{nullptr};
+    vk::raii::ImageView depthImageView_{nullptr};
 
     vk::raii::DescriptorSetLayout cameraDescriptorSetLayout_{nullptr};
     vk::raii::DescriptorSetLayout materialDescriptorSetLayout_{nullptr};

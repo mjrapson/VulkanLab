@@ -66,7 +66,6 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
     spdlog::info("Creating swapchain image views");
     createSwapchainImageViews();
-    createDepthBufferImage();
 
     createCameraBuffers();
 
@@ -82,7 +81,9 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
 Renderer::~Renderer() = default;
 
-void Renderer::queueMeshDraw(assets::SubMeshHandle subMeshHandle, assets::MaterialHandle materialHandle, const glm::mat4& transform)
+void Renderer::queueMeshDraw(assets::SubMeshHandle subMeshHandle,
+                             assets::MaterialHandle materialHandle,
+                             const glm::mat4& transform)
 {
     auto drawCommand = DrawCommand{};
     drawCommand.subMeshHandle = subMeshHandle;
@@ -273,12 +274,14 @@ void Renderer::recreateSwapchain()
 
     gpuDevice_.device().waitIdle();
 
-    swapchainImageViews_.clear();
     swapchain_ = nullptr;
 
     createSwapchain();
+    swapchainImageViews_.clear();
     createSwapchainImageViews();
-    createDepthBufferImage();
+
+    skyboxPass_->resize(swapchainExtent_);
+    geometryPass_->resize(swapchainExtent_);
 }
 
 void Renderer::recordCommands(uint32_t imageIndex,
@@ -296,11 +299,6 @@ void Renderer::recordCommands(uint32_t imageIndex,
 
     auto passInfo = RenderPassCommandInfo{
         .frameIndex = currentFrameIndex_,
-        .colorImage = swapchainImages_[imageIndex],
-        .colorImageView = swapchainImageViews_[imageIndex],
-        .depthImage = depthImage_,
-        .depthImageView = depthImageView_,
-        .extent = swapchainExtent_,
         .commandBuffer = commandBuffer,
         .skyboxHandle = skyboxHandle,
         .gpuResourceCache = *gpuResources_,
@@ -317,8 +315,8 @@ void Renderer::recordCommands(uint32_t imageIndex,
                                      vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
                                      vk::ImageAspectFlagBits::eColor);
 
-    skyboxPass_->recordCommands(passInfo);
-    geometryPass_->recordCommands(passInfo);
+    skyboxPass_->recordCommands(passInfo, swapchainImageViews_[imageIndex]);
+    geometryPass_->recordCommands(passInfo, swapchainImageViews_[imageIndex]);
 
     gpuDevice_.transitionImageLayout(swapchainImages_[imageIndex],
                                      commandBuffer,
@@ -333,18 +331,12 @@ void Renderer::recordCommands(uint32_t imageIndex,
     commandBuffer.end();
 }
 
-void Renderer::createDepthBufferImage()
-{
-    depthImage_ = gpuDevice_.createDepthImage(swapchainExtent_.width, swapchainExtent_.height);
-    depthImageMemory_ = gpuDevice_.allocateImageMemory(depthImage_, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    depthImageView_ = gpuDevice_.createDepthImageView(depthImage_);
-}
-
 void Renderer::createRenderPasses()
 {
-    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_, surfaceFormat_.format, maxFramesInFlight, cameraUboBuffers_);
+    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_);
+    skyboxPass_->initialize(swapchainExtent_, surfaceFormat_.format, maxFramesInFlight, cameraUboBuffers_);
 
-    geometryPass_ =
-        std::make_unique<GeometryPass>(gpuDevice_, surfaceFormat_.format, maxFramesInFlight, cameraUboBuffers_);
+    geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_);
+    geometryPass_->initialize(swapchainExtent_, surfaceFormat_.format, maxFramesInFlight, cameraUboBuffers_);
 }
 } // namespace renderer

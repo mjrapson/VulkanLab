@@ -18,12 +18,18 @@ struct PushConstants
     glm::mat4 normalMatrix;
 };
 
-GeometryPass::GeometryPass(const GpuDevice& gpuDevice,
-                           const vk::Format& surfaceFormat,
-                           uint32_t maxFramesInFlight,
-                           const std::vector<vk::raii::Buffer>& cameraBuffers)
+GeometryPass::GeometryPass(const GpuDevice& gpuDevice)
     : gpuDevice_{gpuDevice}
 {
+}
+
+void GeometryPass::initialize(const vk::Extent2D& extent,
+                              const vk::Format& surfaceFormat,
+                              uint32_t maxFramesInFlight,
+                              const std::vector<vk::raii::Buffer>& cameraBuffers)
+{
+    resize(extent);
+
     createDescriptorSetLayouts();
 
     createPipeline(surfaceFormat);
@@ -32,16 +38,25 @@ GeometryPass::GeometryPass(const GpuDevice& gpuDevice,
     createCameraDescriptorSets(maxFramesInFlight, cameraBuffers);
 }
 
+void GeometryPass::resize(const vk::Extent2D& extent)
+{
+    extent_ = extent;
+
+    depthImage_ = gpuDevice_.createDepthImage(extent.width, extent.height);
+    depthImageMemory_ = gpuDevice_.allocateImageMemory(depthImage_, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    depthImageView_ = gpuDevice_.createDepthImageView(depthImage_);
+}
+
 void GeometryPass::rebuild(const GpuResourceCache& resourceCache)
 {
     recreateMaterialDescriptorPools(static_cast<uint32_t>(resourceCache.materials().size()));
     recreateMaterialDescriptorSets(resourceCache);
 }
 
-void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
+void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView)
 {
     gpuDevice_.transitionImageLayout(
-        passInfo.depthImage,
+        depthImage_,
         passInfo.commandBuffer,
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eDepthAttachmentOptimal,
@@ -51,25 +66,23 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
         vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
         vk::ImageAspectFlagBits::eDepth);
 
-    // const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
     const auto clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 
     auto attachmentInfo = vk::RenderingAttachmentInfo{};
-    attachmentInfo.imageView = passInfo.colorImageView;
+    attachmentInfo.imageView = colorTargetImageView;
     attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
     attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
     attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-    // attachmentInfo.clearValue = clearColor;
 
     auto depthAttachmentInfo = vk::RenderingAttachmentInfo{};
-    depthAttachmentInfo.imageView = passInfo.depthImageView;
+    depthAttachmentInfo.imageView = depthImageView_;
     depthAttachmentInfo.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
     depthAttachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
     depthAttachmentInfo.storeOp = vk::AttachmentStoreOp::eDontCare;
     depthAttachmentInfo.clearValue = clearDepth;
 
     auto renderingInfo = vk::RenderingInfo{};
-    renderingInfo.renderArea = {.offset = {0, 0}, .extent = passInfo.extent};
+    renderingInfo.renderArea = {.offset = {0, 0}, .extent = extent_};
     renderingInfo.layerCount = 1;
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachments = &attachmentInfo;
@@ -86,14 +99,10 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                               *cameraDescriptorSets_.at(passInfo.frameIndex),
                                               nullptr);
 
-    passInfo.commandBuffer.setViewport(0,
-                                       vk::Viewport(0.0f,
-                                                    0.0f,
-                                                    static_cast<float>(passInfo.extent.width),
-                                                    static_cast<float>(passInfo.extent.height),
-                                                    0.0f,
-                                                    1.0f));
-    passInfo.commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), passInfo.extent));
+    passInfo.commandBuffer.setViewport(
+        0,
+        vk::Viewport(0.0f, 0.0f, static_cast<float>(extent_.width), static_cast<float>(extent_.height), 0.0f, 1.0f));
+    passInfo.commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent_));
 
     for (const auto& drawCommand : passInfo.drawCommands)
     {

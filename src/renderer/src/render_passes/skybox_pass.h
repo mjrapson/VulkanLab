@@ -19,14 +19,18 @@ class GpuDevice;
 class SkyboxPass
 {
   public:
-    SkyboxPass(const GpuDevice& gpuDevice,
-               const vk::Format& surfaceFormat,
-               uint32_t maxFramesInFlight,
-               const std::vector<vk::raii::Buffer>& cameraBuffers);
+    explicit SkyboxPass(const GpuDevice& gpuDevice);
+
+    void initialize(const vk::Extent2D& extent,
+                    const vk::Format& surfaceFormat,
+                    uint32_t maxFramesInFlight,
+                    const std::vector<vk::raii::Buffer>& cameraBuffers);
+
+    void resize(const vk::Extent2D& extent);
 
     void rebuild(const GpuResourceCache& resourceCache);
 
-    void recordCommands(const RenderPassCommandInfo& passInfo);
+    void recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView);
 
   private:
     void createDescriptorSetLayouts();
@@ -40,6 +44,8 @@ class SkyboxPass
 
   private:
     const GpuDevice& gpuDevice_;
+
+    vk::Extent2D extent_;
 
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline pipeline_{nullptr};

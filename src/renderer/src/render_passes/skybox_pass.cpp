@@ -10,12 +10,18 @@
 
 namespace renderer
 {
-SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice,
-                       const vk::Format& surfaceFormat,
-                       uint32_t maxFramesInFlight,
-                       const std::vector<vk::raii::Buffer>& cameraBuffers)
+SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice)
     : gpuDevice_{gpuDevice}
 {
+}
+
+void SkyboxPass::initialize(const vk::Extent2D& extent,
+                            const vk::Format& surfaceFormat,
+                            uint32_t maxFramesInFlight,
+                            const std::vector<vk::raii::Buffer>& cameraBuffers)
+{
+    resize(extent);
+
     createDescriptorSetLayouts();
 
     createPipeline(surfaceFormat);
@@ -24,25 +30,31 @@ SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice,
     createCameraDescriptorSets(maxFramesInFlight, cameraBuffers);
 }
 
+void SkyboxPass::resize(const vk::Extent2D& extent)
+{
+    extent_ = extent;
+}
+
 void SkyboxPass::rebuild(const GpuResourceCache& resourceCache)
 {
     recreateDescriptorPools(static_cast<uint32_t>(resourceCache.skyboxes().size()));
     recreateDescriptorSets(resourceCache);
 }
 
-void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
+void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo,
+                                vk::ImageView colorTargetImageView)
 {
     const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
 
     auto attachmentInfo = vk::RenderingAttachmentInfo{};
-    attachmentInfo.imageView = passInfo.colorImageView;
+    attachmentInfo.imageView = colorTargetImageView;
     attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
     attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
     attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
     attachmentInfo.clearValue = clearColor;
 
     auto renderingInfo = vk::RenderingInfo{};
-    renderingInfo.renderArea = {.offset = {0, 0}, .extent = passInfo.extent};
+    renderingInfo.renderArea = {.offset = {0, 0}, .extent = extent_};
     renderingInfo.layerCount = 1;
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachments = &attachmentInfo;
@@ -64,14 +76,10 @@ void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                                   nullptr);
     }
 
-    passInfo.commandBuffer.setViewport(0,
-                                       vk::Viewport(0.0f,
-                                                    0.0f,
-                                                    static_cast<float>(passInfo.extent.width),
-                                                    static_cast<float>(passInfo.extent.height),
-                                                    0.0f,
-                                                    1.0f));
-    passInfo.commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), passInfo.extent));
+    passInfo.commandBuffer.setViewport(
+        0,
+        vk::Viewport(0.0f, 0.0f, static_cast<float>(extent_.width), static_cast<float>(extent_.height), 0.0f, 1.0f));
+    passInfo.commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent_));
 
     passInfo.commandBuffer.draw(36, 1, 0, 0);
 

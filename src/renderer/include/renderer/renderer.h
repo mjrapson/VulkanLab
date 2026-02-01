@@ -65,8 +65,6 @@ class Renderer
                         const vk::raii::CommandBuffer& commandBuffer,
                         const renderer::Camera& camera,
                         const std::optional<assets::SkyboxHandle>& skyboxHandle);
-
-    void createDepthBufferImage();
     void createRenderPasses();
 
   private:
@@ -89,10 +87,6 @@ class Renderer
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
-
-    vk::raii::Image depthImage_{nullptr};
-    vk::raii::DeviceMemory depthImageMemory_{nullptr};
-    vk::raii::ImageView depthImageView_{nullptr};
 
     std::vector<vk::raii::Buffer> cameraUboBuffers_;
     std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;
