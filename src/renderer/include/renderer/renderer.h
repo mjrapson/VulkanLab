@@ -5,7 +5,7 @@
 
 #include "renderer/draw_command.h"
 
-#include <assets/material.h>
+#include <assets/handles.h>
 
 #include <vulkan/vulkan_raii.hpp>
 
@@ -44,8 +44,7 @@ class Renderer
 
     void queueMeshDraw(uint32_t submeshUid, uint32_t materialUid, const glm::mat4& transform);
 
-    void renderFrame(const renderer::Camera& camera,
-                     const std::optional<uint32_t>& skyboxUid);
+    void renderFrame(const renderer::Camera& camera, const std::optional<assets::SkyboxHandle>& skyboxHandle);
 
     void windowResized(int width, int height);
 
@@ -63,7 +62,7 @@ class Renderer
     void recordCommands(uint32_t imageIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
                         const renderer::Camera& camera,
-                        const std::optional<uint32_t>& skyboxUid);
+                        const std::optional<assets::SkyboxHandle>& skyboxHandle);
 
     void createDepthBufferImage();
     void createRenderPasses();

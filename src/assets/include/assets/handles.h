@@ -7,7 +7,19 @@
 
 namespace assets
 {
+struct MaterialHandle : core::Handle<MaterialHandle>
+{
+};
 struct MeshHandle : core::Handle<MeshHandle>
+{
+};
+struct SubMeshHandle : core::Handle<SubMeshHandle>
+{
+};
+struct ImagehHandle : core::Handle<ImagehHandle>
+{
+};
+struct SkyboxHandle : core::Handle<SkyboxHandle>
 {
 };
 } // namespace assets
@@ -15,7 +27,19 @@ struct MeshHandle : core::Handle<MeshHandle>
 namespace std
 {
 template <>
+struct hash<assets::MaterialHandle> : hash<core::Handle<assets::MaterialHandle>>
+{
+};
+template <>
 struct hash<assets::MeshHandle> : hash<core::Handle<assets::MeshHandle>>
+{
+};
+template <>
+struct hash<assets::SubMeshHandle> : hash<core::Handle<assets::SubMeshHandle>>
+{
+};
+template <>
+struct hash<assets::SkyboxHandle> : hash<core::Handle<assets::SkyboxHandle>>
 {
 };
 } // namespace std

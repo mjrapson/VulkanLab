@@ -10,13 +10,13 @@
 namespace assets
 {
 Skybox::Skybox()
-    : uid_{nextUid()}
+    : handle_{nextUid()}
 {
 }
 
-uint32_t Skybox::uid() const
+SkyboxHandle Skybox::handle() const
 {
-    return uid_;
+    return handle_;
 }
 
 uint32_t Skybox::width() const
@@ -46,7 +46,7 @@ uint32_t Skybox::faceCount() const
 
 void Skybox::setImage(int face, std::unique_ptr<Image> image)
 {
-    if(face > images_.size())
+    if(static_cast<size_t>(face) > images_.size())
     {
         throw std::out_of_range{"Face out of range of skybox cubemap array"};
     }
@@ -56,7 +56,7 @@ void Skybox::setImage(int face, std::unique_ptr<Image> image)
 
 Image* Skybox::imageAt(int face) const
 {
-    if(face > images_.size())
+    if(static_cast<size_t>(face) > images_.size())
     {
         throw std::out_of_range{"Face out of range of skybox cubemap array"};
     }

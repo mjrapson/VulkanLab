@@ -8,6 +8,8 @@
 #include "world/components/transform_component.h"
 #include "world/systems/render_system.h"
 
+#include <assets/handles.h>
+
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
@@ -45,7 +47,7 @@ class World
     Entity createEntity();
     void destroyEntity(Entity entity);
 
-    const std::optional<uint32_t>& activeSkybox() const;
+    const std::optional<assets::SkyboxHandle>& activeSkybox() const;
 
     void update(const renderer::Camera& camera);
 
@@ -112,7 +114,7 @@ class World
   private:
     std::unordered_map<Entity, RenderComponent> renderComponents_;
     std::unordered_map<Entity, TransformComponent> transformComponents_;
-    std::optional<uint32_t> activeSkybox_;
+    std::optional<assets::SkyboxHandle> activeSkybox_;
 
   private:
     Entity nextEntity{0};

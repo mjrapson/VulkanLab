@@ -6,9 +6,12 @@
 #include "gpu_image.h"
 #include "gpu_material.h"
 #include "gpu_mesh.h"
-#include <unordered_map>
+
+#include <assets/handles.h>
 
 #include <vulkan/vulkan_raii.hpp>
+
+#include <unordered_map>
 
 namespace assets
 {
@@ -39,12 +42,12 @@ class GpuResourceCache
     const GpuImage& gpuImage(uint32_t handle) const;
     const GpuMaterial& gpuMaterial(uint32_t handle) const;
     const GpuMesh& gpuMesh(uint32_t handle) const;
-    const GpuImage& gpuSkyboxImage(uint32_t handle) const;
+    const GpuImage& gpuSkyboxImage(assets::SkyboxHandle handle) const;
 
     const GpuImage& emptyImage() const;
 
     const std::unordered_map<uint32_t, GpuMaterial>& materials() const;
-    const std::unordered_map<uint32_t, GpuImage>& skyboxes() const;
+    const std::unordered_map<assets::SkyboxHandle, GpuImage>& skyboxes() const;
 
   private:
     void createDefaultData();
@@ -69,6 +72,6 @@ class GpuResourceCache
     std::unordered_map<uint32_t, GpuImage> gpuImages_;
     std::unordered_map<uint32_t, GpuMaterial> gpuMaterials_;
     std::unordered_map<uint32_t, GpuMesh> gpuMeshes_;
-    std::unordered_map<uint32_t, GpuImage> gpuSkyboxImages_;
+    std::unordered_map<assets::SkyboxHandle, GpuImage> gpuSkyboxImages_;
 };
 } // namespace renderer

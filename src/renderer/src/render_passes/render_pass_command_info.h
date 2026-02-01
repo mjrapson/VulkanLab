@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <assets/handles.h>
+
 #include <vulkan/vulkan_raii.hpp>
 
 #include <optional>
@@ -22,7 +24,7 @@ struct RenderPassCommandInfo
     const vk::ImageView& depthImageView;
     const vk::Extent2D& extent;
     const vk::raii::CommandBuffer& commandBuffer;
-    std::optional<uint32_t> skyboxUid;
+    std::optional<assets::SkyboxHandle> skyboxHandle;
     GpuResourceCache& gpuResourceCache;
     std::span<const DrawCommand> drawCommands;
 };

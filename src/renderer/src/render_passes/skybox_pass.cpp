@@ -55,12 +55,12 @@ void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                               *cameraDescriptorSets_.at(passInfo.frameIndex),
                                               nullptr);
 
-    if (passInfo.skyboxUid)
+    if (passInfo.skyboxHandle)
     {
         passInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                                   pipelineLayout_,
                                                   1,
-                                                  *skyboxDescriptorSets_.at(passInfo.skyboxUid.value()),
+                                                  *skyboxDescriptorSets_.at(passInfo.skyboxHandle.value()),
                                                   nullptr);
     }
 
@@ -127,7 +127,7 @@ void SkyboxPass::createCameraDescriptorSets(uint32_t count, const std::vector<vk
 
     cameraDescriptorSets_ = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
 
-    for (auto frameIndex = 0; frameIndex < count; ++frameIndex)
+    for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
     {
         auto bufferInfo = vk::DescriptorBufferInfo{};
         bufferInfo.buffer = cameraBuffers.at(frameIndex);
@@ -135,7 +135,7 @@ void SkyboxPass::createCameraDescriptorSets(uint32_t count, const std::vector<vk
         bufferInfo.range = VK_WHOLE_SIZE;
 
         auto uboWrite = vk::WriteDescriptorSet{};
-        uboWrite.dstSet = cameraDescriptorSets_.at(frameIndex);
+        uboWrite.dstSet = cameraDescriptorSets_.at(static_cast<size_t>(frameIndex));
         uboWrite.dstBinding = 0;
         uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
         uboWrite.descriptorCount = 1;

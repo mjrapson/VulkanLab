@@ -188,7 +188,7 @@ void VulkanApplication::run()
 
         glfwPollEvents();
 
-        updateCamera(deltaTime);
+        updateCamera(static_cast<float>(deltaTime));
 
         world.update(*camera_);
 

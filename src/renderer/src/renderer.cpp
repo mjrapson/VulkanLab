@@ -92,7 +92,7 @@ void Renderer::queueMeshDraw(uint32_t submeshUid, uint32_t materialUid, const gl
     drawCommands_.push_back(drawCommand);
 }
 
-void Renderer::renderFrame(const renderer::Camera& camera, const std::optional<uint32_t>& skyboxUid)
+void Renderer::renderFrame(const renderer::Camera& camera, const std::optional<assets::SkyboxHandle>& skyboxHandle)
 {
     if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
         != vk::Result::eSuccess)
@@ -118,7 +118,7 @@ void Renderer::renderFrame(const renderer::Camera& camera, const std::optional<u
     auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
     commandBuffer.reset();
 
-    recordCommands(imageIndex, commandBuffer, camera, skyboxUid);
+    recordCommands(imageIndex, commandBuffer, camera, skyboxHandle);
     drawCommands_.clear();
 
     auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
@@ -284,7 +284,7 @@ void Renderer::recreateSwapchain()
 void Renderer::recordCommands(uint32_t imageIndex,
                               const vk::raii::CommandBuffer& commandBuffer,
                               const renderer::Camera& camera,
-                              const std::optional<uint32_t>& skyboxUid)
+                              const std::optional<assets::SkyboxHandle>& skyboxHandle)
 {
     commandBuffer.begin({});
 
@@ -302,7 +302,7 @@ void Renderer::recordCommands(uint32_t imageIndex,
         .depthImageView = depthImageView_,
         .extent = swapchainExtent_,
         .commandBuffer = commandBuffer,
-        .skyboxUid = skyboxUid,
+        .skyboxHandle = skyboxHandle,
         .gpuResourceCache = *gpuResources_,
         .drawCommands = drawCommands_,
     };

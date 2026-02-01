@@ -175,7 +175,7 @@ void GeometryPass::createCameraDescriptorSets(uint32_t count, const std::vector<
 
     cameraDescriptorSets_ = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
 
-    for (auto frameIndex = 0; frameIndex < count; ++frameIndex)
+    for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
     {
         auto bufferInfo = vk::DescriptorBufferInfo{};
         bufferInfo.buffer = cameraBuffers.at(frameIndex);
@@ -183,7 +183,7 @@ void GeometryPass::createCameraDescriptorSets(uint32_t count, const std::vector<
         bufferInfo.range = VK_WHOLE_SIZE;
 
         auto uboWrite = vk::WriteDescriptorSet{};
-        uboWrite.dstSet = cameraDescriptorSets_.at(frameIndex);
+        uboWrite.dstSet = cameraDescriptorSets_.at(static_cast<size_t>(frameIndex));
         uboWrite.dstBinding = 0;
         uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
         uboWrite.descriptorCount = 1;

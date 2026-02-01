@@ -17,7 +17,7 @@ class Skybox
   public:
     Skybox();
 
-    uint32_t uid() const;
+    SkyboxHandle handle() const;
 
     uint32_t width() const;
     uint32_t height() const;
@@ -29,7 +29,7 @@ class Skybox
     static uint32_t nextUid();
 
   private:
-    uint32_t uid_;
+    SkyboxHandle handle_;
     std::array<std::unique_ptr<Image>, 6> images_;
 };
 } // namespace assets

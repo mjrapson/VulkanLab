@@ -64,7 +64,7 @@ const GpuMesh& GpuResourceCache::gpuMesh(uint32_t handle) const
     throw std::runtime_error("Mesh handle not uploaded to GPU");
 }
 
-const GpuImage& GpuResourceCache::gpuSkyboxImage(uint32_t handle) const
+const GpuImage& GpuResourceCache::gpuSkyboxImage(assets::SkyboxHandle handle) const
 {
     if (auto itr = gpuSkyboxImages_.find(handle); itr != gpuSkyboxImages_.end())
     {
@@ -84,7 +84,7 @@ const std::unordered_map<uint32_t, GpuMaterial>& GpuResourceCache::materials() c
     return gpuMaterials_;
 }
 
-const std::unordered_map<uint32_t, GpuImage>& GpuResourceCache::skyboxes() const
+const std::unordered_map<assets::SkyboxHandle, GpuImage>& GpuResourceCache::skyboxes() const
 {
     return gpuSkyboxImages_;
 }
@@ -335,7 +335,7 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
                                          vk::ImageAspectFlagBits::eColor,
                                          6);
         void* data = stagingMemory.mapMemory(0, imageSize * 6);
-        for (auto face = 0; face < skybox.second->faceCount(); ++ face)
+        for (auto face = 0; face < skybox.second->faceCount(); ++face)
         {
             std::memcpy(data + (face * imageSize), skybox.second->imageAt(face)->data().data(), imageSize);
         }
@@ -358,7 +358,7 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
         gpuImage.view = gpuDevice_.createCubemapImageView(gpuImage.image);
         gpuImage.sampler = gpuDevice_.createSampler();
 
-        gpuSkyboxImages_.emplace(skybox.second->uid(), std::move(gpuImage));
+        gpuSkyboxImages_.emplace(skybox.second->handle(), std::move(gpuImage));
     }
 }
 } // namespace renderer
