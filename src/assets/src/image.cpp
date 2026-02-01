@@ -6,16 +6,16 @@
 namespace assets
 {
 Image::Image(uint32_t width, uint32_t height, std::vector<std::byte>&& data)
-    : uid_{nextUid()},
+    : handle_{nextUid()},
       width_{width},
       height_{height},
       data_{std::move(data)}
 {
 }
 
-uint32_t Image::uid() const
+ImageHandle Image::handle() const
 {
-    return uid_;
+    return handle_;
 }
 
 uint32_t Image::width() const

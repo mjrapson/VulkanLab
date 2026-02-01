@@ -20,9 +20,9 @@ void Material::setDiffuse(const glm::vec3& diffuse)
     diffuse_ = diffuse;
 }
 
-void Material::setDiffuseTextureUid(uint32_t uid)
+void Material::setDiffuseImageHandle(ImageHandle handle)
 {
-    diffuseTextureUid_ = uid;
+    diffuseImageHandle_ = handle;
 }
 
 const glm::vec3& Material::diffuse() const
@@ -30,9 +30,9 @@ const glm::vec3& Material::diffuse() const
     return diffuse_;
 }
 
-const std::optional<uint32_t>& Material::diffuseTextureUid() const
+const std::optional<ImageHandle>& Material::diffuseImageHandle() const
 {
-    return diffuseTextureUid_;
+    return diffuseImageHandle_;
 }
 
 uint32_t Material::nextUid()

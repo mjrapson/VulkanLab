@@ -19,10 +19,10 @@ class Material
     MaterialHandle handle() const;
 
     void setDiffuse(const glm::vec3& diffuse);
-    void setDiffuseTextureUid(uint32_t uid);
+    void setDiffuseImageHandle(ImageHandle handle);
 
     const glm::vec3& diffuse() const;
-    const std::optional<uint32_t>& diffuseTextureUid() const;
+    const std::optional<ImageHandle>& diffuseImageHandle() const;
 
   private:
     static uint32_t nextUid();
@@ -30,6 +30,6 @@ class Material
   private:
     MaterialHandle handle_;
     glm::vec3 diffuse_{glm::vec3{0.0f}};
-    std::optional<uint32_t> diffuseTextureUid_;
+    std::optional<ImageHandle> diffuseImageHandle_;
 };
 } // namespace assets

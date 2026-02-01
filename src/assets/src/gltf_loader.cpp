@@ -193,7 +193,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
         return nullptr;
     }
 
-    auto imageHandles = std::unordered_map<std::string, uint32_t>{};
+    auto imageHandles = std::unordered_map<std::string, ImageHandle>{};
     auto materialHandles = std::unordered_map<std::string, MaterialHandle>{};
     auto meshHandles = std::vector<MeshHandle>{};
 
@@ -202,7 +202,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
     for (const auto& tinyGltfImage : model.images)
     {
         auto image = createImageFromData(tinyGltfImage.width, tinyGltfImage.height, tinyGltfImage.image);
-        imageHandles[tinyGltfImage.name] = image->uid();
+        imageHandles[tinyGltfImage.name] = image->handle();
 
         prefab->addImage(std::move(image));
     }
@@ -216,7 +216,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
 
         if (const auto index = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index; index >= 0)
         {
-            material->setDiffuseTextureUid(imageHandles.at(model.images[model.textures[index].source].name));
+            material->setDiffuseImageHandle(imageHandles.at(model.images[model.textures[index].source].name));
         }
 
         prefab->addMaterial(std::move(material));

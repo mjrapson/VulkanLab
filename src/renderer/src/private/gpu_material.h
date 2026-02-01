@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <assets/handles.h>
+
 #include <glm/glm.hpp>
 
 #include <optional>
@@ -19,6 +21,6 @@ struct GpuMaterialBufferData
 struct GpuMaterial
 {
     uint32_t uboOffset;
-    std::optional<uint32_t> diffuseTextureHandle;
+    std::optional<assets::ImageHandle> diffuseImageHandle;
 };
 } // namespace renderer

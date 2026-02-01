@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <assets/handles.h>
+
 #include <stdint.h>
 #include <vector>
 
@@ -13,7 +15,7 @@ class Image
   public:
     Image(uint32_t width, uint32_t height, std::vector<std::byte>&& data);
 
-    uint32_t uid() const;
+    ImageHandle handle() const;
 
     uint32_t width() const;
     uint32_t height() const;
@@ -23,7 +25,7 @@ class Image
     static uint32_t nextUid();
 
   private:
-    uint32_t uid_;
+    ImageHandle handle_;
     uint32_t width_;
     uint32_t height_;
     std::vector<std::byte> data_;

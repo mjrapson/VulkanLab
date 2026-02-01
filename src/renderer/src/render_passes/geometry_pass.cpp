@@ -357,10 +357,10 @@ void GeometryPass::recreateMaterialDescriptorSets(const GpuResourceCache& resour
         uboWrite.pBufferInfo = &bufferInfo;
 
         auto imageInfo = vk::DescriptorImageInfo{};
-        if (material.diffuseTextureHandle)
+        if (material.diffuseImageHandle)
         {
-            imageInfo.imageView = *resourceCache.gpuImage(material.diffuseTextureHandle.value()).view;
-            imageInfo.sampler = *resourceCache.gpuImage(material.diffuseTextureHandle.value()).sampler;
+            imageInfo.imageView = *resourceCache.gpuImage(material.diffuseImageHandle.value()).view;
+            imageInfo.sampler = *resourceCache.gpuImage(material.diffuseImageHandle.value()).sampler;
         }
         else
         {

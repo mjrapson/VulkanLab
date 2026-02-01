@@ -34,7 +34,7 @@ const vk::raii::Buffer& GpuResourceCache::materialUboBuffer() const
     return materialUboBuffer_;
 }
 
-const GpuImage& GpuResourceCache::gpuImage(uint32_t handle) const
+const GpuImage& GpuResourceCache::gpuImage(assets::ImageHandle handle) const
 {
     if (auto itr = gpuImages_.find(handle); itr != gpuImages_.end())
     {
@@ -201,7 +201,7 @@ void GpuResourceCache::uploadImageData(const assets::AssetDatabase& db)
             gpuImage.view = gpuDevice_.createImageView(gpuImage.image);
             gpuImage.sampler = gpuDevice_.createSampler();
 
-            gpuImages_.emplace(image.uid(), std::move(gpuImage));
+            gpuImages_.emplace(image.handle(), std::move(gpuImage));
         }
     }
 }
@@ -226,12 +226,12 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetDatabase& db)
         {
             auto gpuMaterial = GpuMaterial{};
             gpuMaterial.uboOffset = currentOffset;
-            gpuMaterial.diffuseTextureHandle = material.diffuseTextureUid();
+            gpuMaterial.diffuseImageHandle = material.diffuseImageHandle();
             gpuMaterials_.emplace(material.handle(), std::move(gpuMaterial));
 
             auto uboData = GpuMaterialBufferData{};
             uboData.diffuseColor = glm::vec4{material.diffuse(), 1.0f};
-            uboData.hasDiffuseTexture = material.diffuseTextureUid() ? 1 : 0;
+            uboData.hasDiffuseTexture = material.diffuseImageHandle() ? 1 : 0;
 
             std::memcpy(static_cast<std::byte*>(mappedMemory) + currentOffset, &uboData, sizeof(GpuMaterialBufferData));
 

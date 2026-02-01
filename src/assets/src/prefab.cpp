@@ -32,7 +32,7 @@ void Prefab::addImage(std::unique_ptr<Image> image)
         return;
     }
 
-    images_[image->uid()] = std::move(image);
+    images_[image->handle()] = std::move(image);
 }
 
 void Prefab::addMeshInstance(MeshInstance&& instance)
