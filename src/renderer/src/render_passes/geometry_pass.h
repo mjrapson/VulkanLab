@@ -5,6 +5,8 @@
 
 #include "render_pass_command_info.h"
 
+#include <assets/handles.h>
+
 #include <vulkan/vulkan_raii.hpp>
 
 #include <unordered_map>
@@ -49,6 +51,6 @@ class GeometryPass
     vk::raii::DescriptorPool materialDescriptorPool_{nullptr};
 
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
-    std::unordered_map<uint32_t, vk::raii::DescriptorSet> materialDescriptorSets_;
+    std::unordered_map<assets::MaterialHandle, vk::raii::DescriptorSet> materialDescriptorSets_;
 };
 } // namespace renderer

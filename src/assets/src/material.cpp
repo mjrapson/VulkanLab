@@ -6,13 +6,13 @@
 namespace assets
 {
 Material::Material()
-    : uid_{nextUid()}
+    : handle_{nextUid()}
 {
 }
 
-uint32_t Material::uid() const
+MaterialHandle Material::handle() const
 {
-    return uid_;
+    return handle_;
 }
 
 void Material::setDiffuse(const glm::vec3& diffuse)

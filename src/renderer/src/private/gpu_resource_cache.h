@@ -40,13 +40,13 @@ class GpuResourceCache
     const vk::raii::Buffer& materialUboBuffer() const;
 
     const GpuImage& gpuImage(uint32_t handle) const;
-    const GpuMaterial& gpuMaterial(uint32_t handle) const;
+    const GpuMaterial& gpuMaterial(assets::MaterialHandle handle) const;
     const GpuMesh& gpuMesh(uint32_t handle) const;
     const GpuImage& gpuSkyboxImage(assets::SkyboxHandle handle) const;
 
     const GpuImage& emptyImage() const;
 
-    const std::unordered_map<uint32_t, GpuMaterial>& materials() const;
+    const std::unordered_map<assets::MaterialHandle, GpuMaterial>& materials() const;
     const std::unordered_map<assets::SkyboxHandle, GpuImage>& skyboxes() const;
 
   private:
@@ -70,7 +70,7 @@ class GpuResourceCache
     vk::raii::DeviceMemory materialUboBufferMemory_{nullptr};
 
     std::unordered_map<uint32_t, GpuImage> gpuImages_;
-    std::unordered_map<uint32_t, GpuMaterial> gpuMaterials_;
+    std::unordered_map<assets::MaterialHandle, GpuMaterial> gpuMaterials_;
     std::unordered_map<uint32_t, GpuMesh> gpuMeshes_;
     std::unordered_map<assets::SkyboxHandle, GpuImage> gpuSkyboxImages_;
 };

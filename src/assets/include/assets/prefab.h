@@ -64,7 +64,7 @@ class Prefab
     }
 
   private:
-    std::unordered_map<uint32_t, std::unique_ptr<Material>> materials_;
+    std::unordered_map<MaterialHandle, std::unique_ptr<Material>> materials_;
     std::unordered_map<MeshHandle, std::unique_ptr<Mesh>> meshes_;
     std::unordered_map<uint32_t, std::unique_ptr<Image>> images_;
     std::vector<MeshInstance> meshInstances_;

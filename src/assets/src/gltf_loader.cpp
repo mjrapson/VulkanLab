@@ -194,7 +194,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
     }
 
     auto imageHandles = std::unordered_map<std::string, uint32_t>{};
-    auto materialHandles = std::unordered_map<std::string, uint32_t>{};
+    auto materialHandles = std::unordered_map<std::string, MaterialHandle>{};
     auto meshHandles = std::vector<MeshHandle>{};
 
     auto prefab = std::make_unique<Prefab>();
@@ -210,7 +210,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
     for (auto& gltfMaterial : model.materials)
     {
         auto material = std::make_unique<Material>();
-        materialHandles[gltfMaterial.name] = material->uid();
+        materialHandles[gltfMaterial.name] = material->handle();
 
         material->setDiffuse(readColor(gltfMaterial.pbrMetallicRoughness.baseColorFactor));
 
@@ -232,7 +232,7 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
             auto subMesh = std::make_unique<SubMesh>();
             subMesh->vertices = readVertices(primitive, model);
             subMesh->indices = readIndices(primitive, model);
-            subMesh->materialUid = materialHandles.at(model.materials[primitive.material].name);
+            subMesh->materialHandle = materialHandles.at(model.materials[primitive.material].name);
             mesh->append(std::move(subMesh));
         }
         prefab->addMesh(std::move(mesh));

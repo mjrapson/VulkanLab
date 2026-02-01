@@ -44,7 +44,7 @@ const GpuImage& GpuResourceCache::gpuImage(uint32_t handle) const
     throw std::runtime_error("Image handle not uploaded to GPU");
 }
 
-const GpuMaterial& GpuResourceCache::gpuMaterial(uint32_t handle) const
+const GpuMaterial& GpuResourceCache::gpuMaterial(assets::MaterialHandle handle) const
 {
     if (auto itr = gpuMaterials_.find(handle); itr != gpuMaterials_.end())
     {
@@ -79,7 +79,7 @@ const GpuImage& GpuResourceCache::emptyImage() const
     return emptyImage_;
 }
 
-const std::unordered_map<uint32_t, GpuMaterial>& GpuResourceCache::materials() const
+const std::unordered_map<assets::MaterialHandle, GpuMaterial>& GpuResourceCache::materials() const
 {
     return gpuMaterials_;
 }
@@ -227,7 +227,7 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetDatabase& db)
             auto gpuMaterial = GpuMaterial{};
             gpuMaterial.uboOffset = currentOffset;
             gpuMaterial.diffuseTextureHandle = material.diffuseTextureUid();
-            gpuMaterials_.emplace(material.uid(), std::move(gpuMaterial));
+            gpuMaterials_.emplace(material.handle(), std::move(gpuMaterial));
 
             auto uboData = GpuMaterialBufferData{};
             uboData.diffuseColor = glm::vec4{material.diffuse(), 1.0f};

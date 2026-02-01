@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <assets/handles.h>
+
 #include <glm/glm.hpp>
 
 namespace renderer
@@ -10,7 +12,7 @@ namespace renderer
 struct DrawCommand
 {
     uint32_t subMeshUid;
-    uint32_t materialUid;
+    assets::MaterialHandle materialHandle;
     glm::mat4 transform;
 };
 } // namespace renderer

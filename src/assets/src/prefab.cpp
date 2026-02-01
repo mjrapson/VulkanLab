@@ -12,7 +12,7 @@ void Prefab::addMaterial(std::unique_ptr<Material> material)
         return;
     }
 
-    materials_[material->uid()] = std::move(material);
+    materials_[material->handle()] = std::move(material);
 }
 
 void Prefab::addMesh(std::unique_ptr<Mesh> mesh)

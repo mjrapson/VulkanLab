@@ -24,7 +24,7 @@ struct SubMesh
     uint32_t uid;
     std::vector<core::Vertex> vertices;
     std::vector<uint32_t> indices;
-    uint32_t materialUid;
+    MaterialHandle materialHandle;
 
   private:
     static uint32_t nextUid()

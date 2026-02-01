@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "assets/handles.h"
+
 #include <glm/glm.hpp>
 
 #include <optional>
@@ -14,7 +16,7 @@ class Material
   public:
     Material();
 
-    uint32_t uid() const;
+    MaterialHandle handle() const;
 
     void setDiffuse(const glm::vec3& diffuse);
     void setDiffuseTextureUid(uint32_t uid);
@@ -26,7 +28,7 @@ class Material
     static uint32_t nextUid();
 
   private:
-    uint32_t uid_;
+    MaterialHandle handle_;
     glm::vec3 diffuse_{glm::vec3{0.0f}};
     std::optional<uint32_t> diffuseTextureUid_;
 };

@@ -82,11 +82,11 @@ Renderer::Renderer(const vk::raii::Instance& instance,
 
 Renderer::~Renderer() = default;
 
-void Renderer::queueMeshDraw(uint32_t submeshUid, uint32_t materialUid, const glm::mat4& transform)
+void Renderer::queueMeshDraw(uint32_t submeshUid, assets::MaterialHandle materialHandle, const glm::mat4& transform)
 {
     auto drawCommand = DrawCommand{};
     drawCommand.subMeshUid = submeshUid;
-    drawCommand.materialUid = materialUid;
+    drawCommand.materialHandle = materialHandle;
     drawCommand.transform = transform;
 
     drawCommands_.push_back(drawCommand);
