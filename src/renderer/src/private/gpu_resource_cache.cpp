@@ -11,13 +11,8 @@
 
 namespace renderer
 {
-GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db,
-                                   const GpuDevice& gpuDevice,
-                                   const vk::DescriptorSetLayout& materialDescriptorSetLayout,
-                                   const vk::DescriptorSetLayout& skyboxDescriptorSetLayout)
-    : gpuDevice_{gpuDevice},
-      materialDescriptorSetLayout_{materialDescriptorSetLayout},
-      skyboxDescriptorSetLayout_{skyboxDescriptorSetLayout}
+GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice)
+    : gpuDevice_{gpuDevice}
 {
     createDefaultData();
 
@@ -34,7 +29,12 @@ const vk::raii::Buffer& GpuResourceCache::meshIndexBuffer() const
     return meshIndexBuffer_;
 }
 
-GpuImage& GpuResourceCache::gpuImage(uint32_t handle)
+const vk::raii::Buffer& GpuResourceCache::materialUboBuffer() const
+{
+    return materialUboBuffer_;
+}
+
+const GpuImage& GpuResourceCache::gpuImage(uint32_t handle) const
 {
     if (auto itr = gpuImages_.find(handle); itr != gpuImages_.end())
     {
@@ -44,7 +44,7 @@ GpuImage& GpuResourceCache::gpuImage(uint32_t handle)
     throw std::runtime_error("Image handle not uploaded to GPU");
 }
 
-GpuMaterial& GpuResourceCache::gpuMaterial(uint32_t handle)
+const GpuMaterial& GpuResourceCache::gpuMaterial(uint32_t handle) const
 {
     if (auto itr = gpuMaterials_.find(handle); itr != gpuMaterials_.end())
     {
@@ -54,7 +54,7 @@ GpuMaterial& GpuResourceCache::gpuMaterial(uint32_t handle)
     throw std::runtime_error("Material handle not uploaded to GPU");
 }
 
-GpuMesh& GpuResourceCache::gpuMesh(uint32_t handle)
+const GpuMesh& GpuResourceCache::gpuMesh(uint32_t handle) const
 {
     if (auto itr = gpuMeshes_.find(handle); itr != gpuMeshes_.end())
     {
@@ -64,7 +64,7 @@ GpuMesh& GpuResourceCache::gpuMesh(uint32_t handle)
     throw std::runtime_error("Mesh handle not uploaded to GPU");
 }
 
-GpuImage& GpuResourceCache::gpuSkyboxImage(uint32_t handle)
+const GpuImage& GpuResourceCache::gpuSkyboxImage(uint32_t handle) const
 {
     if (auto itr = gpuSkyboxImages_.find(handle); itr != gpuSkyboxImages_.end())
     {
@@ -74,14 +74,19 @@ GpuImage& GpuResourceCache::gpuSkyboxImage(uint32_t handle)
     throw std::runtime_error("Skybox handle not uploaded to GPU");
 }
 
-const vk::raii::DescriptorSet& GpuResourceCache::materialDescriptorSet(uint32_t handle) const
+const GpuImage& GpuResourceCache::emptyImage() const
 {
-    return materialDescriptorSets_.at(handle);
+    return emptyImage_;
 }
 
-const vk::raii::DescriptorSet& GpuResourceCache::skyboxDescriptorSet(uint32_t handle) const
+const std::unordered_map<uint32_t, GpuMaterial>& GpuResourceCache::materials() const
 {
-    return skyboxDescriptorSets_.at(handle);
+    return gpuMaterials_;
+}
+
+const std::unordered_map<uint32_t, GpuImage>& GpuResourceCache::skyboxes() const
+{
+    return gpuSkyboxImages_;
 }
 
 void GpuResourceCache::createDefaultData()
@@ -208,8 +213,6 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetDatabase& db)
         return;
     }
 
-    createMaterialDescriptorPools(db.materialCount());
-
     const auto stride = gpuDevice_.calculateAlignedUboStride(sizeof(GpuMaterialBufferData));
 
     materialUboBuffer_ = gpuDevice_.createUniformBuffer(stride * db.materialCount());
@@ -223,6 +226,7 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetDatabase& db)
         {
             auto gpuMaterial = GpuMaterial{};
             gpuMaterial.uboOffset = currentOffset;
+            gpuMaterial.diffuseTextureHandle = material.diffuseTextureUid();
             gpuMaterials_.emplace(material.uid(), std::move(gpuMaterial));
 
             auto uboData = GpuMaterialBufferData{};
@@ -234,49 +238,6 @@ void GpuResourceCache::uploadMaterialData(const assets::AssetDatabase& db)
                         sizeof(GpuMaterialBufferData));
 
             currentOffset += static_cast<uint32_t>(stride);
-
-            auto allocInfo = vk::DescriptorSetAllocateInfo{};
-            allocInfo.descriptorPool = *materialDescriptorPool_;
-            allocInfo.descriptorSetCount = 1;
-            allocInfo.pSetLayouts = &materialDescriptorSetLayout_;
-
-            auto sets = vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo};
-            materialDescriptorSets_.emplace(material.uid(), std::move(sets[0]));
-
-            auto bufferInfo = vk::DescriptorBufferInfo{};
-            bufferInfo.buffer = *materialUboBuffer_;
-            bufferInfo.offset = 0;
-            bufferInfo.range = stride;
-
-            auto uboWrite = vk::WriteDescriptorSet{};
-            uboWrite.dstSet = *materialDescriptorSets_.at(material.uid());
-            uboWrite.dstBinding = 0;
-            uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
-            uboWrite.descriptorCount = 1;
-            uboWrite.pBufferInfo = &bufferInfo;
-
-            auto imageInfo = vk::DescriptorImageInfo{};
-            if (material.diffuseTextureUid())
-            {
-                imageInfo.imageView = *gpuImage(material.diffuseTextureUid().value()).view;
-                imageInfo.sampler = *gpuImage(material.diffuseTextureUid().value()).sampler;
-            }
-            else
-            {
-                imageInfo.imageView = *emptyImage_.view;
-                imageInfo.sampler = *emptyImage_.sampler;
-            }
-            imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-            auto textureWrite = vk::WriteDescriptorSet{};
-            textureWrite.dstSet = *materialDescriptorSets_.at(material.uid());
-            textureWrite.dstBinding = 1;
-            textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-            textureWrite.descriptorCount = 1;
-            textureWrite.pImageInfo = &imageInfo;
-
-            std::array writes{uboWrite, textureWrite};
-            gpuDevice_.device().updateDescriptorSets(writes, {});
         }
     }
 }
@@ -346,8 +307,6 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
 
 void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
 {
-    createSkyboxDescriptorPools(db.skyboxCount());
-
     for (const auto& skybox : db.skyboxes())
     {
         // Assume all faces equal dimensions
@@ -400,66 +359,7 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
         gpuImage.view = gpuDevice_.createCubemapImageView(gpuImage.image);
         gpuImage.sampler = gpuDevice_.createSampler();
 
-        auto allocInfo = vk::DescriptorSetAllocateInfo{};
-        allocInfo.descriptorPool = *skyboxDescriptorPool_;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &skyboxDescriptorSetLayout_;
-
-        auto sets = vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo};
-        skyboxDescriptorSets_.emplace(skybox.second->uid, std::move(sets[0]));
-
-        auto imageInfo = vk::DescriptorImageInfo{};
-        imageInfo.imageView = gpuImage.view;
-        imageInfo.sampler = gpuImage.sampler;
-        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-        auto textureWrite = vk::WriteDescriptorSet{};
-        textureWrite.dstSet = *skyboxDescriptorSets_.at(skybox.second->uid);
-        textureWrite.dstBinding = 0;
-        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        textureWrite.descriptorCount = 1;
-        textureWrite.pImageInfo = &imageInfo;
-
-        std::array writes{textureWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
-
         gpuSkyboxImages_.emplace(skybox.second->uid, std::move(gpuImage));
     }
-}
-
-void GpuResourceCache::createMaterialDescriptorPools(uint32_t materialCount)
-{
-    auto materialUboPoolSize = vk::DescriptorPoolSize{};
-    materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
-    materialUboPoolSize.descriptorCount = 1;
-
-    auto texturePoolSize = vk::DescriptorPoolSize{};
-    texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
-    texturePoolSize.descriptorCount = 1;
-
-    auto materialPoolSizes = std::array{materialUboPoolSize, texturePoolSize};
-
-    auto materialPoolInfo = vk::DescriptorPoolCreateInfo{};
-    materialPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    materialPoolInfo.maxSets = materialCount;
-    materialPoolInfo.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size());
-    materialPoolInfo.pPoolSizes = materialPoolSizes.data();
-
-    materialDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), materialPoolInfo};
-}
-
-void GpuResourceCache::createSkyboxDescriptorPools(uint32_t skyboxCount)
-{
-    auto texturePoolSize = vk::DescriptorPoolSize{};
-    texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
-    texturePoolSize.descriptorCount = 1;
-
-    auto poolInfo = vk::DescriptorPoolCreateInfo{};
-    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    poolInfo.maxSets = skyboxCount;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &texturePoolSize;
-
-    skyboxDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), poolInfo};
 }
 } // namespace renderer

@@ -22,7 +22,6 @@ struct RenderPassCommandInfo
     const vk::ImageView& depthImageView;
     const vk::Extent2D& extent;
     const vk::raii::CommandBuffer& commandBuffer;
-    const vk::raii::DescriptorSet& cameraDescriptorSet;
     std::optional<uint32_t> skyboxUid;
     GpuResourceCache& gpuResourceCache;
     std::span<const DrawCommand> drawCommands;

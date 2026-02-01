@@ -20,11 +20,22 @@ struct PushConstants
 
 GeometryPass::GeometryPass(const GpuDevice& gpuDevice,
                            const vk::Format& surfaceFormat,
-                           const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout,
-                           const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout)
+                           uint32_t maxFramesInFlight,
+                           const std::vector<vk::raii::Buffer>& cameraBuffers)
     : gpuDevice_{gpuDevice}
 {
-    createPipeline(surfaceFormat, cameraDescriptorSetLayout, materialDescriptorSetLayout);
+    createDescriptorSetLayouts();
+
+    createPipeline(surfaceFormat);
+
+    createCameraDescriptorPool(maxFramesInFlight);
+    createCameraDescriptorSets(maxFramesInFlight, cameraBuffers);
+}
+
+void GeometryPass::rebuild(const GpuResourceCache& resourceCache)
+{
+    recreateMaterialDescriptorPools(static_cast<uint32_t>(resourceCache.materials().size()));
+    recreateMaterialDescriptorSets(resourceCache);
 }
 
 void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
@@ -72,7 +83,7 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
     passInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                               pipelineLayout_,
                                               0,
-                                              *passInfo.cameraDescriptorSet,
+                                              *cameraDescriptorSets_.at(passInfo.frameIndex),
                                               nullptr);
 
     passInfo.commandBuffer.setViewport(0,
@@ -96,12 +107,11 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
                                              vk::ArrayProxy<const PushConstants>{pushConstants});
 
         const auto& gpuMaterial = passInfo.gpuResourceCache.gpuMaterial(drawCommand.materialUid);
-        passInfo.commandBuffer.bindDescriptorSets(
-            vk::PipelineBindPoint::eGraphics,
-            pipelineLayout_,
-            1,
-            *passInfo.gpuResourceCache.materialDescriptorSet(drawCommand.materialUid),
-            gpuMaterial.uboOffset);
+        passInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                                  pipelineLayout_,
+                                                  1,
+                                                  *materialDescriptorSets_.at(drawCommand.materialUid),
+                                                  gpuMaterial.uboOffset);
 
         auto& gpuMesh = passInfo.gpuResourceCache.gpuMesh(drawCommand.subMeshUid);
         passInfo.commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);
@@ -110,9 +120,81 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo)
     passInfo.commandBuffer.endRendering();
 }
 
-void GeometryPass::createPipeline(const vk::Format& surfaceFormat,
-                                  const vk::raii::DescriptorSetLayout& cameraDescriptorSetLayout,
-                                  const vk::raii::DescriptorSetLayout& materialDescriptorSetLayout)
+void GeometryPass::createDescriptorSetLayouts()
+{
+    auto cameraLayoutBinding = vk::DescriptorSetLayoutBinding{};
+    cameraLayoutBinding.binding = 0;
+    cameraLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+    cameraLayoutBinding.descriptorCount = 1;
+    cameraLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+
+    auto cameraLayoutBindings = std::array{cameraLayoutBinding};
+    cameraDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(cameraLayoutBindings);
+
+    auto materialUboLayoutBinding = vk::DescriptorSetLayoutBinding{};
+    materialUboLayoutBinding.binding = 0;
+    materialUboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+    materialUboLayoutBinding.descriptorCount = 1;
+    materialUboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+    auto textureBinding = vk::DescriptorSetLayoutBinding{};
+    textureBinding.binding = 1;
+    textureBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    textureBinding.descriptorCount = 1;
+    textureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+    auto materialLayoutBindings = std::array{materialUboLayoutBinding, textureBinding};
+    materialDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(materialLayoutBindings);
+}
+
+void GeometryPass::createCameraDescriptorPool(uint32_t count)
+{
+    auto cameraPoolSize = vk::DescriptorPoolSize{};
+    cameraPoolSize.type = vk::DescriptorType::eUniformBuffer;
+    cameraPoolSize.descriptorCount = count;
+
+    auto cameraPoolSizes = std::array{cameraPoolSize};
+
+    auto cameraPoolInfo = vk::DescriptorPoolCreateInfo{};
+    cameraPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    cameraPoolInfo.maxSets = count;
+    cameraPoolInfo.poolSizeCount = static_cast<uint32_t>(cameraPoolSizes.size());
+    cameraPoolInfo.pPoolSizes = cameraPoolSizes.data();
+
+    cameraDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), cameraPoolInfo};
+}
+
+void GeometryPass::createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers)
+{
+    auto layouts = std::vector<vk::DescriptorSetLayout>{count, *cameraDescriptorSetLayout_};
+
+    auto allocInfo = vk::DescriptorSetAllocateInfo{};
+    allocInfo.descriptorPool = *cameraDescriptorPool_;
+    allocInfo.descriptorSetCount = count;
+    allocInfo.pSetLayouts = layouts.data();
+
+    cameraDescriptorSets_ = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+
+    for (auto frameIndex = 0; frameIndex < count; ++frameIndex)
+    {
+        auto bufferInfo = vk::DescriptorBufferInfo{};
+        bufferInfo.buffer = cameraBuffers.at(frameIndex);
+        bufferInfo.offset = 0;
+        bufferInfo.range = VK_WHOLE_SIZE;
+
+        auto uboWrite = vk::WriteDescriptorSet{};
+        uboWrite.dstSet = cameraDescriptorSets_.at(frameIndex);
+        uboWrite.dstBinding = 0;
+        uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
+        uboWrite.descriptorCount = 1;
+        uboWrite.pBufferInfo = &bufferInfo;
+
+        auto writes = std::array{uboWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+    }
+}
+
+void GeometryPass::createPipeline(const vk::Format& surfaceFormat)
 {
     // Shader-progammable stages
     auto vertexShaderModule = gpuDevice_.createShaderModule(core::getShaderDir() / "basic.vert.spv");
@@ -177,7 +259,7 @@ void GeometryPass::createPipeline(const vk::Format& surfaceFormat,
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout, *materialDescriptorSetLayout};
+    auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout_, *materialDescriptorSetLayout_};
 
     if (gpuDevice_.physicalDevice().getProperties().limits.maxPushConstantsSize < sizeof(PushConstants))
     {
@@ -226,5 +308,76 @@ void GeometryPass::createPipeline(const vk::Format& surfaceFormat,
     pipelineInfo.renderPass = nullptr;
 
     pipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
+}
+
+void GeometryPass::recreateMaterialDescriptorPools(uint32_t count)
+{
+    auto materialUboPoolSize = vk::DescriptorPoolSize{};
+    materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
+    materialUboPoolSize.descriptorCount = 1;
+
+    auto texturePoolSize = vk::DescriptorPoolSize{};
+    texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
+    texturePoolSize.descriptorCount = 1;
+
+    auto materialPoolSizes = std::array{materialUboPoolSize, texturePoolSize};
+
+    auto materialPoolInfo = vk::DescriptorPoolCreateInfo{};
+    materialPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    materialPoolInfo.maxSets = count;
+    materialPoolInfo.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size());
+    materialPoolInfo.pPoolSizes = materialPoolSizes.data();
+
+    materialDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), materialPoolInfo};
+}
+
+void GeometryPass::recreateMaterialDescriptorSets(const GpuResourceCache& resourceCache)
+{
+    const auto stride = gpuDevice_.calculateAlignedUboStride(sizeof(GpuMaterialBufferData));
+    for (const auto& [handle, material] : resourceCache.materials())
+    {
+        auto allocInfo = vk::DescriptorSetAllocateInfo{};
+        allocInfo.descriptorPool = *materialDescriptorPool_;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &*materialDescriptorSetLayout_;
+
+        auto sets = vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo};
+        materialDescriptorSets_.emplace(handle, std::move(sets[0]));
+
+        auto bufferInfo = vk::DescriptorBufferInfo{};
+        bufferInfo.buffer = *resourceCache.materialUboBuffer();
+        bufferInfo.offset = 0;
+        bufferInfo.range = stride;
+
+        auto uboWrite = vk::WriteDescriptorSet{};
+        uboWrite.dstSet = *materialDescriptorSets_.at(handle);
+        uboWrite.dstBinding = 0;
+        uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+        uboWrite.descriptorCount = 1;
+        uboWrite.pBufferInfo = &bufferInfo;
+
+        auto imageInfo = vk::DescriptorImageInfo{};
+        if (material.diffuseTextureHandle)
+        {
+            imageInfo.imageView = *resourceCache.gpuImage(material.diffuseTextureHandle.value()).view;
+            imageInfo.sampler = *resourceCache.gpuImage(material.diffuseTextureHandle.value()).sampler;
+        }
+        else
+        {
+            imageInfo.imageView = *resourceCache.emptyImage().view;
+            imageInfo.sampler = *resourceCache.emptyImage().sampler;
+        }
+        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+        auto textureWrite = vk::WriteDescriptorSet{};
+        textureWrite.dstSet = *materialDescriptorSets_.at(handle);
+        textureWrite.dstBinding = 1;
+        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        textureWrite.descriptorCount = 1;
+        textureWrite.pImageInfo = &imageInfo;
+
+        std::array writes{uboWrite, textureWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+    }
 }
 } // namespace renderer

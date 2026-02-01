@@ -55,13 +55,9 @@ class Renderer
     void createSwapchain();
     void createSwapchainImageViews();
 
-    void createCameraDescriptorPool();
-    void createDescriptorSetLayouts();
     void createCommandBuffers();
     void createSyncObjects();
     void createCameraBuffers();
-
-    void createDescriptorSets();
 
     void recreateSwapchain();
     void recordCommands(uint32_t imageIndex,
@@ -87,10 +83,6 @@ class Renderer
     vk::SurfaceFormatKHR surfaceFormat_;
     std::vector<vk::Image> swapchainImages_;
     std::vector<vk::raii::ImageView> swapchainImageViews_;
-    vk::raii::DescriptorPool cameraDescriptorPool_{nullptr};
-    vk::raii::DescriptorSetLayout cameraDescriptorSetLayout_{nullptr};
-    vk::raii::DescriptorSetLayout materialDescriptorSetLayout_{nullptr};
-    vk::raii::DescriptorSetLayout skyboxDescriptorSetLayout_{nullptr};
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
     std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
@@ -104,7 +96,6 @@ class Renderer
     std::vector<vk::raii::Buffer> cameraUboBuffers_;
     std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;
     std::vector<void*> cameraUboMappedMemory_;
-    std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
 
     std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
 

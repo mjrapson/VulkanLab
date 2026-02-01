@@ -19,5 +19,6 @@ struct GpuMaterialBufferData
 struct GpuMaterial
 {
     uint32_t uboOffset;
+    std::optional<uint32_t> diffuseTextureHandle;
 };
 } // namespace renderer

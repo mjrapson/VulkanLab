@@ -68,8 +68,6 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     createSwapchainImageViews();
     createDepthBufferImage();
 
-    createCameraDescriptorPool();
-    createDescriptorSetLayouts();
     createCameraBuffers();
 
     spdlog::info("Creating command buffers");
@@ -178,8 +176,10 @@ void Renderer::windowResized(int width, int height)
 
 void Renderer::setResources(const assets::AssetDatabase& db)
 {
-    gpuResources_ =
-        std::make_unique<GpuResourceCache>(db, gpuDevice_, materialDescriptorSetLayout_, skyboxDescriptorSetLayout_);
+    gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_);
+
+    skyboxPass_->rebuild(*gpuResources_);
+    geometryPass_->rebuild(*gpuResources_);
 }
 
 void Renderer::createSwapchain()
@@ -227,62 +227,6 @@ void Renderer::createSwapchainImageViews()
     }
 }
 
-void Renderer::createCameraDescriptorPool()
-{
-    auto cameraPoolSize = vk::DescriptorPoolSize{};
-    cameraPoolSize.type = vk::DescriptorType::eUniformBuffer;
-    cameraPoolSize.descriptorCount = maxFramesInFlight;
-
-    auto cameraPoolSizes = std::array{cameraPoolSize};
-
-    auto cameraPoolInfo = vk::DescriptorPoolCreateInfo{};
-    cameraPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    cameraPoolInfo.maxSets = maxFramesInFlight;
-    cameraPoolInfo.poolSizeCount = static_cast<uint32_t>(cameraPoolSizes.size());
-    cameraPoolInfo.pPoolSizes = cameraPoolSizes.data();
-
-    cameraDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), cameraPoolInfo};
-}
-
-void Renderer::createDescriptorSetLayouts()
-{
-    // Camera descriptor set layout
-    auto cameraLayoutBinding = vk::DescriptorSetLayoutBinding{};
-    cameraLayoutBinding.binding = 0;
-    cameraLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-    cameraLayoutBinding.descriptorCount = 1;
-    cameraLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
-
-    auto cameraLayoutBindings = std::array{cameraLayoutBinding};
-    cameraDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(cameraLayoutBindings);
-
-    // Material descriptor set layout
-    auto materialUboLayoutBinding = vk::DescriptorSetLayoutBinding{};
-    materialUboLayoutBinding.binding = 0;
-    materialUboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
-    materialUboLayoutBinding.descriptorCount = 1;
-    materialUboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-
-    auto textureBinding = vk::DescriptorSetLayoutBinding{};
-    textureBinding.binding = 1;
-    textureBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-    textureBinding.descriptorCount = 1;
-    textureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-
-    auto materialLayoutBindings = std::array{materialUboLayoutBinding, textureBinding};
-    materialDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(materialLayoutBindings);
-
-    // Skybox descriptor set layout
-    auto skyboxTextureBinding = vk::DescriptorSetLayoutBinding{};
-    skyboxTextureBinding.binding = 0;
-    skyboxTextureBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-    skyboxTextureBinding.descriptorCount = 1;
-    skyboxTextureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-
-    auto skyboxLayoutBindings = std::array{skyboxTextureBinding};
-    skyboxDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(skyboxLayoutBindings);
-}
-
 void Renderer::createCommandBuffers()
 {
     commandBuffers_ = gpuDevice_.createCommandBuffers(maxFramesInFlight);
@@ -307,15 +251,6 @@ void Renderer::createSyncObjects()
 
 void Renderer::createCameraBuffers()
 {
-    auto layouts = std::vector<vk::DescriptorSetLayout>{maxFramesInFlight, *cameraDescriptorSetLayout_};
-
-    auto allocInfo = vk::DescriptorSetAllocateInfo{};
-    allocInfo.descriptorPool = *cameraDescriptorPool_;
-    allocInfo.descriptorSetCount = maxFramesInFlight;
-    allocInfo.pSetLayouts = layouts.data();
-
-    cameraDescriptorSets_ = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
-
     for (auto frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex)
     {
         auto buffer = gpuDevice_.createBuffer(sizeof(CameraBufferObject),
@@ -327,21 +262,6 @@ void Renderer::createCameraBuffers()
                                                           | vk::MemoryPropertyFlagBits::eHostCoherent);
 
         auto mappedMemory = memory.mapMemory(0, VK_WHOLE_SIZE);
-
-        auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = buffer;
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(CameraBufferObject);
-
-        auto uboWrite = vk::WriteDescriptorSet{};
-        uboWrite.dstSet = cameraDescriptorSets_.at(frameIndex);
-        uboWrite.dstBinding = 0;
-        uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
-        uboWrite.descriptorCount = 1;
-        uboWrite.pBufferInfo = &bufferInfo;
-
-        auto writes = std::array{uboWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
 
         cameraUboBuffers_.emplace_back(std::move(buffer));
         cameraUboBuffersMemory_.emplace_back(std::move(memory));
@@ -387,7 +307,6 @@ void Renderer::recordCommands(uint32_t imageIndex,
         .depthImageView = depthImageView_,
         .extent = swapchainExtent_,
         .commandBuffer = commandBuffer,
-        .cameraDescriptorSet = cameraDescriptorSets_.at(currentFrameIndex_),
         .skyboxUid = skyboxUid,
         .gpuResourceCache = *gpuResources_,
         .drawCommands = drawCommands_,
@@ -428,14 +347,9 @@ void Renderer::createDepthBufferImage()
 
 void Renderer::createRenderPasses()
 {
-    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_,
-                                               surfaceFormat_.format,
-                                               cameraDescriptorSetLayout_,
-                                               skyboxDescriptorSetLayout_);
+    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_, surfaceFormat_.format, maxFramesInFlight, cameraUboBuffers_);
 
-    geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_,
-                                                   surfaceFormat_.format,
-                                                   cameraDescriptorSetLayout_,
-                                                   materialDescriptorSetLayout_);
+    geometryPass_ =
+        std::make_unique<GeometryPass>(gpuDevice_, surfaceFormat_.format, maxFramesInFlight, cameraUboBuffers_);
 }
 } // namespace renderer
