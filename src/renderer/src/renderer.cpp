@@ -194,9 +194,9 @@ void Renderer::createCameraBuffers()
 
         auto mappedMemory = memory.mapMemory(0, VK_WHOLE_SIZE);
 
-        cameraUboBuffers_.emplace_back(std::move(buffer));
-        cameraUboBuffersMemory_.emplace_back(std::move(memory));
-        cameraUboMappedMemory_.emplace_back(std::move(mappedMemory));
+        cameraUboBuffers_.push_back(std::move(buffer));
+        cameraUboBuffersMemory_.push_back(std::move(memory));
+        cameraUboMappedMemory_.push_back(std::move(mappedMemory));
     }
 }
 
