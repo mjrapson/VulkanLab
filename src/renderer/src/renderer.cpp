@@ -253,13 +253,8 @@ void Renderer::createCameraBuffers()
 {
     for (auto frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex)
     {
-        auto buffer = gpuDevice_.createBuffer(sizeof(CameraBufferObject),
-                                              vk::BufferUsageFlagBits::eUniformBuffer,
-                                              vk::SharingMode::eExclusive);
-
-        auto memory = gpuDevice_.allocateBufferMemory(buffer,
-                                                      vk::MemoryPropertyFlagBits::eHostVisible
-                                                          | vk::MemoryPropertyFlagBits::eHostCoherent);
+        auto buffer = gpuDevice_.createUniformBuffer(sizeof(CameraBufferObject));
+        auto memory = gpuDevice_.allocateStagingBufferMemory(buffer);
 
         auto mappedMemory = memory.mapMemory(0, VK_WHOLE_SIZE);
 
