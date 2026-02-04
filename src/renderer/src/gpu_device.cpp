@@ -210,14 +210,40 @@ void GpuDevice::submitCommandBuffer(const vk::CommandBuffer& cmd,
     graphicsQueue_.submit(submitInfo, fence);
 }
 
+vk::raii::DescriptorPool GpuDevice::createDescriptorPool(uint32_t maxSets,
+                                                         std::span<vk::DescriptorPoolSize> poolSizes) const
+{
+    auto createInfo = vk::DescriptorPoolCreateInfo{};
+    createInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    createInfo.maxSets = maxSets;
+    createInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    createInfo.pPoolSizes = poolSizes.data();
+
+    return vk::raii::DescriptorPool{device_, createInfo};
+}
+
 vk::raii::DescriptorSetLayout
-GpuDevice::createDescriptorSetLayout(const std::span<vk::DescriptorSetLayoutBinding>& bindings) const
+GpuDevice::createDescriptorSetLayout(const std::span<const vk::DescriptorSetLayoutBinding>& bindings) const
 {
     auto createInfo = vk::DescriptorSetLayoutCreateInfo{};
     createInfo.bindingCount = static_cast<uint32_t>(bindings.size());
     createInfo.pBindings = bindings.data();
 
     return vk::raii::DescriptorSetLayout{device_, createInfo};
+}
+
+vk::raii::DescriptorSets GpuDevice::createDescriptorSets(const vk::raii::DescriptorSetLayout& layout,
+                                                         const vk::raii::DescriptorPool& pool,
+                                                         uint32_t count) const
+{
+    auto layouts = std::vector<vk::DescriptorSetLayout>{count, *layout};
+
+    auto allocateInfo = vk::DescriptorSetAllocateInfo{};
+    allocateInfo.descriptorPool = *pool;
+    allocateInfo.descriptorSetCount = count;
+    allocateInfo.pSetLayouts = layouts.data();
+
+    return vk::raii::DescriptorSets{device_, allocateInfo};
 }
 
 vk::raii::ShaderModule GpuDevice::createShaderModule(const std::filesystem::path& filePath) const

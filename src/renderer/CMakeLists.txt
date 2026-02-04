@@ -3,6 +3,7 @@ add_library(Renderer STATIC)
 target_sources(Renderer
     PUBLIC
         include/renderer/camera.h
+        include/renderer/descriptor_set_allocator.h
         include/renderer/gpu_device.h
         include/renderer/renderer.h
         include/renderer/swapchain.h
@@ -19,6 +20,7 @@ target_sources(Renderer
         src/render_passes/skybox_pass.cpp
         src/render_passes/skybox_pass.h
         src/camera.cpp
+        src/descriptor_set_allocator.cpp
         src/gpu_device.cpp
         src/renderer.cpp
 )

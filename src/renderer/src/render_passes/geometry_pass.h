@@ -5,6 +5,8 @@
 
 #include "render_pass_command_info.h"
 
+#include "renderer/descriptor_set_allocator.h"
+
 #include <assets/handles.h>
 
 #include <vulkan/vulkan_raii.hpp>
@@ -33,13 +35,8 @@ class GeometryPass
     void recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView);
 
   private:
-    void createDescriptorSetLayouts();
-    void createCameraDescriptorPool(uint32_t count);
     void createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers);
-
     void createPipeline(const vk::Format& surfaceFormat);
-
-    void recreateMaterialDescriptorPools(uint32_t count);
     void recreateMaterialDescriptorSets(const GpuResourceCache& resourceCache);
 
   private:
@@ -54,11 +51,8 @@ class GeometryPass
     vk::raii::DeviceMemory depthImageMemory_{nullptr};
     vk::raii::ImageView depthImageView_{nullptr};
 
-    vk::raii::DescriptorSetLayout cameraDescriptorSetLayout_{nullptr};
-    vk::raii::DescriptorSetLayout materialDescriptorSetLayout_{nullptr};
-
-    vk::raii::DescriptorPool cameraDescriptorPool_{nullptr};
-    vk::raii::DescriptorPool materialDescriptorPool_{nullptr};
+    DescriptorSetAllocator cameraDescriptor_;
+    DescriptorSetAllocator materialDescriptor_;
 
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
     std::unordered_map<assets::MaterialHandle, vk::raii::DescriptorSet> materialDescriptorSets_;

@@ -41,8 +41,7 @@ void SkyboxPass::rebuild(const GpuResourceCache& resourceCache)
     recreateDescriptorSets(resourceCache);
 }
 
-void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo,
-                                vk::ImageView colorTargetImageView)
+void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView)
 {
     const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
 
@@ -94,8 +93,7 @@ void SkyboxPass::createDescriptorSetLayouts()
     cameraLayoutBinding.descriptorCount = 1;
     cameraLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
 
-    auto cameraLayoutBindings = std::array{cameraLayoutBinding};
-    cameraDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(cameraLayoutBindings);
+    cameraDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(std::span{&cameraLayoutBinding, 1});
 
     auto skyboxTextureBinding = vk::DescriptorSetLayoutBinding{};
     skyboxTextureBinding.binding = 0;
@@ -103,8 +101,7 @@ void SkyboxPass::createDescriptorSetLayouts()
     skyboxTextureBinding.descriptorCount = 1;
     skyboxTextureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-    auto skyboxLayoutBindings = std::array{skyboxTextureBinding};
-    skyboxDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(skyboxLayoutBindings);
+    skyboxDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(std::span{&skyboxTextureBinding, 1});
 }
 
 void SkyboxPass::createCameraDescriptorPool(uint32_t count)
@@ -113,27 +110,12 @@ void SkyboxPass::createCameraDescriptorPool(uint32_t count)
     cameraPoolSize.type = vk::DescriptorType::eUniformBuffer;
     cameraPoolSize.descriptorCount = count;
 
-    auto cameraPoolSizes = std::array{cameraPoolSize};
-
-    auto cameraPoolInfo = vk::DescriptorPoolCreateInfo{};
-    cameraPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    cameraPoolInfo.maxSets = count;
-    cameraPoolInfo.poolSizeCount = static_cast<uint32_t>(cameraPoolSizes.size());
-    cameraPoolInfo.pPoolSizes = cameraPoolSizes.data();
-
-    cameraDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), cameraPoolInfo};
+    cameraDescriptorPool_ = gpuDevice_.createDescriptorPool(count, std::span{&cameraPoolSize, 1});
 }
 
 void SkyboxPass::createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers)
 {
-    auto layouts = std::vector<vk::DescriptorSetLayout>{count, *cameraDescriptorSetLayout_};
-
-    auto allocInfo = vk::DescriptorSetAllocateInfo{};
-    allocInfo.descriptorPool = *cameraDescriptorPool_;
-    allocInfo.descriptorSetCount = count;
-    allocInfo.pSetLayouts = layouts.data();
-
-    cameraDescriptorSets_ = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+    cameraDescriptorSets_ = gpuDevice_.createDescriptorSets(cameraDescriptorSetLayout_, cameraDescriptorPool_, count);
 
     for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
     {
@@ -256,27 +238,16 @@ void SkyboxPass::recreateDescriptorPools(uint32_t count)
 {
     auto texturePoolSize = vk::DescriptorPoolSize{};
     texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
-    texturePoolSize.descriptorCount = 1;
+    texturePoolSize.descriptorCount = count;
 
-    auto poolInfo = vk::DescriptorPoolCreateInfo{};
-    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    poolInfo.maxSets = count;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &texturePoolSize;
-
-    skyboxDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), poolInfo};
+    skyboxDescriptorPool_ = gpuDevice_.createDescriptorPool(count, std::span{&texturePoolSize, 1});
 }
 
 void SkyboxPass::recreateDescriptorSets(const GpuResourceCache& resourceCache)
 {
     for (const auto& [handle, image] : resourceCache.skyboxes())
     {
-        auto allocInfo = vk::DescriptorSetAllocateInfo{};
-        allocInfo.descriptorPool = *skyboxDescriptorPool_;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &*skyboxDescriptorSetLayout_;
-
-        auto sets = vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo};
+        auto sets = gpuDevice_.createDescriptorSets(skyboxDescriptorSetLayout_, skyboxDescriptorPool_, 1);
         skyboxDescriptorSets_.emplace(handle, std::move(sets[0]));
 
         auto imageInfo = vk::DescriptorImageInfo{};

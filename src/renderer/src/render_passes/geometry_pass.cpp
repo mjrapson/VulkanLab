@@ -10,6 +10,8 @@
 
 #include <core/file_system.h>
 
+#include <array>
+
 namespace renderer
 {
 struct PushConstants
@@ -18,8 +20,19 @@ struct PushConstants
     glm::mat4 normalMatrix;
 };
 
+constexpr auto cameraDescriptorBindings = std::array{
+    vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
+};
+
+constexpr auto materialDescriptorBindings = std::array{
+    vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eFragment},
+    vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
+};
+
 GeometryPass::GeometryPass(const GpuDevice& gpuDevice)
-    : gpuDevice_{gpuDevice}
+    : gpuDevice_{gpuDevice},
+      cameraDescriptor_{gpuDevice_, cameraDescriptorBindings},
+      materialDescriptor_{gpuDevice_, materialDescriptorBindings}
 {
 }
 
@@ -27,14 +40,14 @@ void GeometryPass::initialize(const vk::Extent2D& extent,
                               const vk::Format& surfaceFormat,
                               uint32_t maxFramesInFlight,
                               const std::vector<vk::raii::Buffer>& cameraBuffers)
+
 {
     resize(extent);
 
-    createDescriptorSetLayouts();
-
     createPipeline(surfaceFormat);
 
-    createCameraDescriptorPool(maxFramesInFlight);
+    cameraDescriptor_.resize(maxFramesInFlight);
+
     createCameraDescriptorSets(maxFramesInFlight, cameraBuffers);
 }
 
@@ -49,7 +62,8 @@ void GeometryPass::resize(const vk::Extent2D& extent)
 
 void GeometryPass::rebuild(const GpuResourceCache& resourceCache)
 {
-    recreateMaterialDescriptorPools(static_cast<uint32_t>(resourceCache.materials().size()));
+    materialDescriptor_.resize(static_cast<uint32_t>(resourceCache.materials().size()));
+
     recreateMaterialDescriptorSets(resourceCache);
 }
 
@@ -129,60 +143,9 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo, vk::Ima
     passInfo.commandBuffer.endRendering();
 }
 
-void GeometryPass::createDescriptorSetLayouts()
-{
-    auto cameraLayoutBinding = vk::DescriptorSetLayoutBinding{};
-    cameraLayoutBinding.binding = 0;
-    cameraLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-    cameraLayoutBinding.descriptorCount = 1;
-    cameraLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
-
-    auto cameraLayoutBindings = std::array{cameraLayoutBinding};
-    cameraDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(cameraLayoutBindings);
-
-    auto materialUboLayoutBinding = vk::DescriptorSetLayoutBinding{};
-    materialUboLayoutBinding.binding = 0;
-    materialUboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
-    materialUboLayoutBinding.descriptorCount = 1;
-    materialUboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-
-    auto textureBinding = vk::DescriptorSetLayoutBinding{};
-    textureBinding.binding = 1;
-    textureBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-    textureBinding.descriptorCount = 1;
-    textureBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-
-    auto materialLayoutBindings = std::array{materialUboLayoutBinding, textureBinding};
-    materialDescriptorSetLayout_ = gpuDevice_.createDescriptorSetLayout(materialLayoutBindings);
-}
-
-void GeometryPass::createCameraDescriptorPool(uint32_t count)
-{
-    auto cameraPoolSize = vk::DescriptorPoolSize{};
-    cameraPoolSize.type = vk::DescriptorType::eUniformBuffer;
-    cameraPoolSize.descriptorCount = count;
-
-    auto cameraPoolSizes = std::array{cameraPoolSize};
-
-    auto cameraPoolInfo = vk::DescriptorPoolCreateInfo{};
-    cameraPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    cameraPoolInfo.maxSets = count;
-    cameraPoolInfo.poolSizeCount = static_cast<uint32_t>(cameraPoolSizes.size());
-    cameraPoolInfo.pPoolSizes = cameraPoolSizes.data();
-
-    cameraDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), cameraPoolInfo};
-}
-
 void GeometryPass::createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers)
 {
-    auto layouts = std::vector<vk::DescriptorSetLayout>{count, *cameraDescriptorSetLayout_};
-
-    auto allocInfo = vk::DescriptorSetAllocateInfo{};
-    allocInfo.descriptorPool = *cameraDescriptorPool_;
-    allocInfo.descriptorSetCount = count;
-    allocInfo.pSetLayouts = layouts.data();
-
-    cameraDescriptorSets_ = std::move(vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo});
+    cameraDescriptorSets_ = std::move(cameraDescriptor_.allocateSets(count));
 
     for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
     {
@@ -268,7 +231,7 @@ void GeometryPass::createPipeline(const vk::Format& surfaceFormat)
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    auto descriptorSetLayouts = std::array{*cameraDescriptorSetLayout_, *materialDescriptorSetLayout_};
+    const auto descriptorSetLayouts = std::array{*cameraDescriptor_.layout(), *materialDescriptor_.layout()};
 
     if (gpuDevice_.exceedsPushConstantLimit(sizeof(PushConstants)))
     {
@@ -319,39 +282,12 @@ void GeometryPass::createPipeline(const vk::Format& surfaceFormat)
     pipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
 }
 
-void GeometryPass::recreateMaterialDescriptorPools(uint32_t count)
-{
-    auto materialUboPoolSize = vk::DescriptorPoolSize{};
-    materialUboPoolSize.type = vk::DescriptorType::eUniformBufferDynamic;
-    materialUboPoolSize.descriptorCount = 1;
-
-    auto texturePoolSize = vk::DescriptorPoolSize{};
-    texturePoolSize.type = vk::DescriptorType::eCombinedImageSampler;
-    texturePoolSize.descriptorCount = 1;
-
-    auto materialPoolSizes = std::array{materialUboPoolSize, texturePoolSize};
-
-    auto materialPoolInfo = vk::DescriptorPoolCreateInfo{};
-    materialPoolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    materialPoolInfo.maxSets = count;
-    materialPoolInfo.poolSizeCount = static_cast<uint32_t>(materialPoolSizes.size());
-    materialPoolInfo.pPoolSizes = materialPoolSizes.data();
-
-    materialDescriptorPool_ = vk::raii::DescriptorPool{gpuDevice_.device(), materialPoolInfo};
-}
-
 void GeometryPass::recreateMaterialDescriptorSets(const GpuResourceCache& resourceCache)
 {
     const auto stride = gpuDevice_.calculateAlignedUboStride(sizeof(GpuMaterialBufferData));
     for (const auto& [handle, material] : resourceCache.materials())
     {
-        auto allocInfo = vk::DescriptorSetAllocateInfo{};
-        allocInfo.descriptorPool = *materialDescriptorPool_;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &*materialDescriptorSetLayout_;
-
-        auto sets = vk::raii::DescriptorSets{gpuDevice_.device(), allocInfo};
-        materialDescriptorSets_.emplace(handle, std::move(sets[0]));
+        materialDescriptorSets_.emplace(handle, std::move(materialDescriptor_.allocateSets(1)[0]));
 
         auto bufferInfo = vk::DescriptorBufferInfo{};
         bufferInfo.buffer = *resourceCache.materialUboBuffer();
