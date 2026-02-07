@@ -8,13 +8,8 @@
 
 namespace world
 {
-World::World(renderer::Renderer& renderer)
-    : renderSystem_{renderer, *this}
-{
-}
-
 World::World(const scene::Scene& scene, const assets::AssetDatabase& assetDatabase, renderer::Renderer& renderer)
-    : World(renderer)
+    : renderSystem_{renderer, *this}
 {
     for (const auto& sceneEntity : scene.entities)
     {
@@ -34,6 +29,7 @@ World::World(const scene::Scene& scene, const assets::AssetDatabase& assetDataba
         }
 
         activeSkybox_ = assetDatabase.skyboxes().at(scene.camera.skybox)->handle();
+        directionalLight_.direction = scene.directionalLight.direction;
     }
 }
 
@@ -51,6 +47,11 @@ void World::destroyEntity(Entity entity)
 const std::optional<assets::SkyboxHandle>& World::activeSkybox() const
 {
     return activeSkybox_;
+}
+
+const DirectionalLightComponent& World::directionalLight() const
+{
+    return directionalLight_;
 }
 
 void World::update(const renderer::Camera& camera)

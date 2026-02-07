@@ -4,13 +4,13 @@
 #pragma once
 
 #include "entity.h"
+#include "world/components/directional_light_component.h"
 #include "world/components/render_component.h"
 #include "world/components/transform_component.h"
 #include "world/systems/render_system.h"
 
 #include <assets/handles.h>
 
-#include <memory>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -35,7 +35,6 @@ namespace world
 class World
 {
   public:
-    World(renderer::Renderer& renderer);
     World(const scene::Scene& scene, const assets::AssetDatabase& assetDatabase, renderer::Renderer& renderer);
 
     World(const World&) = delete;
@@ -48,6 +47,8 @@ class World
     void destroyEntity(Entity entity);
 
     const std::optional<assets::SkyboxHandle>& activeSkybox() const;
+
+    const DirectionalLightComponent& directionalLight() const;
 
     void update(const renderer::Camera& camera);
 
@@ -115,6 +116,7 @@ class World
     std::unordered_map<Entity, RenderComponent> renderComponents_;
     std::unordered_map<Entity, TransformComponent> transformComponents_;
     std::optional<assets::SkyboxHandle> activeSkybox_;
+    DirectionalLightComponent directionalLight_;
 
   private:
     Entity nextEntity{0};
