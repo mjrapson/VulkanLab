@@ -162,7 +162,7 @@ std::unique_ptr<Scene> loadScene(const std::filesystem::path& path)
         loadEntity(entityJson, *scene);
     }
 
-    if(sceneJson.contains(cameraKey))
+    if (sceneJson.contains(cameraKey))
     {
         loadCamera(sceneJson[cameraKey], *scene);
     }

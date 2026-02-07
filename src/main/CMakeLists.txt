@@ -15,13 +15,13 @@ target_include_directories(VulkanDemo
 target_link_libraries(VulkanDemo
     PRIVATE
     Core
+    Window
     Scene
     Assets
     Renderer
     World
     glfw
     spdlog
-    Vulkan::Vulkan
 )
 
 set(SHADER_SRC_DIR ${CMAKE_SOURCE_DIR}/assets/shaders)

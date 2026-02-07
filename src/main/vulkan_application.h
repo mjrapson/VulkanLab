@@ -3,64 +3,30 @@
 
 #pragma once
 
-#include <vulkan/vulkan_raii.hpp>
-
-#include <memory>
-#include <string>
-
-namespace assets
-{
-class AssetDatabase;
-}
-
-namespace core
-{
-class InputHandler;
-}
+#include <renderer/camera.h>
 
 namespace renderer
 {
-class Camera;
-class GpuDevice;
 class Renderer;
 } // namespace renderer
 
-struct GLFWwindow;
+namespace window
+{
+class Window;
+} // namespace window
 
 class VulkanApplication
 {
   public:
-    VulkanApplication();
-    ~VulkanApplication();
+    VulkanApplication(window::Window& window, renderer::Renderer& renderer);
 
-    void init(int windowWidth, int windowHeight, const std::string& windowTitle);
     void run();
 
-    void windowResized(int width, int height);
-    void keyPressed(int key, int scancode, int action, int mods);
-
   private:
-    void initGlfw();
-    void initWindow(int windowWidth, int windowHeight, const std::string& windowTitle);
-    void initVulkan(int windowWidth, int windowHeight);
-
-    void createInstance();
-    void createDebugMessenger();
-    void createSurface();
-
     void updateCamera(float deltaTime);
 
   private:
-    bool glfwInitialised_{false};
-    GLFWwindow* window_{nullptr};
-
-    vk::raii::Context context_;
-    vk::raii::Instance instance_{nullptr};
-    vk::raii::DebugUtilsMessengerEXT debugMessenger_{nullptr};
-    vk::raii::SurfaceKHR surface_{nullptr};
-
-    std::unique_ptr<core::InputHandler> inputHandler_{nullptr};
-    std::unique_ptr<renderer::GpuDevice> gpuDevice_{nullptr};
-    std::unique_ptr<renderer::Renderer> renderer_{nullptr};
-    std::unique_ptr<renderer::Camera> camera_{nullptr};
+    window::Window& window_;
+    renderer::Renderer& renderer_;
+    renderer::Camera camera_;
 };

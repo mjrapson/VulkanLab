@@ -38,7 +38,7 @@ class SkyboxPass
     void createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers);
 
     void createPipeline(const vk::Format& surfaceFormat);
-    
+
     void recreateDescriptorSets(const GpuResourceCache& resourceCache);
 
   private:
@@ -53,6 +53,7 @@ class SkyboxPass
     DescriptorSetAllocator skyboxDescriptor_;
 
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
-    std::unordered_map<assets::SkyboxHandle, vk::raii::DescriptorSet> skyboxDescriptorSets_;
+    std::unordered_map<assets::SkyboxHandle, vk::raii::DescriptorSet, core::Hash<assets::SkyboxHandle>>
+        skyboxDescriptorSets_;
 };
 } // namespace renderer

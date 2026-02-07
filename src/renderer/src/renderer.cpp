@@ -1,20 +1,17 @@
 #include "renderer/renderer.h"
 
-#include "private/gpu_material.h"
 #include "private/gpu_resource_cache.h"
 #include "render_passes/geometry_pass.h"
 #include "render_passes/skybox_pass.h"
 #include "renderer/camera.h"
-#include "renderer/gpu_device.h"
-#include "renderer/vertex_layout.h"
 
 #include <assets/asset_database.h>
+#include <window/window.h>
 
 #include <spdlog/spdlog.h>
 
 #include <glm/glm.hpp>
 
-#include <chrono>
 #include <ranges>
 
 namespace renderer
@@ -27,21 +24,15 @@ struct CameraBufferObject
 
 constexpr auto maxFramesInFlight = 2;
 
-Renderer::Renderer(const vk::raii::Instance& instance,
-                   const vk::raii::SurfaceKHR& surface,
-                   const GpuDevice& gpuDevice,
-                   int windowWidth,
-                   int windowHeight)
-    : instance_{instance},
-      surface_{surface},
-      gpuDevice_{gpuDevice},
-      windowWidth_{windowWidth},
-      windowHeight_{windowHeight}
+Renderer::Renderer(const window::Window& window)
+    : instance_{context_, window.requiredExtensions()},
+      surface_{window.createVulkanSurface(instance_.instance())},
+      gpuDevice_{instance_.instance(), surface_},
+      windowWidth_{window.width()},
+      windowHeight_{window.height()}
 {
     spdlog::info("Creating swapchain");
     createSwapchain();
-
-    createCameraBuffers();
 
     spdlog::info("Creating command buffers");
     createCommandBuffers();
@@ -50,6 +41,7 @@ Renderer::Renderer(const vk::raii::Instance& instance,
     createSyncObjects();
 
     spdlog::info("Creating render passes");
+    createCameraBuffers();
     createRenderPasses();
 }
 
@@ -131,6 +123,8 @@ void Renderer::renderFrame(const renderer::Camera& camera, const std::optional<a
     }
 
     currentFrameIndex_ = (currentFrameIndex_ + 1) & maxFramesInFlight;
+
+    gpuDevice_.device().waitIdle();
 }
 
 void Renderer::windowResized(int width, int height)
@@ -160,7 +154,9 @@ void Renderer::setResources(const assets::AssetDatabase& db)
 
 void Renderer::createSwapchain()
 {
-    swapchain_ = gpuDevice_.createSwapchain(surface_, windowWidth_, windowHeight_);
+    swapchain_ = gpuDevice_.createSwapchain(surface_,
+                                            static_cast<uint32_t>(windowWidth_),
+                                            static_cast<uint32_t>(windowHeight_));
 }
 
 void Renderer::createCommandBuffers()

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <functional>
+#include <stddef.h>
 #include <stdint.h>
 
 namespace core
@@ -17,16 +19,13 @@ struct Handle
         return uid == other.uid;
     }
 };
-} // namespace core
 
-namespace std
-{
 template <typename HandleType>
-struct hash<core::Handle<HandleType>>
+struct Hash
 {
-    std::size_t operator()(const core::Handle<HandleType>& handle) const noexcept
+    size_t operator()(const core::Handle<HandleType>& handle) const noexcept
     {
         return std::hash<uint32_t>{}(handle.uid);
     }
 };
-} // namespace std
+} // namespace core

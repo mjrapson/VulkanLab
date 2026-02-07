@@ -4,6 +4,8 @@
 #pragma once
 
 #include "renderer/draw_command.h"
+#include "renderer/gpu_device.h"
+#include "renderer/instance.h"
 #include "renderer/swapchain.h"
 
 #include <assets/handles.h>
@@ -18,6 +20,11 @@ namespace assets
 class AssetDatabase;
 } // namespace assets
 
+namespace window
+{
+class Window;
+} // namespace window
+
 namespace renderer
 {
 class Camera;
@@ -29,12 +36,7 @@ class SkyboxPass;
 class Renderer
 {
   public:
-    Renderer(const vk::raii::Instance& instance,
-             const vk::raii::SurfaceKHR& surface,
-             const GpuDevice& gpuDevice,
-             int windowWidth,
-             int windowHeight);
-
+    explicit Renderer(const window::Window& window);
     ~Renderer();
 
     Renderer(const Renderer&) = delete;
@@ -67,9 +69,11 @@ class Renderer
     void createRenderPasses();
 
   private:
-    const vk::raii::Instance& instance_;
-    const vk::raii::SurfaceKHR& surface_;
-    const GpuDevice& gpuDevice_;
+    vk::raii::Context context_;
+    Instance instance_;
+    vk::raii::SurfaceKHR surface_;
+    GpuDevice gpuDevice_;
+    Swapchain swapchain_;
 
     int windowWidth_{0};
     int windowHeight_{0};
@@ -81,8 +85,6 @@ class Renderer
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
-
-    Swapchain swapchain_;
 
     std::vector<vk::raii::Buffer> cameraUboBuffers_;
     std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;

@@ -5,6 +5,7 @@ target_sources(Renderer
         include/renderer/camera.h
         include/renderer/descriptor_set_allocator.h
         include/renderer/gpu_device.h
+        include/renderer/instance.h
         include/renderer/renderer.h
         include/renderer/swapchain.h
         include/renderer/vertex_layout.h
@@ -22,6 +23,7 @@ target_sources(Renderer
         src/camera.cpp
         src/descriptor_set_allocator.cpp
         src/gpu_device.cpp
+        src/instance.cpp
         src/renderer.cpp
 )
 
@@ -35,6 +37,7 @@ target_include_directories(Renderer
 target_link_libraries(Renderer
     PRIVATE
         Core
+        Window
         Assets
         spdlog
         Vulkan::Vulkan

@@ -79,16 +79,6 @@ const GpuImage& GpuResourceCache::emptyImage() const
     return emptyImage_;
 }
 
-const std::unordered_map<assets::MaterialHandle, GpuMaterial>& GpuResourceCache::materials() const
-{
-    return gpuMaterials_;
-}
-
-const std::unordered_map<assets::SkyboxHandle, GpuImage>& GpuResourceCache::skyboxes() const
-{
-    return gpuSkyboxImages_;
-}
-
 void GpuResourceCache::createDefaultData()
 {
     emptyImage_.image = gpuDevice_.createImage(1, 1);

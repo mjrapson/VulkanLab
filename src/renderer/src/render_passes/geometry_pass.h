@@ -55,6 +55,7 @@ class GeometryPass
     DescriptorSetAllocator materialDescriptor_;
 
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
-    std::unordered_map<assets::MaterialHandle, vk::raii::DescriptorSet> materialDescriptorSets_;
+    std::unordered_map<assets::MaterialHandle, vk::raii::DescriptorSet, core::Hash<assets::MaterialHandle>>
+        materialDescriptorSets_;
 };
 } // namespace renderer

@@ -24,6 +24,9 @@ class GpuDevice;
 
 class GpuResourceCache
 {
+    template <typename Handle, typename Resource>
+    using Container = std::unordered_map<Handle, Resource, core::Hash<Handle>>;
+
   public:
     GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice);
 
@@ -46,8 +49,15 @@ class GpuResourceCache
 
     const GpuImage& emptyImage() const;
 
-    const std::unordered_map<assets::MaterialHandle, GpuMaterial>& materials() const;
-    const std::unordered_map<assets::SkyboxHandle, GpuImage>& skyboxes() const;
+    auto materials() const
+    {
+        return gpuMaterials_ | std::views::all;
+    };
+
+    auto skyboxes() const
+    {
+        return gpuSkyboxImages_ | std::views::all;
+    }
 
   private:
     void createDefaultData();
@@ -69,9 +79,9 @@ class GpuResourceCache
     vk::raii::Buffer materialUboBuffer_{nullptr};
     vk::raii::DeviceMemory materialUboBufferMemory_{nullptr};
 
-    std::unordered_map<assets::ImageHandle, GpuImage> gpuImages_;
-    std::unordered_map<assets::MaterialHandle, GpuMaterial> gpuMaterials_;
-    std::unordered_map<assets::SubMeshHandle, GpuMesh> gpuMeshes_;
-    std::unordered_map<assets::SkyboxHandle, GpuImage> gpuSkyboxImages_;
+    Container<assets::ImageHandle, GpuImage> gpuImages_;
+    Container<assets::MaterialHandle, GpuMaterial> gpuMaterials_;
+    Container<assets::SubMeshHandle, GpuMesh> gpuMeshes_;
+    Container<assets::SkyboxHandle, GpuImage> gpuSkyboxImages_;
 };
 } // namespace renderer
