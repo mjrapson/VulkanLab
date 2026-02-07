@@ -47,6 +47,11 @@ struct Skybox
     std::string nzPath;
 };
 
+struct DirectionalLight
+{
+    glm::vec3 direction{0.0f};
+};
+
 struct Camera
 {
     std::string skybox;
@@ -57,6 +62,7 @@ struct Scene
     std::vector<Prefab> prefabs;
     std::vector<Entity> entities;
     std::vector<Skybox> skyboxes;
+    DirectionalLight directionalLight;
     Camera camera;
 };
 } // namespace scene

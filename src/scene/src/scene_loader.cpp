@@ -18,6 +18,7 @@ namespace scene
 constexpr auto positionKey = "position";
 constexpr auto rotationKey = "rotation";
 constexpr auto scaleKey = "scale";
+constexpr auto directionKey = "direction";
 constexpr auto transformComponentKey = "transformComponent";
 constexpr auto renderComponentKey = "renderComponent";
 constexpr auto prefabKey = "prefab";
@@ -29,6 +30,7 @@ constexpr auto texturesKey = "textures";
 constexpr auto prefabsKey = "prefabs";
 constexpr auto entitiesKey = "entities";
 constexpr auto skyboxesKey = "skyboxes";
+constexpr auto directionalLightKey = "directionalLight";
 
 glm::vec3
 loadVec3(const nlohmann::json& json, const std::string& param1, const std::string& param2, const std::string& param3)
@@ -139,6 +141,14 @@ void loadCamera(const nlohmann::json& json, Scene& scene)
     }
 }
 
+void loadDirectionalLight(const nlohmann::json& json, Scene& scene)
+{
+    if (json.contains(directionKey))
+    {
+        scene.directionalLight.direction = loadXYZ(json[directionKey]);
+    }
+}
+
 std::unique_ptr<Scene> loadScene(const std::filesystem::path& path)
 {
     auto filestream = std::ifstream{path};
@@ -165,6 +175,11 @@ std::unique_ptr<Scene> loadScene(const std::filesystem::path& path)
     if (sceneJson.contains(cameraKey))
     {
         loadCamera(sceneJson[cameraKey], *scene);
+    }
+
+    if (sceneJson.contains(directionalLightKey))
+    {
+        loadDirectionalLight(sceneJson[directionalLightKey], *scene);
     }
 
     return scene;
