@@ -14,9 +14,33 @@ namespace renderer
 GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice)
     : gpuDevice_{gpuDevice}
 {
+    pendingCommandBuffer_ = std::move(gpuDevice_.createCommandBuffers(1)[0]);
+    pendingCommandBuffer_.begin({vk::CommandBufferUsageFlagBits::eSimultaneousUse});
+
     createDefaultData();
 
     uploadData(db);
+
+    pendingCommandBuffer_.end();
+}
+
+void GpuResourceCache::submitPendingCommands()
+{
+    if (pendingCommandBuffer_ == nullptr)
+    {
+        return;
+    }
+
+    gpuDevice_.submitCommandBuffer(pendingCommandBuffer_);
+    pendingCommandBuffer_ = nullptr;
+
+    meshVertexStagingBuffer_ = nullptr;
+    meshIndexStagingBuffer_ = nullptr;
+    imageStagingBuffers_.clear();
+
+    meshVertexStagingBufferMemory_ = nullptr;
+    meshIndexStagingBufferMemory_ = nullptr;
+    imageStagingBuffersMemory_.clear();
 }
 
 const vk::raii::Buffer& GpuResourceCache::meshVertexBuffer() const
@@ -98,12 +122,8 @@ void GpuResourceCache::createDefaultData()
     std::memcpy(data, imageData.data(), imageSize);
     stagingMemory.unmapMemory();
 
-    auto commandBuffers = gpuDevice_.createCommandBuffers(1);
-    auto& cmd = commandBuffers[0];
-    cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-
     gpuDevice_.transitionImageLayout(*emptyImage_.image,
-                                     *cmd,
+                                     *pendingCommandBuffer_,
                                      vk::ImageLayout::eUndefined,
                                      vk::ImageLayout::eTransferDstOptimal,
                                      {}, // srcAccess
@@ -112,10 +132,10 @@ void GpuResourceCache::createDefaultData()
                                      vk::PipelineStageFlagBits2::eTransfer,
                                      vk::ImageAspectFlagBits::eColor);
 
-    gpuDevice_.copyBufferToImage(*cmd, *stagingBuffer, *emptyImage_.image, 1, 1);
+    gpuDevice_.copyBufferToImage(pendingCommandBuffer_, stagingBuffer, emptyImage_.image, 1, 1);
 
     gpuDevice_.transitionImageLayout(*emptyImage_.image,
-                                     *cmd,
+                                     *pendingCommandBuffer_,
                                      vk::ImageLayout::eTransferDstOptimal,
                                      vk::ImageLayout::eShaderReadOnlyOptimal,
                                      vk::AccessFlagBits2::eTransferWrite,
@@ -124,11 +144,11 @@ void GpuResourceCache::createDefaultData()
                                      vk::PipelineStageFlagBits2::eFragmentShader,
                                      vk::ImageAspectFlagBits::eColor);
 
-    cmd.end();
-    gpuDevice_.submitCommandBuffer(*cmd);
-
     emptyImage_.view = gpuDevice_.createImageView(emptyImage_.image);
     emptyImage_.sampler = gpuDevice_.createSampler();
+
+    imageStagingBuffers_.push_back(std::move(stagingBuffer));
+    imageStagingBuffersMemory_.push_back(std::move(stagingMemory));
 }
 
 void GpuResourceCache::uploadData(const assets::AssetDatabase& db)
@@ -159,12 +179,8 @@ void GpuResourceCache::uploadImageData(const assets::AssetDatabase& db)
             std::memcpy(data, image.data().data(), imageSize);
             stagingMemory.unmapMemory();
 
-            auto commandBuffers = gpuDevice_.createCommandBuffers(1);
-            auto& cmd = commandBuffers[0];
-            cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-
             gpuDevice_.transitionImageLayout(*gpuImage.image,
-                                             *cmd,
+                                             *pendingCommandBuffer_,
                                              vk::ImageLayout::eUndefined,
                                              vk::ImageLayout::eTransferDstOptimal,
                                              {}, // srcAccess
@@ -173,10 +189,14 @@ void GpuResourceCache::uploadImageData(const assets::AssetDatabase& db)
                                              vk::PipelineStageFlagBits2::eTransfer,
                                              vk::ImageAspectFlagBits::eColor);
 
-            gpuDevice_.copyBufferToImage(*cmd, *stagingBuffer, *gpuImage.image, image.width(), image.height());
+            gpuDevice_.copyBufferToImage(pendingCommandBuffer_,
+                                         stagingBuffer,
+                                         gpuImage.image,
+                                         image.width(),
+                                         image.height());
 
             gpuDevice_.transitionImageLayout(*gpuImage.image,
-                                             *cmd,
+                                             *pendingCommandBuffer_,
                                              vk::ImageLayout::eTransferDstOptimal,
                                              vk::ImageLayout::eShaderReadOnlyOptimal,
                                              vk::AccessFlagBits2::eTransferWrite,
@@ -185,13 +205,13 @@ void GpuResourceCache::uploadImageData(const assets::AssetDatabase& db)
                                              vk::PipelineStageFlagBits2::eFragmentShader,
                                              vk::ImageAspectFlagBits::eColor);
 
-            cmd.end();
-            gpuDevice_.submitCommandBuffer(*cmd);
-
             gpuImage.view = gpuDevice_.createImageView(gpuImage.image);
             gpuImage.sampler = gpuDevice_.createSampler();
 
             gpuImages_.emplace(image.handle(), std::move(gpuImage));
+
+            imageStagingBuffers_.push_back(std::move(stagingBuffer));
+            imageStagingBuffersMemory_.push_back(std::move(stagingMemory));
         }
     }
 }
@@ -242,18 +262,18 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
     meshVertexBuffer_ = gpuDevice_.createVertexBuffer(vertexBufferSize);
     meshVertexBufferMemory_ = gpuDevice_.allocateDeviceBufferMemory(meshVertexBuffer_);
 
-    auto vertexStagingBuffer = gpuDevice_.createStagingBuffer(vertexBufferSize);
-    auto vertexStagingBufferMemory = gpuDevice_.allocateStagingBufferMemory(vertexStagingBuffer);
+    meshVertexStagingBuffer_ = gpuDevice_.createStagingBuffer(vertexBufferSize);
+    meshVertexStagingBufferMemory_ = gpuDevice_.allocateStagingBufferMemory(meshVertexStagingBuffer_);
 
     const auto indexBufferSize = sizeof(uint32_t) * totalIndices;
     meshIndexBuffer_ = gpuDevice_.createIndexBuffer(indexBufferSize);
     meshIndexBufferMemory_ = gpuDevice_.allocateDeviceBufferMemory(meshIndexBuffer_);
 
-    auto indexStagingBuffer = gpuDevice_.createStagingBuffer(indexBufferSize);
-    auto indexStagingBufferMemory = gpuDevice_.allocateStagingBufferMemory(indexStagingBuffer);
+    meshIndexStagingBuffer_ = gpuDevice_.createStagingBuffer(indexBufferSize);
+    meshIndexStagingBufferMemory_ = gpuDevice_.allocateStagingBufferMemory(meshIndexStagingBuffer_);
 
-    void* vertexStagingMemory = vertexStagingBufferMemory.mapMemory(0, vertexBufferSize);
-    void* indexStagingMemory = indexStagingBufferMemory.mapMemory(0, indexBufferSize);
+    void* vertexStagingMemory = meshVertexStagingBufferMemory_.mapMemory(0, vertexBufferSize);
+    void* indexStagingMemory = meshIndexStagingBufferMemory_.mapMemory(0, indexBufferSize);
 
     auto currentVertexOffset = size_t{0};
     auto currentIndexOffset = size_t{0};
@@ -288,11 +308,11 @@ void GpuResourceCache::uploadMeshData(const assets::AssetDatabase& db)
         }
     }
 
-    vertexStagingBufferMemory.unmapMemory();
-    indexStagingBufferMemory.unmapMemory();
+    meshVertexStagingBufferMemory_.unmapMemory();
+    meshIndexStagingBufferMemory_.unmapMemory();
 
-    gpuDevice_.copyBuffer(vertexStagingBuffer, meshVertexBuffer_, vertexBufferSize);
-    gpuDevice_.copyBuffer(indexStagingBuffer, meshIndexBuffer_, indexBufferSize);
+    gpuDevice_.copyBuffer(pendingCommandBuffer_, meshVertexStagingBuffer_, meshVertexBuffer_, vertexBufferSize);
+    gpuDevice_.copyBuffer(pendingCommandBuffer_, meshIndexStagingBuffer_, meshIndexBuffer_, indexBufferSize);
 }
 
 void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
@@ -310,12 +330,8 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
         auto stagingBuffer = gpuDevice_.createStagingBuffer(imageSize * 6);
         auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
 
-        auto commandBuffers = gpuDevice_.createCommandBuffers(1);
-        auto& cmd = commandBuffers[0];
-        cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-
         gpuDevice_.transitionImageLayout(*gpuImage.image,
-                                         *cmd,
+                                         *pendingCommandBuffer_,
                                          vk::ImageLayout::eUndefined,
                                          vk::ImageLayout::eTransferDstOptimal,
                                          {}, // srcAccess
@@ -330,9 +346,9 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
             std::memcpy(data + (face * imageSize), skybox.second->imageAt(face)->data().data(), imageSize);
         }
         stagingMemory.unmapMemory();
-        gpuDevice_.copyBufferToImage(*cmd, *stagingBuffer, *gpuImage.image, width, height, 6);
+        gpuDevice_.copyBufferToImage(pendingCommandBuffer_, stagingBuffer, gpuImage.image, width, height, 6);
         gpuDevice_.transitionImageLayout(*gpuImage.image,
-                                         *cmd,
+                                         *pendingCommandBuffer_,
                                          vk::ImageLayout::eTransferDstOptimal,
                                          vk::ImageLayout::eShaderReadOnlyOptimal,
                                          vk::AccessFlagBits2::eTransferWrite,
@@ -342,13 +358,13 @@ void GpuResourceCache::uploadSkyboxImageData(const assets::AssetDatabase& db)
                                          vk::ImageAspectFlagBits::eColor,
                                          6);
 
-        cmd.end();
-        gpuDevice_.submitCommandBuffer(*cmd);
-
         gpuImage.view = gpuDevice_.createCubemapImageView(gpuImage.image);
         gpuImage.sampler = gpuDevice_.createSampler();
 
         gpuSkyboxImages_.emplace(skybox.second->handle(), std::move(gpuImage));
+
+        imageStagingBuffers_.push_back(std::move(stagingBuffer));
+        imageStagingBuffersMemory_.push_back(std::move(stagingMemory));
     }
 }
 } // namespace renderer

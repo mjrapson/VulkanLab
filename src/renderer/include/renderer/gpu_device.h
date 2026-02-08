@@ -53,13 +53,15 @@ class GpuDevice
     vk::raii::Buffer createStagingBuffer(const vk::DeviceSize& size) const;
     vk::raii::Buffer createUniformBuffer(const vk::DeviceSize& size) const;
 
-    void copyBuffer(const vk::raii::Buffer& source,
+    void copyBuffer(const vk::raii::CommandBuffer& cmd,
+                    const vk::raii::Buffer& source,
                     const vk::raii::Buffer& destination,
                     const vk::DeviceSize& size,
                     const vk::DeviceSize& destinationOffset = 0) const;
-    void copyBufferToImage(const vk::CommandBuffer& cmd,
-                           const vk::Buffer& source,
-                           const vk::Image& destination,
+
+    void copyBufferToImage(const vk::raii::CommandBuffer& cmd,
+                           const vk::raii::Buffer& source,
+                           const vk::raii::Image& destination,
                            uint32_t width,
                            uint32_t height,
                            uint32_t layers = 1) const;

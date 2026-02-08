@@ -147,9 +147,15 @@ void Renderer::windowResized(int width, int height)
 void Renderer::setResources(const assets::AssetDatabase& db)
 {
     gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_);
+    gpuResources_->submitPendingCommands();
 
     skyboxPass_->rebuild(*gpuResources_);
     geometryPass_->rebuild(*gpuResources_);
+}
+
+const GpuDevice& Renderer::device() const
+{
+    return gpuDevice_;
 }
 
 void Renderer::createSwapchain()

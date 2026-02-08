@@ -293,26 +293,18 @@ vk::raii::Buffer GpuDevice::createUniformBuffer(const vk::DeviceSize& size) cons
     return createBuffer(size, vk::BufferUsageFlagBits::eUniformBuffer, vk::SharingMode::eExclusive);
 }
 
-void GpuDevice::copyBuffer(const vk::raii::Buffer& source,
+void GpuDevice::copyBuffer(const vk::raii::CommandBuffer& cmd,
+                           const vk::raii::Buffer& source,
                            const vk::raii::Buffer& destination,
                            const vk::DeviceSize& size,
                            const vk::DeviceSize& destinationOffset) const
 {
-    auto commandBuffers = createCommandBuffers(1);
-    auto& commandCopyBuffer = commandBuffers[0];
-
-    auto commandBufferBeginInfo = vk::CommandBufferBeginInfo{};
-    commandBufferBeginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
-    commandCopyBuffer.begin(commandBufferBeginInfo);
-    commandCopyBuffer.copyBuffer(*source, *destination, vk::BufferCopy(0, destinationOffset, size));
-    commandCopyBuffer.end();
-
-    submitCommandBuffer(*commandCopyBuffer);
+    cmd.copyBuffer(*source, *destination, vk::BufferCopy(0, destinationOffset, size));
 }
 
-void GpuDevice::copyBufferToImage(const vk::CommandBuffer& cmd,
-                                  const vk::Buffer& source,
-                                  const vk::Image& destination,
+void GpuDevice::copyBufferToImage(const vk::raii::CommandBuffer& cmd,
+                                  const vk::raii::Buffer& source,
+                                  const vk::raii::Image& destination,
                                   uint32_t width,
                                   uint32_t height,
                                   uint32_t layers) const

@@ -55,6 +55,8 @@ class Renderer
 
     void setResources(const assets::AssetDatabase& db);
 
+    const GpuDevice& device() const;
+
   private:
     void createSwapchain();
     void createCommandBuffers();

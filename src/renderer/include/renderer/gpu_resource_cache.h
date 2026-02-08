@@ -38,6 +38,8 @@ class GpuResourceCache
     GpuResourceCache(GpuResourceCache&& other) = delete;
     GpuResourceCache& operator=(GpuResourceCache&& other) = delete;
 
+    void submitPendingCommands();
+
     const vk::raii::Buffer& meshVertexBuffer() const;
     const vk::raii::Buffer& meshIndexBuffer() const;
     const vk::raii::Buffer& materialUboBuffer() const;
@@ -70,14 +72,23 @@ class GpuResourceCache
   private:
     const GpuDevice& gpuDevice_;
     GpuImage emptyImage_;
+    vk::raii::CommandBuffer pendingCommandBuffer_{nullptr};
 
     vk::raii::Buffer meshVertexBuffer_{nullptr};
+    vk::raii::Buffer meshVertexStagingBuffer_{nullptr};
     vk::raii::Buffer meshIndexBuffer_{nullptr};
+    vk::raii::Buffer meshIndexStagingBuffer_{nullptr};
+
     vk::raii::DeviceMemory meshVertexBufferMemory_{nullptr};
+    vk::raii::DeviceMemory meshVertexStagingBufferMemory_{nullptr};
     vk::raii::DeviceMemory meshIndexBufferMemory_{nullptr};
+    vk::raii::DeviceMemory meshIndexStagingBufferMemory_{nullptr};
 
     vk::raii::Buffer materialUboBuffer_{nullptr};
     vk::raii::DeviceMemory materialUboBufferMemory_{nullptr};
+
+    std::vector<vk::raii::Buffer> imageStagingBuffers_;
+    std::vector<vk::raii::DeviceMemory> imageStagingBuffersMemory_;
 
     Container<assets::ImageHandle, GpuImage> gpuImages_;
     Container<assets::MaterialHandle, GpuMaterial> gpuMaterials_;
