@@ -11,6 +11,8 @@
 
 #include <assets/handles.h>
 
+#include <future>
+#include <memory>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -27,6 +29,7 @@ class AssetDatabase;
 namespace renderer
 {
 class Camera;
+class GpuResourceCache;
 class Renderer;
 } // namespace renderer
 
@@ -50,6 +53,9 @@ class World
 
     const DirectionalLightComponent& directionalLight() const;
 
+    std::unique_ptr<renderer::GpuResourceCache> gpuResources();
+
+    bool isReady() const;
     void update(const renderer::Camera& camera);
 
     template <typename Component, typename... Args>
@@ -118,7 +124,8 @@ class World
     std::optional<assets::SkyboxHandle> activeSkybox_;
     DirectionalLightComponent directionalLight_;
 
-  private:
+    std::future<std::unique_ptr<renderer::GpuResourceCache>> gpuResourcesFuture_;
+
     Entity nextEntity{0};
     RenderSystem renderSystem_;
 };

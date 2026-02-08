@@ -10,6 +10,7 @@
 #include <core/input_handler.h>
 #include <renderer/camera.h>
 #include <renderer/gpu_device.h>
+#include <renderer/gpu_resource_cache.h>
 #include <renderer/renderer.h>
 #include <scene/scene.h>
 #include <scene/scene_loader.h>
@@ -33,6 +34,8 @@ VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer&
       renderer_{renderer}
 {
 }
+
+VulkanApplication::~VulkanApplication() = default;
 
 void VulkanApplication::run()
 {
@@ -62,9 +65,7 @@ void VulkanApplication::run()
         db.addSkybox(skyboxDef.name, std::move(skybox));
     }
 
-    renderer_.setResources(db);
-
-    auto world = world::World{*scene, db, renderer_};
+    pendingWorld_ = std::make_unique<world::World>(*scene, db, renderer_);
     // ...end loading screen
 
     constexpr auto maxFps = std::chrono::duration<double>(1.0 / 60.0);
@@ -84,9 +85,25 @@ void VulkanApplication::run()
             camera_.setAspectRatio(getAspectRatio(window_.width(), window_.height()));
         }
 
-        updateCamera(static_cast<float>(deltaTime));
+        if (currentState_ == ApplicationState::SceneLoading && pendingWorld_)
+        {
+            if (pendingWorld_->isReady())
+            {
+                renderer_.setResources(pendingWorld_->gpuResources());
+                activeWorld_ = std::move(pendingWorld_);
+                currentState_ = ApplicationState::SceneActive;
+            }
+            else
+            {
+                // Loading screen
+            }
+        }
+        else if (currentState_ == ApplicationState::SceneActive && activeWorld_)
+        {
+            updateCamera(static_cast<float>(deltaTime));
 
-        world.update(camera_);
+            activeWorld_->update(camera_);
+        }
 
         const auto frameFinishTime = std::chrono::steady_clock::now();
         const auto frameDuration = frameFinishTime - frameStartTime;

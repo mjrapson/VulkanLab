@@ -4,6 +4,7 @@
 #include "world/world.h"
 
 #include <assets/asset_database.h>
+#include <renderer/gpu_resource_cache.h>
 #include <scene/scene.h>
 
 namespace world
@@ -31,6 +32,8 @@ World::World(const scene::Scene& scene, const assets::AssetDatabase& assetDataba
         activeSkybox_ = assetDatabase.skyboxes().at(scene.camera.skybox)->handle();
         directionalLight_.direction = scene.directionalLight.direction;
     }
+
+    gpuResourcesFuture_ = renderSystem_.initialize(assetDatabase);
 }
 
 Entity World::createEntity()
@@ -52,6 +55,17 @@ const std::optional<assets::SkyboxHandle>& World::activeSkybox() const
 const DirectionalLightComponent& World::directionalLight() const
 {
     return directionalLight_;
+}
+
+std::unique_ptr<renderer::GpuResourceCache> World::gpuResources()
+{
+    return gpuResourcesFuture_.get();
+}
+
+bool World::isReady() const
+{
+    return gpuResourcesFuture_.valid()
+           && gpuResourcesFuture_.wait_for(std::chrono::seconds{0}) == std::future_status::ready;
 }
 
 void World::update(const renderer::Camera& camera)

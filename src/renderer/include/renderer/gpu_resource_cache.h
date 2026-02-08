@@ -29,8 +29,7 @@ class GpuResourceCache
 
   public:
     GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice);
-
-    ~GpuResourceCache() = default;
+    ~GpuResourceCache();
 
     GpuResourceCache(const GpuResourceCache&) = delete;
     GpuResourceCache& operator=(const GpuResourceCache&) = delete;

@@ -4,6 +4,7 @@
 #include "world/systems/render_system.h"
 
 #include <assets/asset_database.h>
+#include <renderer/gpu_resource_cache.h>
 #include <renderer/renderer.h>
 
 #include "world/world.h"
@@ -19,6 +20,16 @@ RenderSystem::RenderSystem(renderer::Renderer& renderer, World& world)
     : renderer_{renderer},
       world_{world}
 {
+}
+
+std::future<std::unique_ptr<renderer::GpuResourceCache>>
+RenderSystem::initialize(const assets::AssetDatabase& assetDatabase) const
+{
+    return std::async(std::launch::async,
+                      [this, &assetDatabase]
+                      {
+                          return std::make_unique<renderer::GpuResourceCache>(assetDatabase, renderer_.device());
+                      });
 }
 
 void RenderSystem::update(const renderer::Camera& camera)

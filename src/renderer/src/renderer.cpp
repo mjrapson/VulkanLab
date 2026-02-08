@@ -144,9 +144,9 @@ void Renderer::windowResized(int width, int height)
     windowResized_ = true;
 }
 
-void Renderer::setResources(const assets::AssetDatabase& db)
+void Renderer::setResources(std::unique_ptr<GpuResourceCache> gpuResources)
 {
-    gpuResources_ = std::make_unique<GpuResourceCache>(db, gpuDevice_);
+    gpuResources_ = std::move(gpuResources);
     gpuResources_->submitPendingCommands();
 
     skyboxPass_->rebuild(*gpuResources_);

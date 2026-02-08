@@ -24,6 +24,8 @@ GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db, const GpuDev
     pendingCommandBuffer_.end();
 }
 
+GpuResourceCache::~GpuResourceCache() = default;
+
 void GpuResourceCache::submitPendingCommands()
 {
     if (pendingCommandBuffer_ == nullptr)

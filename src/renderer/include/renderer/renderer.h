@@ -15,11 +15,6 @@
 #include <memory>
 #include <vector>
 
-namespace assets
-{
-class AssetDatabase;
-} // namespace assets
-
 namespace window
 {
 class Window;
@@ -53,7 +48,7 @@ class Renderer
 
     void windowResized(int width, int height);
 
-    void setResources(const assets::AssetDatabase& db);
+    void setResources(std::unique_ptr<GpuResourceCache> gpuResources);
 
     const GpuDevice& device() const;
 
