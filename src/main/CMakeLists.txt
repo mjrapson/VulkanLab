@@ -32,6 +32,7 @@ file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 set(SHADER_FILENAMES
     basic
     skybox
+    loading_screen
 )
 
 function(add_shader SHADER_NAME)

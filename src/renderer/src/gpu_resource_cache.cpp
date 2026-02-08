@@ -12,9 +12,10 @@
 namespace renderer
 {
 GpuResourceCache::GpuResourceCache(const assets::AssetDatabase& db, const GpuDevice& gpuDevice)
-    : gpuDevice_{gpuDevice}
+    : gpuDevice_{gpuDevice},
+      commandPool_{gpuDevice.createCommandPool()}
 {
-    pendingCommandBuffer_ = std::move(gpuDevice_.createCommandBuffers(1)[0]);
+    pendingCommandBuffer_ = std::move(gpuDevice_.createCommandBuffers(commandPool_, 1)[0]);
     pendingCommandBuffer_.begin({vk::CommandBufferUsageFlagBits::eSimultaneousUse});
 
     createDefaultData();

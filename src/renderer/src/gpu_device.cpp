@@ -122,9 +122,6 @@ GpuDevice::GpuDevice(const vk::raii::Instance& instance, const vk::raii::Surface
 
     spdlog::info("Creating logical GPU device");
     createLogicalDevice(surface);
-
-    spdlog::info("Creating command pool");
-    createCommandPool();
 }
 
 Swapchain GpuDevice::createSwapchain(const vk::raii::SurfaceKHR& surface, uint32_t width, uint32_t height) const
@@ -172,10 +169,19 @@ Swapchain GpuDevice::createSwapchain(const vk::raii::SurfaceKHR& surface, uint32
     return swapchain;
 }
 
-vk::raii::CommandBuffers GpuDevice::createCommandBuffers(uint32_t count) const
+vk::raii::CommandPool GpuDevice::createCommandPool() const
+{
+    auto poolInfo = vk::CommandPoolCreateInfo{};
+    poolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+    poolInfo.queueFamilyIndex = graphicsQueueFamilyIndex_;
+
+    return vk::raii::CommandPool(device_, poolInfo);
+}
+
+vk::raii::CommandBuffers GpuDevice::createCommandBuffers(const vk::raii::CommandPool& pool, uint32_t count) const
 {
     auto allocInfo = vk::CommandBufferAllocateInfo{};
-    allocInfo.commandPool = *commandPool_;
+    allocInfo.commandPool = *pool;
     allocInfo.level = vk::CommandBufferLevel::ePrimary;
     allocInfo.commandBufferCount = count;
 
@@ -636,15 +642,6 @@ void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
     device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
     graphicsQueue_ = vk::raii::Queue(device_, graphicsQueueFamilyIndex_, 0);
     presentQueue_ = vk::raii::Queue(device_, surfacePresentationQueueFamilyIndex, 0);
-}
-
-void GpuDevice::createCommandPool()
-{
-    auto poolInfo = vk::CommandPoolCreateInfo{};
-    poolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-    poolInfo.queueFamilyIndex = graphicsQueueFamilyIndex_;
-
-    commandPool_ = vk::raii::CommandPool(device_, poolInfo);
 }
 
 bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const

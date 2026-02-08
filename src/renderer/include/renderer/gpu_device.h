@@ -25,7 +25,9 @@ class GpuDevice
 
     Swapchain createSwapchain(const vk::raii::SurfaceKHR& surface, uint32_t width, uint32_t height) const;
 
-    vk::raii::CommandBuffers createCommandBuffers(uint32_t count) const;
+    vk::raii::CommandPool createCommandPool() const;
+
+    vk::raii::CommandBuffers createCommandBuffers(const vk::raii::CommandPool& pool, uint32_t count) const;
     void submitCommandBuffer(const vk::CommandBuffer& cmd) const;
     void submitCommandBuffer(const vk::CommandBuffer& cmd,
                              std::span<vk::Semaphore> waitSemaphores,
@@ -106,7 +108,6 @@ class GpuDevice
   private:
     void pickPhysicalDevice(const vk::raii::Instance& instance);
     void createLogicalDevice(const vk::raii::SurfaceKHR& surface);
-    void createCommandPool();
 
     bool isDeviceSuitable(vk::raii::PhysicalDevice device) const;
     vk::raii::PhysicalDevice selectBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices) const;
@@ -117,6 +118,5 @@ class GpuDevice
     vk::raii::Queue graphicsQueue_{nullptr};
     vk::raii::Queue presentQueue_{nullptr};
     uint32_t graphicsQueueFamilyIndex_;
-    vk::raii::CommandPool commandPool_{nullptr};
 };
 } // namespace renderer

@@ -15,6 +15,11 @@
 #include <memory>
 #include <vector>
 
+namespace assets
+{
+class Image;
+}
+
 namespace window
 {
 class Window;
@@ -26,6 +31,7 @@ class Camera;
 class GeometryPass;
 class GpuDevice;
 class GpuResourceCache;
+class LoadingScreenPass;
 class SkyboxPass;
 
 class Renderer
@@ -40,11 +46,12 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
-    void queueMeshDraw(assets::SubMeshHandle subMeshHandle,
-                       assets::MaterialHandle materialHandle,
-                       const glm::mat4& transform);
+    void setLoadingScreenImage(const assets::Image& image);
 
-    void renderFrame(const renderer::Camera& camera, const std::optional<assets::SkyboxHandle>& skyboxHandle);
+    void renderScene(std::span<const DrawCommand> drawCommands,
+                     std::optional<assets::SkyboxHandle> skyboxHandle,
+                     const Camera& camera);
+    void renderLoadingScreen();
 
     void windowResized(int width, int height);
 
@@ -57,13 +64,11 @@ class Renderer
     void createCommandBuffers();
     void createSyncObjects();
     void createCameraBuffers();
+    void createRenderPasses();
 
     void recreateSwapchain();
-    void recordCommands(uint32_t imageIndex,
-                        const vk::raii::CommandBuffer& commandBuffer,
-                        const renderer::Camera& camera,
-                        const std::optional<assets::SkyboxHandle>& skyboxHandle);
-    void createRenderPasses();
+
+    void renderFrame(std::function<void(uint32_t, const vk::raii::CommandBuffer&)> recordCommands);
 
   private:
     vk::raii::Context context_;
@@ -77,6 +82,7 @@ class Renderer
     bool windowResized_{false};
     bool windowMinimized_{false};
 
+    vk::raii::CommandPool commandPool_{nullptr};
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
     std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
@@ -89,8 +95,7 @@ class Renderer
 
     std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
 
-    std::vector<DrawCommand> drawCommands_;
-
+    std::unique_ptr<LoadingScreenPass> loadingScreenPass_{nullptr};
     std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};
     std::unique_ptr<GeometryPass> geometryPass_{nullptr};
 };

@@ -33,6 +33,11 @@ VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer&
     : window_{window},
       renderer_{renderer}
 {
+    auto loadingScreenImage = assets::createImageFromPath(core::getTexturesDir() / "loading_screen.png");
+    if (loadingScreenImage)
+    {
+        renderer_.setLoadingScreenImage(*loadingScreenImage);
+    }
 }
 
 VulkanApplication::~VulkanApplication() = default;
@@ -95,7 +100,7 @@ void VulkanApplication::run()
             }
             else
             {
-                // Loading screen
+                renderer_.renderLoadingScreen();
             }
         }
         else if (currentState_ == ApplicationState::SceneActive && activeWorld_)

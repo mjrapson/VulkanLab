@@ -17,6 +17,8 @@ target_sources(Renderer
     PRIVATE
         src/render_passes/geometry_pass.cpp
         src/render_passes/geometry_pass.h
+        src/render_passes/loading_screen_pass.cpp
+        src/render_passes/loading_screen_pass.h
         src/render_passes/render_pass_command_info.h
         src/render_passes/skybox_pass.cpp
         src/render_passes/skybox_pass.h

@@ -71,6 +71,8 @@ class GpuResourceCache
   private:
     const GpuDevice& gpuDevice_;
     GpuImage emptyImage_;
+
+    vk::raii::CommandPool commandPool_{nullptr};
     vk::raii::CommandBuffer pendingCommandBuffer_{nullptr};
 
     vk::raii::Buffer meshVertexBuffer_{nullptr};

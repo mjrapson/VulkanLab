@@ -31,6 +31,7 @@ void DescriptorSetAllocator::resize(uint32_t maxSets)
     }
 
     pool_ = gpuDevice_.createDescriptorPool(maxSets, poolSizes);
+    maxSets_ = maxSets;
 }
 
 vk::raii::DescriptorSets DescriptorSetAllocator::allocateSets(uint32_t count) const
@@ -41,5 +42,10 @@ vk::raii::DescriptorSets DescriptorSetAllocator::allocateSets(uint32_t count) co
 const vk::raii::DescriptorSetLayout& DescriptorSetAllocator::layout() const
 {
     return layout_;
+}
+
+uint32_t DescriptorSetAllocator::size() const
+{
+    return maxSets_;
 }
 } // namespace renderer
