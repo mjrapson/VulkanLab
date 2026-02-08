@@ -1,9 +1,9 @@
 #include "renderer/renderer.h"
 
-#include "private/gpu_resource_cache.h"
 #include "render_passes/geometry_pass.h"
 #include "render_passes/skybox_pass.h"
 #include "renderer/camera.h"
+#include "renderer/gpu_resource_cache.h"
 
 #include <assets/asset_database.h>
 #include <window/window.h>

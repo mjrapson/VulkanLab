@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include "gpu_image.h"
-#include "gpu_material.h"
-#include "gpu_mesh.h"
+#include "renderer/gpu_image.h"
+#include "renderer/gpu_material.h"
+#include "renderer/gpu_mesh.h"
 
 #include <assets/handles.h>
 

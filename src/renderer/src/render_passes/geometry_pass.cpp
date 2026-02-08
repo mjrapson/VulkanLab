@@ -3,9 +3,9 @@
 
 #include "geometry_pass.h"
 
-#include "private/gpu_resource_cache.h"
 #include "renderer/draw_command.h"
 #include "renderer/gpu_device.h"
+#include "renderer/gpu_resource_cache.h"
 #include "renderer/vertex_layout.h"
 
 #include <core/file_system.h>

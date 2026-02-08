@@ -4,17 +4,17 @@ target_sources(Renderer
     PUBLIC
         include/renderer/camera.h
         include/renderer/descriptor_set_allocator.h
+        include/renderer/draw_command.h
         include/renderer/gpu_device.h
+        include/renderer/gpu_image.h
+        include/renderer/gpu_material.h
+        include/renderer/gpu_mesh.h
+        include/renderer/gpu_resource_cache.h
         include/renderer/instance.h
         include/renderer/renderer.h
         include/renderer/swapchain.h
         include/renderer/vertex_layout.h
     PRIVATE
-        src/private/gpu_image.h
-        src/private/gpu_material.h
-        src/private/gpu_mesh.h
-        src/private/gpu_resource_cache.cpp
-        src/private/gpu_resource_cache.h
         src/render_passes/geometry_pass.cpp
         src/render_passes/geometry_pass.h
         src/render_passes/render_pass_command_info.h
@@ -23,6 +23,7 @@ target_sources(Renderer
         src/camera.cpp
         src/descriptor_set_allocator.cpp
         src/gpu_device.cpp
+        src/gpu_resource_cache.cpp
         src/instance.cpp
         src/renderer.cpp
 )

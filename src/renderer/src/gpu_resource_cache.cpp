@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Mark Rapson
 
-#include "gpu_resource_cache.h"
+#include "renderer/gpu_resource_cache.h"
 
 #include "renderer/gpu_device.h"
 
