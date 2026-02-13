@@ -3,14 +3,13 @@
 
 #include "vulkan_application.h"
 
-#include <assets/asset_database.h>
-#include <assets/gltf_loader.h>
-#include <assets/image_loader.h>
+#include "gltf_loader.h"
+#include "image_loader.h"
+
 #include <core/file_system.h>
 #include <core/input_handler.h>
 #include <renderer/camera.h>
 #include <renderer/gpu_device.h>
-#include <renderer/gpu_resource_cache.h>
 #include <renderer/renderer.h>
 #include <scene/scene.h>
 #include <scene/scene_loader.h>
@@ -29,15 +28,19 @@ float getAspectRatio(int width, int height)
     return static_cast<float>(width) / static_cast<float>(height);
 }
 
+void prepareScene()
+{
+}
+
 VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer& renderer)
     : window_{window},
       renderer_{renderer}
 {
-    auto loadingScreenImage = assets::createImageFromPath(core::getTexturesDir() / "loading_screen.png");
-    if (loadingScreenImage)
-    {
-        renderer_.setLoadingScreenImage(*loadingScreenImage);
-    }
+    // auto loadingScreenImage = createImageFromPath(core::getTexturesDir() / "loading_screen.png");
+    // if (loadingScreenImage)
+    // {
+    //     renderer_.setLoadingScreenImage(*loadingScreenImage);
+    // }
 }
 
 VulkanApplication::~VulkanApplication() = default;
@@ -49,29 +52,55 @@ void VulkanApplication::run()
     auto scene = scene::loadScene(core::getScenesDir() / "demo.json");
     camera_.setPosition(glm::vec3{0.0f, 8.0f, 24.0f});
 
+    activeWorld_ = std::make_unique<world::World>(renderer_);
+    auto pendingAssetData = renderer::AssetData{};
+
     // Probably show some loading screen here...
     // Move to separate func
-    auto db = assets::AssetDatabase{};
     for (auto& prefabDef : scene->prefabs)
     {
-        db.addPrefab(prefabDef.name, assets::loadGLTFModel(core::getPrefabsDir() / prefabDef.path));
+        activeWorld_->addPrefab(prefabDef.name,
+                                loadGLTFModel(core::getPrefabsDir() / prefabDef.path, pendingAssetData));
     }
 
     for (auto& skyboxDef : scene->skyboxes)
     {
-        auto skybox = std::make_unique<assets::Skybox>();
-        skybox->setImage(0, assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pxPath));
-        skybox->setImage(1, assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pyPath));
-        skybox->setImage(2, assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.pzPath));
-        skybox->setImage(3, assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nxPath));
-        skybox->setImage(4, assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nyPath));
-        skybox->setImage(5, assets::createImageFromPath(core::getSkyboxesDir() / skyboxDef.nzPath));
+        auto skyboxData = renderer::SkyboxData{};
+        skyboxData.imageData[0] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pxPath);
+        skyboxData.imageData[1] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pyPath);
+        skyboxData.imageData[2] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pzPath);
+        skyboxData.imageData[3] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nxPath);
+        skyboxData.imageData[4] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nyPath);
+        skyboxData.imageData[5] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nzPath);
 
-        db.addSkybox(skyboxDef.name, std::move(skybox));
+        const auto handle = renderer::SkyboxHandleGenerator::generate();
+
+        activeWorld_->setSkybox(handle);
+
+        pendingAssetData.skyboxData.emplace(handle, std::move(skyboxData));
     }
 
-    pendingWorld_ = std::make_unique<world::World>(*scene, db, renderer_);
-    // ...end loading screen
+    for (const auto& sceneEntity : scene->entities)
+    {
+        auto entity = activeWorld_->createEntity();
+
+        if (sceneEntity.renderComponent.has_value())
+        {
+            auto& renderComponent = activeWorld_->addComponent<world::RenderComponent>(entity);
+            renderComponent.prefab = activeWorld_->prefab(sceneEntity.renderComponent->prefabId);
+        }
+        if (sceneEntity.transformComponent.has_value())
+        {
+            auto& transformComponent = activeWorld_->addComponent<world::TransformComponent>(entity);
+            transformComponent.position = sceneEntity.transformComponent->position;
+            transformComponent.rotation = sceneEntity.transformComponent->rotation;
+            transformComponent.scale = sceneEntity.transformComponent->scale;
+        }
+
+        // directionalLight_.direction = scene.directionalLight.direction;
+    }
+
+    renderer_.setData(pendingAssetData);
 
     constexpr auto maxFps = std::chrono::duration<double>(1.0 / 60.0);
     auto lastTime = std::chrono::steady_clock::now();
@@ -90,20 +119,19 @@ void VulkanApplication::run()
             camera_.setAspectRatio(getAspectRatio(window_.width(), window_.height()));
         }
 
-        if (currentState_ == ApplicationState::SceneLoading && pendingWorld_)
-        {
-            if (pendingWorld_->isReady())
-            {
-                renderer_.setResources(pendingWorld_->gpuResources());
-                activeWorld_ = std::move(pendingWorld_);
-                currentState_ = ApplicationState::SceneActive;
-            }
-            else
-            {
-                renderer_.renderLoadingScreen();
-            }
-        }
-        else if (currentState_ == ApplicationState::SceneActive && activeWorld_)
+        // if (currentState_ == ApplicationState::SceneLoading && pendingWorld_)
+        //{
+        //  if (pendingWorld_->isReady())
+        //  {
+        //      activeWorld_ = std::move(pendingWorld_);
+        //      currentState_ = ApplicationState::SceneActive;
+        //  }
+        //  else
+        //  {
+        //  renderer_.renderLoadingScreen();
+        // }
+        // }
+        // else if (currentState_ == ApplicationState::SceneActive && activeWorld_)
         {
             updateCamera(static_cast<float>(deltaTime));
 

@@ -4,7 +4,6 @@
 #include "skybox_pass.h"
 
 #include "renderer/gpu_device.h"
-#include "renderer/gpu_resource_cache.h"
 
 #include <core/file_system.h>
 
@@ -44,13 +43,35 @@ void SkyboxPass::resize(const vk::Extent2D& extent)
     extent_ = extent;
 }
 
-void SkyboxPass::rebuild(const GpuResourceCache& resourceCache)
+void SkyboxPass::rebuild(const std::unordered_map<SkyboxHandle, Skybox, core::Hash<SkyboxHandle>>& skyboxes)
 {
-    skyboxDescriptor_.resize(static_cast<uint32_t>(resourceCache.skyboxes().size()));
-    recreateDescriptorSets(resourceCache);
+    skyboxDescriptor_.resize(static_cast<uint32_t>(skyboxes.size()));
+    for (const auto& [handle, skybox] : skyboxes)
+    {
+        auto sets = skyboxDescriptor_.allocateSets(1);
+        skyboxDescriptorSets_.emplace(handle, std::move(sets[0]));
+
+        auto imageInfo = vk::DescriptorImageInfo{};
+        imageInfo.imageView = skybox.view;
+        imageInfo.sampler = skybox.sampler;
+        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+        auto textureWrite = vk::WriteDescriptorSet{};
+        textureWrite.dstSet = *skyboxDescriptorSets_.at(handle);
+        textureWrite.dstBinding = 0;
+        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        textureWrite.descriptorCount = 1;
+        textureWrite.pImageInfo = &imageInfo;
+
+        std::array writes{textureWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+    }
 }
 
-void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView)
+void SkyboxPass::recordCommands(uint32_t frameIndex,
+                                const vk::raii::CommandBuffer& commandBuffer,
+                                SkyboxHandle skyboxHandle,
+                                vk::ImageView colorTargetImageView)
 {
     const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
 
@@ -67,31 +88,28 @@ void SkyboxPass::recordCommands(const RenderPassCommandInfo& passInfo, vk::Image
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachments = &attachmentInfo;
 
-    passInfo.commandBuffer.beginRendering(renderingInfo);
-    passInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
-    passInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                              pipelineLayout_,
-                                              0,
-                                              *cameraDescriptorSets_.at(passInfo.frameIndex),
-                                              nullptr);
+    commandBuffer.beginRendering(renderingInfo);
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                     pipelineLayout_,
+                                     0,
+                                     *cameraDescriptorSets_.at(frameIndex),
+                                     nullptr);
 
-    if (passInfo.skyboxHandle)
-    {
-        passInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                  pipelineLayout_,
-                                                  1,
-                                                  *skyboxDescriptorSets_.at(passInfo.skyboxHandle.value()),
-                                                  nullptr);
-    }
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                     pipelineLayout_,
+                                     1,
+                                     *skyboxDescriptorSets_.at(skyboxHandle),
+                                     nullptr);
 
-    passInfo.commandBuffer.setViewport(
+    commandBuffer.setViewport(
         0,
         vk::Viewport(0.0f, 0.0f, static_cast<float>(extent_.width), static_cast<float>(extent_.height), 0.0f, 1.0f));
-    passInfo.commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent_));
+    commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent_));
 
-    passInfo.commandBuffer.draw(36, 1, 0, 0);
+    commandBuffer.draw(36, 1, 0, 0);
 
-    passInfo.commandBuffer.endRendering();
+    commandBuffer.endRendering();
 }
 
 void SkyboxPass::createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers)
@@ -213,29 +231,5 @@ void SkyboxPass::createPipeline(const vk::Format& surfaceFormat)
     pipelineInfo.renderPass = nullptr;
 
     pipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
-}
-
-void SkyboxPass::recreateDescriptorSets(const GpuResourceCache& resourceCache)
-{
-    for (const auto& [handle, image] : resourceCache.skyboxes())
-    {
-        auto sets = skyboxDescriptor_.allocateSets(1);
-        skyboxDescriptorSets_.emplace(handle, std::move(sets[0]));
-
-        auto imageInfo = vk::DescriptorImageInfo{};
-        imageInfo.imageView = image.view;
-        imageInfo.sampler = image.sampler;
-        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-        auto textureWrite = vk::WriteDescriptorSet{};
-        textureWrite.dstSet = *skyboxDescriptorSets_.at(handle);
-        textureWrite.dstBinding = 0;
-        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        textureWrite.descriptorCount = 1;
-        textureWrite.pImageInfo = &imageInfo;
-
-        std::array writes{textureWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
-    }
 }
 } // namespace renderer

@@ -4,7 +4,7 @@
 #include "loading_screen_pass.h"
 
 #include "renderer/gpu_device.h"
-#include "renderer/gpu_image.h"
+#include "renderer/gpu_objects.h"
 
 #include <core/file_system.h>
 
@@ -36,14 +36,35 @@ void LoadingScreenPass::resize(const vk::Extent2D& extent)
     extent_ = extent;
 }
 
-void LoadingScreenPass::setImage(std::unique_ptr<GpuImage> loadingScreenImage)
+void LoadingScreenPass::rebuild(std::unique_ptr<Image> loadingScreenImage)
 {
     loadingScreenImage_ = std::move(loadingScreenImage);
-    imageDescriptorSets_.clear();
 
-    if (loadingScreenImage_)
+    if (!loadingScreenImage_)
     {
-        createImageDescriptorSet();
+        return;
+    }
+
+    const auto count = imageDescriptor_.size();
+
+    imageDescriptorSets_ = imageDescriptor_.allocateSets(count);
+
+    for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
+    {
+        auto imageInfo = vk::DescriptorImageInfo{};
+        imageInfo.imageView = loadingScreenImage_->view;
+        imageInfo.sampler = loadingScreenImage_->sampler;
+        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+        auto imageWrite = vk::WriteDescriptorSet{};
+        imageWrite.dstSet = *imageDescriptorSets_.at(frameIndex);
+        imageWrite.dstBinding = 0;
+        imageWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        imageWrite.descriptorCount = 1;
+        imageWrite.pImageInfo = &imageInfo;
+
+        auto writes = std::array{imageWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
     }
 }
 
@@ -87,31 +108,6 @@ void LoadingScreenPass::recordCommands(uint32_t frameIndex,
     commandBuffer.draw(6, 1, 0, 0);
 
     commandBuffer.endRendering();
-}
-
-void LoadingScreenPass::createImageDescriptorSet()
-{
-    const auto count = imageDescriptor_.size();
-
-    imageDescriptorSets_ = imageDescriptor_.allocateSets(count);
-
-    for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
-    {
-        auto imageInfo = vk::DescriptorImageInfo{};
-        imageInfo.imageView = loadingScreenImage_->view;
-        imageInfo.sampler = loadingScreenImage_->sampler;
-        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-        auto imageWrite = vk::WriteDescriptorSet{};
-        imageWrite.dstSet = *imageDescriptorSets_.at(frameIndex);
-        imageWrite.dstBinding = 0;
-        imageWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        imageWrite.descriptorCount = 1;
-        imageWrite.pImageInfo = &imageInfo;
-
-        auto writes = std::array{imageWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
-    }
 }
 
 void LoadingScreenPass::createPipeline(const vk::Format& surfaceFormat)

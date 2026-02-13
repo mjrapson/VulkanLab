@@ -5,7 +5,6 @@
 
 #include "renderer/draw_command.h"
 #include "renderer/gpu_device.h"
-#include "renderer/gpu_resource_cache.h"
 #include "renderer/vertex_layout.h"
 
 #include <core/file_system.h>
@@ -60,18 +59,45 @@ void GeometryPass::resize(const vk::Extent2D& extent)
     depthImageView_ = gpuDevice_.createDepthImageView(depthImage_);
 }
 
-void GeometryPass::rebuild(const GpuResourceCache& resourceCache)
+void GeometryPass::rebuild(const std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>>& materials)
 {
-    materialDescriptor_.resize(static_cast<uint32_t>(resourceCache.materials().size()));
+    materialDescriptor_.resize(static_cast<uint32_t>(materials.size()));
+    for (const auto& [handle, material] : materials)
+    {
+        materialDescriptorSets_.emplace(handle, std::move(materialDescriptor_.allocateSets(1)[0]));
 
-    recreateMaterialDescriptorSets(resourceCache);
+        auto uboWrite = vk::WriteDescriptorSet{};
+        uboWrite.dstSet = *materialDescriptorSets_.at(handle);
+        uboWrite.dstBinding = 0;
+        uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+        uboWrite.descriptorCount = 1;
+        uboWrite.pBufferInfo = &material.bufferInfo;
+
+        auto textureWrite = vk::WriteDescriptorSet{};
+        textureWrite.dstSet = *materialDescriptorSets_.at(handle);
+        textureWrite.dstBinding = 1;
+        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        textureWrite.descriptorCount = 1;
+        textureWrite.pImageInfo = &material.imageInfo;
+
+        std::array writes{uboWrite, textureWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+    }
 }
 
-void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView)
+void GeometryPass::recordCommands(
+    uint32_t frameIndex,
+    const vk::raii::CommandBuffer& commandBuffer,
+    const vk::raii::Buffer& vertexBuffer,
+    const vk::raii::Buffer& indexBuffer,
+    const std::unordered_map<MeshHandle, Mesh, core::Hash<MeshHandle>>& meshGpuData,
+    const std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>>& materialGpuData,
+    vk::ImageView colorTargetImageView,
+    std::span<const DrawCommand> drawCommands)
 {
     gpuDevice_.transitionImageLayout(
         depthImage_,
-        passInfo.commandBuffer,
+        commandBuffer,
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eDepthAttachmentOptimal,
         vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
@@ -102,45 +128,50 @@ void GeometryPass::recordCommands(const RenderPassCommandInfo& passInfo, vk::Ima
     renderingInfo.pColorAttachments = &attachmentInfo;
     renderingInfo.pDepthAttachment = &depthAttachmentInfo;
 
-    passInfo.commandBuffer.beginRendering(renderingInfo);
-    passInfo.commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
-    passInfo.commandBuffer.bindVertexBuffers(0, *passInfo.gpuResourceCache.meshVertexBuffer(), {0});
-    passInfo.commandBuffer.bindIndexBuffer(*passInfo.gpuResourceCache.meshIndexBuffer(), 0, vk::IndexType::eUint32);
+    commandBuffer.beginRendering(renderingInfo);
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
+    commandBuffer.bindVertexBuffers(0, *vertexBuffer, {0});
+    commandBuffer.bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint32);
 
-    passInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                              pipelineLayout_,
-                                              0,
-                                              *cameraDescriptorSets_.at(passInfo.frameIndex),
-                                              nullptr);
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                     pipelineLayout_,
+                                     0,
+                                     *cameraDescriptorSets_.at(frameIndex),
+                                     nullptr);
 
-    passInfo.commandBuffer.setViewport(
+    commandBuffer.setViewport(
         0,
         vk::Viewport(0.0f, 0.0f, static_cast<float>(extent_.width), static_cast<float>(extent_.height), 0.0f, 1.0f));
-    passInfo.commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent_));
+    commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent_));
 
-    for (const auto& drawCommand : passInfo.drawCommands)
+    for (const auto& drawCommand : drawCommands)
     {
+        auto& gpuMesh = meshGpuData.at(drawCommand.meshHandle);
+        if (!gpuMesh.materialHandle)
+        {
+            continue;
+        }
+
         auto pushConstants = PushConstants{};
         pushConstants.modelTransform = drawCommand.transform;
         pushConstants.normalMatrix = glm::transpose(glm::inverse(glm::mat3(drawCommand.transform)));
 
-        passInfo.commandBuffer.pushConstants(pipelineLayout_,
-                                             vk::ShaderStageFlagBits::eVertex,
-                                             0,
-                                             vk::ArrayProxy<const PushConstants>{pushConstants});
+        commandBuffer.pushConstants(pipelineLayout_,
+                                    vk::ShaderStageFlagBits::eVertex,
+                                    0,
+                                    vk::ArrayProxy<const PushConstants>{pushConstants});
 
-        const auto& gpuMaterial = passInfo.gpuResourceCache.gpuMaterial(drawCommand.materialHandle);
-        passInfo.commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                  pipelineLayout_,
-                                                  1,
-                                                  *materialDescriptorSets_.at(drawCommand.materialHandle),
-                                                  gpuMaterial.uboOffset);
+        const auto& gpuMaterial = materialGpuData.at(gpuMesh.materialHandle.value());
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         pipelineLayout_,
+                                         1,
+                                         *materialDescriptorSets_.at(gpuMesh.materialHandle.value()),
+                                         gpuMaterial.bufferOffset);
 
-        auto& gpuMesh = passInfo.gpuResourceCache.gpuMesh(drawCommand.subMeshHandle);
-        passInfo.commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexOffset, gpuMesh.vertexOffset, 0);
+        commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexBufferOffset, gpuMesh.vertexBufferOffset, 0);
     }
 
-    passInfo.commandBuffer.endRendering();
+    commandBuffer.endRendering();
 }
 
 void GeometryPass::createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers)
@@ -280,49 +311,5 @@ void GeometryPass::createPipeline(const vk::Format& surfaceFormat)
     pipelineInfo.renderPass = nullptr;
 
     pipeline_ = vk::raii::Pipeline(gpuDevice_.device(), nullptr, pipelineInfo);
-}
-
-void GeometryPass::recreateMaterialDescriptorSets(const GpuResourceCache& resourceCache)
-{
-    const auto stride = gpuDevice_.calculateAlignedUboStride(sizeof(GpuMaterialBufferData));
-    for (const auto& [handle, material] : resourceCache.materials())
-    {
-        materialDescriptorSets_.emplace(handle, std::move(materialDescriptor_.allocateSets(1)[0]));
-
-        auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = *resourceCache.materialUboBuffer();
-        bufferInfo.offset = 0;
-        bufferInfo.range = stride;
-
-        auto uboWrite = vk::WriteDescriptorSet{};
-        uboWrite.dstSet = *materialDescriptorSets_.at(handle);
-        uboWrite.dstBinding = 0;
-        uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
-        uboWrite.descriptorCount = 1;
-        uboWrite.pBufferInfo = &bufferInfo;
-
-        auto imageInfo = vk::DescriptorImageInfo{};
-        if (material.diffuseImageHandle)
-        {
-            imageInfo.imageView = *resourceCache.gpuImage(material.diffuseImageHandle.value()).view;
-            imageInfo.sampler = *resourceCache.gpuImage(material.diffuseImageHandle.value()).sampler;
-        }
-        else
-        {
-            imageInfo.imageView = *resourceCache.emptyImage().view;
-            imageInfo.sampler = *resourceCache.emptyImage().sampler;
-        }
-        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-        auto textureWrite = vk::WriteDescriptorSet{};
-        textureWrite.dstSet = *materialDescriptorSets_.at(handle);
-        textureWrite.dstBinding = 1;
-        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        textureWrite.descriptorCount = 1;
-        textureWrite.pImageInfo = &imageInfo;
-
-        std::array writes{uboWrite, textureWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
-    }
 }
 } // namespace renderer

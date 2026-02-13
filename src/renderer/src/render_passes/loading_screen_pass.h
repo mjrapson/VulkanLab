@@ -12,7 +12,7 @@
 namespace renderer
 {
 class GpuDevice;
-struct GpuImage;
+struct Image;
 
 class LoadingScreenPass
 {
@@ -23,7 +23,7 @@ class LoadingScreenPass
 
     void resize(const vk::Extent2D& extent);
 
-    void setImage(std::unique_ptr<GpuImage> image);
+    void rebuild(std::unique_ptr<Image> loadingScreenImage);
 
     void recordCommands(uint32_t frameIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
@@ -36,8 +36,9 @@ class LoadingScreenPass
 
   private:
     const GpuDevice& gpuDevice_;
-    std::unique_ptr<GpuImage> loadingScreenImage_{nullptr};
     vk::Extent2D extent_;
+
+    std::unique_ptr<Image> loadingScreenImage_;
 
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline pipeline_{nullptr};

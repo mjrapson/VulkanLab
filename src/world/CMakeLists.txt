@@ -7,6 +7,7 @@ target_sources(World
         include/world/components/transform_component.h
         include/world/systems/render_system.h
         include/world/entity.h
+        include/world/prefab.h
         include/world/world.h
     PRIVATE
         src/systems/render_system.cpp
@@ -22,7 +23,6 @@ target_link_libraries(World
     PRIVATE
         Core
         Scene
-        Assets
         Renderer
         spdlog
         pch

@@ -9,36 +9,26 @@
 #include "world/components/transform_component.h"
 #include "world/systems/render_system.h"
 
-#include <assets/handles.h>
+#include <renderer/handles.h>
 
-#include <future>
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
 
-namespace scene
-{
-struct Scene;
-}
-
-namespace assets
-{
-class AssetDatabase;
-} // namespace assets
-
 namespace renderer
 {
 class Camera;
-class GpuResourceCache;
 class Renderer;
 } // namespace renderer
 
 namespace world
 {
+struct Prefab;
+
 class World
 {
   public:
-    World(const scene::Scene& scene, const assets::AssetDatabase& assetDatabase, renderer::Renderer& renderer);
+    World(renderer::Renderer& renderer);
 
     World(const World&) = delete;
     World& operator=(const World&) = delete;
@@ -49,13 +39,14 @@ class World
     Entity createEntity();
     void destroyEntity(Entity entity);
 
-    const std::optional<assets::SkyboxHandle>& activeSkybox() const;
+    void addPrefab(const std::string& name, std::unique_ptr<Prefab> prefab);
+    Prefab* prefab(const std::string& name) const;
+
+    void setSkybox(renderer::SkyboxHandle handle);
+    const std::optional<renderer::SkyboxHandle>& activeSkybox() const;
 
     const DirectionalLightComponent& directionalLight() const;
 
-    std::unique_ptr<renderer::GpuResourceCache> gpuResources();
-
-    bool isReady() const;
     void update(const renderer::Camera& camera);
 
     template <typename Component, typename... Args>
@@ -119,14 +110,18 @@ class World
     }
 
   private:
+    // Components
     std::unordered_map<Entity, RenderComponent> renderComponents_;
     std::unordered_map<Entity, TransformComponent> transformComponents_;
-    std::optional<assets::SkyboxHandle> activeSkybox_;
     DirectionalLightComponent directionalLight_;
 
-    std::future<std::unique_ptr<renderer::GpuResourceCache>> gpuResourcesFuture_;
-
-    Entity nextEntity{0};
+    // Systems
     RenderSystem renderSystem_;
+
+    // State
+    std::optional<renderer::SkyboxHandle> activeSkybox_;
+
+    std::unordered_map<std::string, std::unique_ptr<Prefab>> prefabs_;
+    Entity nextEntity{0};
 };
 } // namespace world

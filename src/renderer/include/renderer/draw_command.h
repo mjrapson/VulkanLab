@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <assets/handles.h>
+#include "renderer/handles.h"
 
 #include <glm/glm.hpp>
 
@@ -11,8 +11,7 @@ namespace renderer
 {
 struct DrawCommand
 {
-    assets::SubMeshHandle subMeshHandle;
-    assets::MaterialHandle materialHandle;
+    renderer::MeshHandle meshHandle;
     glm::mat4 transform;
 };
 } // namespace renderer

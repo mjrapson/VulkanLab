@@ -3,22 +3,19 @@
 
 #pragma once
 
+#include "renderer/data.h"
 #include "renderer/draw_command.h"
 #include "renderer/gpu_device.h"
+#include "renderer/gpu_objects.h"
+#include "renderer/handles.h"
 #include "renderer/instance.h"
 #include "renderer/swapchain.h"
-
-#include <assets/handles.h>
 
 #include <vulkan/vulkan_raii.hpp>
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
-
-namespace assets
-{
-class Image;
-}
 
 namespace window
 {
@@ -27,10 +24,11 @@ class Window;
 
 namespace renderer
 {
+struct AssetData;
 class Camera;
 class GeometryPass;
 class GpuDevice;
-class GpuResourceCache;
+struct ImageData;
 class LoadingScreenPass;
 class SkyboxPass;
 
@@ -46,18 +44,16 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
-    void setLoadingScreenImage(const assets::Image& image);
+    void setLoadingScreenImage(const ImageData& imageData);
 
     void renderScene(std::span<const DrawCommand> drawCommands,
-                     std::optional<assets::SkyboxHandle> skyboxHandle,
+                     std::optional<renderer::SkyboxHandle> skyboxHandle,
                      const Camera& camera);
     void renderLoadingScreen();
 
     void windowResized(int width, int height);
 
-    void setResources(std::unique_ptr<GpuResourceCache> gpuResources);
-
-    const GpuDevice& device() const;
+    void setData(const AssetData& data);
 
   private:
     void createSwapchain();
@@ -69,6 +65,11 @@ class Renderer
     void recreateSwapchain();
 
     void renderFrame(std::function<void(uint32_t, const vk::raii::CommandBuffer&)> recordCommands);
+
+    void uploadImages(const ImageDataContainer& data);
+    void uploadMeshes(const MeshDataContainer& data);
+    void uploadMaterials(const MaterialDataContainer& data);
+    void uploadSkyboxes(const SkyboxDataContainer& data);
 
   private:
     vk::raii::Context context_;
@@ -93,7 +94,22 @@ class Renderer
     std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;
     std::vector<void*> cameraUboMappedMemory_;
 
-    std::unique_ptr<GpuResourceCache> gpuResources_{nullptr};
+    vk::raii::Image emptyImage_{nullptr};
+    vk::raii::ImageView emptyImageView_{nullptr};
+    vk::raii::DeviceMemory emptyImageMemory_{nullptr};
+    vk::raii::Sampler emptyImageSampler_{nullptr};
+
+    vk::raii::Buffer meshVertexBuffer_{nullptr};
+    vk::raii::Buffer meshIndexBuffer_{nullptr};
+    vk::raii::Buffer materialUbo_{nullptr};
+    vk::raii::DeviceMemory meshVertexBufferMemory_{nullptr};
+    vk::raii::DeviceMemory meshIndexBufferMemory_{nullptr};
+    vk::raii::DeviceMemory materialUboMemory_{nullptr};
+
+    std::unordered_map<MeshHandle, Mesh, core::Hash<MeshHandle>> meshGpuData_;
+    std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>> materialGpuData_;
+    std::unordered_map<ImageHandle, Image, core::Hash<ImageHandle>> imageGpuData_;
+    std::unordered_map<SkyboxHandle, Skybox, core::Hash<SkyboxHandle>> skyboxGpuData_;
 
     std::unique_ptr<LoadingScreenPass> loadingScreenPass_{nullptr};
     std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};

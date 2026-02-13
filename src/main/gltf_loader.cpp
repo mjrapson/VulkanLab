@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2025 Mark Rapson
 
-#include "assets/gltf_loader.h"
+#include "gltf_loader.h"
 
-#include "assets/image.h"
-#include "assets/image_loader.h"
-#include "assets/material.h"
-#include "assets/mesh.h"
-#include "assets/prefab.h"
+#include "image_loader.h"
+
+#include <renderer/data.h>
+#include <world/prefab.h>
 
 #include <core/vertex.h>
 
@@ -33,8 +32,6 @@
 
 #include <vector>
 
-namespace assets
-{
 glm::vec3 readColor(const std::vector<double>& color)
 {
     if (color.empty() || color.size() < 3)
@@ -114,8 +111,8 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
 void parseNode(int index,
                tinygltf::Model& model,
                const glm::mat4& parentTransform,
-               Prefab& prefab,
-               const std::vector<MeshHandle>& meshHandles)
+               world::Prefab& prefab,
+               const std::vector<std::vector<renderer::MeshHandle>>& meshHandles)
 {
     const auto& node = model.nodes[index];
 
@@ -151,10 +148,10 @@ void parseNode(int index,
 
     if (node.mesh >= 0)
     {
-        auto meshInstance = MeshInstance{};
-        meshInstance.meshHandle = meshHandles.at(node.mesh);
+        auto meshInstance = world::MeshInstance{};
+        meshInstance.subMeshes = meshHandles.at(node.mesh);
         meshInstance.transform = nodeToPrefab;
-        prefab.addMeshInstance(std::move(meshInstance));
+        prefab.meshInstances.push_back(std::move(meshInstance));
     }
 
     for (const auto& childIndex : node.children)
@@ -163,7 +160,7 @@ void parseNode(int index,
     }
 }
 
-std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
+std::unique_ptr<world::Prefab> loadGLTFModel(const std::filesystem::path& path, renderer::AssetData& assetData)
 {
     if (path.extension() != ".glb")
     {
@@ -193,49 +190,57 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
         return nullptr;
     }
 
-    auto imageHandles = std::unordered_map<std::string, ImageHandle>{};
-    auto materialHandles = std::unordered_map<std::string, MaterialHandle>{};
-    auto meshHandles = std::vector<MeshHandle>{};
+    auto imageHandles = std::unordered_map<std::string, renderer::ImageHandle>{};
+    auto materialHandles = std::unordered_map<std::string, renderer::MaterialHandle>{};
+    auto meshHandles = std::vector<std::vector<renderer::MeshHandle>>{};
 
-    auto prefab = std::make_unique<Prefab>();
+    auto prefab = std::make_unique<world::Prefab>();
 
     for (const auto& tinyGltfImage : model.images)
     {
-        auto image = createImageFromData(tinyGltfImage.width, tinyGltfImage.height, tinyGltfImage.image);
-        imageHandles[tinyGltfImage.name] = image->handle();
+        const auto handle = renderer::ImageHandleGenerator::generate();
 
-        prefab->addImage(std::move(image));
+        imageHandles.emplace(tinyGltfImage.name, handle);
+
+        assetData.imageData.emplace(
+            handle,
+            createImageFromData(tinyGltfImage.width, tinyGltfImage.height, tinyGltfImage.image));
     }
 
     for (auto& gltfMaterial : model.materials)
     {
-        auto material = std::make_unique<Material>();
-        materialHandles[gltfMaterial.name] = material->handle();
+        const auto handle = renderer::MaterialHandleGenerator::generate();
 
-        material->setDiffuse(readColor(gltfMaterial.pbrMetallicRoughness.baseColorFactor));
+        materialHandles.emplace(gltfMaterial.name, handle);
+
+        auto materialData = renderer::MaterialData{};
+        materialData.diffuseColour = readColor(gltfMaterial.pbrMetallicRoughness.baseColorFactor);
 
         if (const auto index = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index; index >= 0)
         {
-            material->setDiffuseImageHandle(imageHandles.at(model.images[model.textures[index].source].name));
+            materialData.diffuseImage = imageHandles.at(model.images[model.textures[index].source].name);
         }
 
-        prefab->addMaterial(std::move(material));
+        assetData.materialData.emplace(handle, std::move(materialData));
     }
 
     for (auto& gltfMesh : model.meshes)
     {
-        auto mesh = std::make_unique<Mesh>();
-        meshHandles.push_back(mesh->handle());
-
+        auto subMeshHandles = std::vector<renderer::MeshHandle>();
         for (auto& primitive : gltfMesh.primitives)
         {
-            auto subMesh = std::make_unique<SubMesh>();
-            subMesh->vertices = readVertices(primitive, model);
-            subMesh->indices = readIndices(primitive, model);
-            subMesh->materialHandle = materialHandles.at(model.materials[primitive.material].name);
-            mesh->append(std::move(subMesh));
+            const auto handle = renderer::MeshHandleGenerator::generate();
+
+            auto meshData = renderer::MeshData{};
+            meshData.vertices = readVertices(primitive, model);
+            meshData.indices = readIndices(primitive, model);
+            meshData.materialHandle = materialHandles.at(model.materials[primitive.material].name);
+
+            subMeshHandles.push_back(handle);
+
+            assetData.meshData.emplace(handle, std::move(meshData));
         }
-        prefab->addMesh(std::move(mesh));
+        meshHandles.push_back(subMeshHandles);
     }
 
     auto& gltfScene = model.scenes[model.defaultScene];
@@ -247,4 +252,3 @@ std::unique_ptr<Prefab> loadGLTFModel(const std::filesystem::path& path)
 
     return prefab;
 }
-} // namespace assets

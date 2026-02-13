@@ -3,11 +3,9 @@
 
 #pragma once
 
-#include "render_pass_command_info.h"
-
 #include "renderer/descriptor_set_allocator.h"
-
-#include <assets/handles.h>
+#include "renderer/draw_command.h"
+#include "renderer/gpu_objects.h"
 
 #include <vulkan/vulkan_raii.hpp>
 
@@ -30,14 +28,20 @@ class GeometryPass
 
     void resize(const vk::Extent2D& extent);
 
-    void rebuild(const GpuResourceCache& resourceCache);
+    void rebuild(const std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>>& materials);
 
-    void recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView);
+    void recordCommands(uint32_t frameIndex,
+                        const vk::raii::CommandBuffer& commandBuffer,
+                        const vk::raii::Buffer& vertexBuffer,
+                        const vk::raii::Buffer& indexBuffer,
+                        const std::unordered_map<MeshHandle, Mesh, core::Hash<MeshHandle>>& meshGpuData,
+                        const std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>>& materialGpuData,
+                        vk::ImageView colorTargetImageView,
+                        std::span<const DrawCommand> drawCommands);
 
   private:
     void createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers);
     void createPipeline(const vk::Format& surfaceFormat);
-    void recreateMaterialDescriptorSets(const GpuResourceCache& resourceCache);
 
   private:
     const GpuDevice& gpuDevice_;
@@ -55,7 +59,6 @@ class GeometryPass
     DescriptorSetAllocator materialDescriptor_;
 
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
-    std::unordered_map<assets::MaterialHandle, vk::raii::DescriptorSet, core::Hash<assets::MaterialHandle>>
-        materialDescriptorSets_;
+    std::unordered_map<MaterialHandle, vk::raii::DescriptorSet, core::Hash<MaterialHandle>> materialDescriptorSets_;
 };
 } // namespace renderer

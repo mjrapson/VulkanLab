@@ -3,11 +3,9 @@
 
 #pragma once
 
-#include "render_pass_command_info.h"
-
 #include "renderer/descriptor_set_allocator.h"
-
-#include <assets/handles.h>
+#include "renderer/gpu_objects.h"
+#include "renderer/handles.h"
 
 #include <vulkan/vulkan_raii.hpp>
 
@@ -30,16 +28,16 @@ class SkyboxPass
 
     void resize(const vk::Extent2D& extent);
 
-    void rebuild(const GpuResourceCache& resourceCache);
+    void rebuild(const std::unordered_map<SkyboxHandle, Skybox, core::Hash<SkyboxHandle>>& skyboxes);
 
-    void recordCommands(const RenderPassCommandInfo& passInfo, vk::ImageView colorTargetImageView);
+    void recordCommands(uint32_t frameIndex,
+                        const vk::raii::CommandBuffer& commandBuffer,
+                        SkyboxHandle skyboxHandle,
+                        vk::ImageView colorTargetImageView);
 
   private:
     void createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers);
-
     void createPipeline(const vk::Format& surfaceFormat);
-
-    void recreateDescriptorSets(const GpuResourceCache& resourceCache);
 
   private:
     const GpuDevice& gpuDevice_;
@@ -53,7 +51,6 @@ class SkyboxPass
     DescriptorSetAllocator skyboxDescriptor_;
 
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
-    std::unordered_map<assets::SkyboxHandle, vk::raii::DescriptorSet, core::Hash<assets::SkyboxHandle>>
-        skyboxDescriptorSets_;
+    std::unordered_map<SkyboxHandle, vk::raii::DescriptorSet, core::Hash<SkyboxHandle>> skyboxDescriptorSets_;
 };
 } // namespace renderer

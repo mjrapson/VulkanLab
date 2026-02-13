@@ -2,6 +2,10 @@ add_executable(VulkanDemo)
 
 target_sources(VulkanDemo
     PRIVATE
+    gltf_loader.cpp
+    gltf_loader.h
+    image_loader.cpp
+    image_loader.h
     main.cpp
     vulkan_application.cpp
     vulkan_application.h
@@ -10,6 +14,8 @@ target_sources(VulkanDemo
 target_include_directories(VulkanDemo
     PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/glfw/include
+    ${CMAKE_SOURCE_DIR}/third_party/stb
+    ${CMAKE_SOURCE_DIR}/third_party/tinygltf
 )
 
 target_link_libraries(VulkanDemo
@@ -17,7 +23,6 @@ target_link_libraries(VulkanDemo
     Core
     Window
     Scene
-    Assets
     Renderer
     World
     glfw
