@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "renderer/buffer_object.h"
 #include "renderer/descriptor_set_allocator.h"
 #include "renderer/gpu_objects.h"
 #include "renderer/handles.h"
@@ -24,7 +25,7 @@ class SkyboxPass
     void initialize(const vk::Extent2D& extent,
                     const vk::Format& surfaceFormat,
                     uint32_t maxFramesInFlight,
-                    const std::vector<vk::raii::Buffer>& cameraBuffers);
+                    std::span<BufferObject> cameraBuffers);
 
     void resize(const vk::Extent2D& extent);
 
@@ -36,7 +37,7 @@ class SkyboxPass
                         vk::ImageView colorTargetImageView);
 
   private:
-    void createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers);
+    void createCameraDescriptorSets(uint32_t count, std::span<BufferObject> cameraBuffers);
     void createPipeline(const vk::Format& surfaceFormat);
 
   private:

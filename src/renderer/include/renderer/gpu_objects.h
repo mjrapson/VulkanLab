@@ -35,6 +35,12 @@ struct MaterialUboData
     uint _padding[3];
 };
 
+struct DirectionalLightUboData
+{
+    glm::vec3 direction;
+    uint _padding[3];
+};
+
 struct Mesh
 {
     uint32_t vertexBufferOffset;

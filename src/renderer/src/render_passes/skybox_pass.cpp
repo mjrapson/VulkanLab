@@ -27,7 +27,7 @@ SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice)
 void SkyboxPass::initialize(const vk::Extent2D& extent,
                             const vk::Format& surfaceFormat,
                             uint32_t maxFramesInFlight,
-                            const std::vector<vk::raii::Buffer>& cameraBuffers)
+                            std::span<BufferObject> cameraBuffers)
 {
     resize(extent);
 
@@ -112,14 +112,14 @@ void SkyboxPass::recordCommands(uint32_t frameIndex,
     commandBuffer.endRendering();
 }
 
-void SkyboxPass::createCameraDescriptorSets(uint32_t count, const std::vector<vk::raii::Buffer>& cameraBuffers)
+void SkyboxPass::createCameraDescriptorSets(uint32_t count, std::span<BufferObject> cameraBuffers)
 {
     cameraDescriptorSets_ = cameraDescriptor_.allocateSets(count);
 
     for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
     {
         auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = cameraBuffers.at(frameIndex);
+        bufferInfo.buffer = cameraBuffers[frameIndex].buffer;
         bufferInfo.offset = 0;
         bufferInfo.range = VK_WHOLE_SIZE;
 

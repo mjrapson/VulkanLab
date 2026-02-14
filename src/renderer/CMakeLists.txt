@@ -2,6 +2,7 @@ add_library(Renderer STATIC)
 
 target_sources(Renderer
     PUBLIC
+        include/renderer/buffer_object.h
         include/renderer/camera.h
         include/renderer/data.h
         include/renderer/descriptor_set_allocator.h

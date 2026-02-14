@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "renderer/buffer_object.h"
 #include "renderer/data.h"
 #include "renderer/draw_command.h"
 #include "renderer/gpu_device.h"
@@ -90,21 +91,11 @@ class Renderer
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
 
-    std::vector<vk::raii::Buffer> cameraUboBuffers_;
-    std::vector<vk::raii::DeviceMemory> cameraUboBuffersMemory_;
-    std::vector<void*> cameraUboMappedMemory_;
-
-    vk::raii::Image emptyImage_{nullptr};
-    vk::raii::ImageView emptyImageView_{nullptr};
-    vk::raii::DeviceMemory emptyImageMemory_{nullptr};
-    vk::raii::Sampler emptyImageSampler_{nullptr};
-
-    vk::raii::Buffer meshVertexBuffer_{nullptr};
-    vk::raii::Buffer meshIndexBuffer_{nullptr};
-    vk::raii::Buffer materialUbo_{nullptr};
-    vk::raii::DeviceMemory meshVertexBufferMemory_{nullptr};
-    vk::raii::DeviceMemory meshIndexBufferMemory_{nullptr};
-    vk::raii::DeviceMemory materialUboMemory_{nullptr};
+    Image emptyImage_;
+    BufferObject meshVertexBuffer_;
+    BufferObject meshIndexBuffer_;
+    BufferObject materialUbo_;
+    std::vector<BufferObject> cameraUbos_;
 
     std::unordered_map<MeshHandle, Mesh, core::Hash<MeshHandle>> meshGpuData_;
     std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>> materialGpuData_;

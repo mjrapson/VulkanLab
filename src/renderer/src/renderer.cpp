@@ -109,7 +109,7 @@ void Renderer::renderScene(std::span<const DrawCommand> drawCommands,
             auto cameraBuffer = CameraBufferObject{};
             cameraBuffer.projection = camera.projection();
             cameraBuffer.view = camera.view();
-            memcpy(cameraUboMappedMemory_[currentFrameIndex_], &cameraBuffer, sizeof(cameraBuffer));
+            memcpy(cameraUbos_[currentFrameIndex_].mappedMemory, &cameraBuffer, sizeof(cameraBuffer));
 
             gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
                                              commandBuffer,
@@ -127,8 +127,8 @@ void Renderer::renderScene(std::span<const DrawCommand> drawCommands,
                                         swapchain_.views[imageIndex]);
             geometryPass_->recordCommands(currentFrameIndex_,
                                           commandBuffer,
-                                          meshVertexBuffer_,
-                                          meshIndexBuffer_,
+                                          meshVertexBuffer_.buffer,
+                                          meshIndexBuffer_.buffer,
                                           meshGpuData_,
                                           materialGpuData_,
                                           swapchain_.views[imageIndex],
@@ -199,8 +199,8 @@ void Renderer::setData(const AssetData& data)
     cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
 
     // Empty image (move this)
-    emptyImage_ = gpuDevice_.createImage(1, 1);
-    emptyImageMemory_ = gpuDevice_.allocateImageMemory(emptyImage_, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    emptyImage_.image = gpuDevice_.createImage(1, 1);
+    emptyImage_.memory = gpuDevice_.allocateImageMemory(emptyImage_.image, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     const auto imageSize = 4; //  RGBA8
     auto stagingBuffer = gpuDevice_.createBuffer(imageSize,
@@ -216,7 +216,7 @@ void Renderer::setData(const AssetData& data)
     std::memcpy(mappedMemory, imageData.data(), imageSize);
     stagingMemory.unmapMemory();
 
-    gpuDevice_.transitionImageLayout(*emptyImage_,
+    gpuDevice_.transitionImageLayout(*emptyImage_.image,
                                      *cmd,
                                      vk::ImageLayout::eUndefined,
                                      vk::ImageLayout::eTransferDstOptimal,
@@ -226,9 +226,9 @@ void Renderer::setData(const AssetData& data)
                                      vk::PipelineStageFlagBits2::eTransfer,
                                      vk::ImageAspectFlagBits::eColor);
 
-    gpuDevice_.copyBufferToImage(cmd, stagingBuffer, emptyImage_, 1, 1);
+    gpuDevice_.copyBufferToImage(cmd, stagingBuffer, emptyImage_.image, 1, 1);
 
-    gpuDevice_.transitionImageLayout(*emptyImage_,
+    gpuDevice_.transitionImageLayout(*emptyImage_.image,
                                      *cmd,
                                      vk::ImageLayout::eTransferDstOptimal,
                                      vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -238,8 +238,8 @@ void Renderer::setData(const AssetData& data)
                                      vk::PipelineStageFlagBits2::eFragmentShader,
                                      vk::ImageAspectFlagBits::eColor);
 
-    emptyImageView_ = gpuDevice_.createImageView(emptyImage_);
-    emptyImageSampler_ = gpuDevice_.createSampler();
+    emptyImage_.view = gpuDevice_.createImageView(emptyImage_.image);
+    emptyImage_.sampler = gpuDevice_.createSampler();
 
     cmd.end();
     gpuDevice_.submitCommandBuffer(cmd);
@@ -293,14 +293,12 @@ void Renderer::createCameraBuffers()
 {
     for (auto frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex)
     {
-        auto buffer = gpuDevice_.createUniformBuffer(sizeof(CameraBufferObject));
-        auto memory = gpuDevice_.allocateStagingBufferMemory(buffer);
+        auto cameraUbo = BufferObject{};
+        cameraUbo.buffer = gpuDevice_.createUniformBuffer(sizeof(CameraBufferObject));
+        cameraUbo.memory = gpuDevice_.allocateStagingBufferMemory(cameraUbo.buffer);
+        cameraUbo.mappedMemory = cameraUbo.memory.mapMemory(0, VK_WHOLE_SIZE);
 
-        auto mappedMemory = memory.mapMemory(0, VK_WHOLE_SIZE);
-
-        cameraUboBuffers_.push_back(std::move(buffer));
-        cameraUboBuffersMemory_.push_back(std::move(memory));
-        cameraUboMappedMemory_.push_back(std::move(mappedMemory));
+        cameraUbos_.push_back(std::move(cameraUbo));
     }
 }
 
@@ -310,10 +308,10 @@ void Renderer::createRenderPasses()
     loadingScreenPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight);
 
     skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_);
-    skyboxPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight, cameraUboBuffers_);
+    skyboxPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight, cameraUbos_);
 
     geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_);
-    geometryPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight, cameraUboBuffers_);
+    geometryPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight, cameraUbos_);
 }
 
 void Renderer::recreateSwapchain()
@@ -474,15 +472,15 @@ void Renderer::uploadMeshes(const MeshDataContainer& data)
 
     const auto vertexBufferSize = static_cast<uint32_t>(sizeof(core::Vertex) * totalVertices);
 
-    meshVertexBuffer_ = gpuDevice_.createVertexBuffer(vertexBufferSize);
-    meshVertexBufferMemory_ = gpuDevice_.allocateDeviceBufferMemory(meshVertexBuffer_);
+    meshVertexBuffer_.buffer = gpuDevice_.createVertexBuffer(vertexBufferSize);
+    meshVertexBuffer_.memory = gpuDevice_.allocateDeviceBufferMemory(meshVertexBuffer_.buffer);
 
     auto vertexStagingBuffer = gpuDevice_.createStagingBuffer(vertexBufferSize);
     auto vertexStagingBufferMemory = gpuDevice_.allocateStagingBufferMemory(vertexStagingBuffer);
 
     const auto indexBufferSize = static_cast<uint32_t>(sizeof(uint32_t) * totalIndices);
-    meshIndexBuffer_ = gpuDevice_.createIndexBuffer(indexBufferSize);
-    meshIndexBufferMemory_ = gpuDevice_.allocateDeviceBufferMemory(meshIndexBuffer_);
+    meshIndexBuffer_.buffer = gpuDevice_.createIndexBuffer(indexBufferSize);
+    meshIndexBuffer_.memory = gpuDevice_.allocateDeviceBufferMemory(meshIndexBuffer_.buffer);
 
     auto indexStagingBuffer = gpuDevice_.createStagingBuffer(indexBufferSize);
     auto indexStagingBufferMemory = gpuDevice_.allocateStagingBufferMemory(indexStagingBuffer);
@@ -521,8 +519,8 @@ void Renderer::uploadMeshes(const MeshDataContainer& data)
     vertexStagingBufferMemory.unmapMemory();
     indexStagingBufferMemory.unmapMemory();
 
-    gpuDevice_.copyBuffer(cmd, vertexStagingBuffer, meshVertexBuffer_, vertexBufferSize);
-    gpuDevice_.copyBuffer(cmd, indexStagingBuffer, meshIndexBuffer_, indexBufferSize);
+    gpuDevice_.copyBuffer(cmd, vertexStagingBuffer, meshVertexBuffer_.buffer, vertexBufferSize);
+    gpuDevice_.copyBuffer(cmd, indexStagingBuffer, meshIndexBuffer_.buffer, indexBufferSize);
 
     cmd.end();
     gpuDevice_.submitCommandBuffer(cmd);
@@ -536,9 +534,9 @@ void Renderer::uploadMaterials(const MaterialDataContainer& data)
 
     const auto uboStride = gpuDevice_.calculateAlignedUboStride(sizeof(MaterialUboData));
 
-    materialUbo_ = gpuDevice_.createUniformBuffer(uboStride * data.size());
-    materialUboMemory_ = gpuDevice_.allocateStagingBufferMemory(materialUbo_);
-    void* mapped = materialUboMemory_.mapMemory(0, VK_WHOLE_SIZE);
+    materialUbo_.buffer = gpuDevice_.createUniformBuffer(uboStride * data.size());
+    materialUbo_.memory = gpuDevice_.allocateStagingBufferMemory(materialUbo_.buffer);
+    void* mapped = materialUbo_.memory.mapMemory(0, VK_WHOLE_SIZE);
 
     auto offset = uint32_t{0};
     for (const auto& [handle, materialData] : data)
@@ -555,7 +553,7 @@ void Renderer::uploadMaterials(const MaterialDataContainer& data)
         offset += static_cast<uint32_t>(uboStride);
 
         auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = *materialUbo_;
+        bufferInfo.buffer = *materialUbo_.buffer;
         bufferInfo.offset = 0;
         bufferInfo.range = uboStride;
 
@@ -569,8 +567,8 @@ void Renderer::uploadMaterials(const MaterialDataContainer& data)
         }
         else
         {
-            imageInfo.imageView = *emptyImageView_;
-            imageInfo.sampler = *emptyImageSampler_;
+            imageInfo.imageView = *emptyImage_.view;
+            imageInfo.sampler = *emptyImage_.sampler;
         }
         imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
@@ -579,7 +577,7 @@ void Renderer::uploadMaterials(const MaterialDataContainer& data)
         materialGpuData_.emplace(handle, std::move(material));
     }
 
-    materialUboMemory_.unmapMemory();
+    materialUbo_.memory.unmapMemory();
 
     cmd.end();
     gpuDevice_.submitCommandBuffer(cmd);
