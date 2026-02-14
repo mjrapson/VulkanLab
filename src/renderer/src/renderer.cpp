@@ -50,7 +50,7 @@ Renderer::~Renderer() = default;
 
 void Renderer::setLoadingScreenImage(const ImageData& imageData)
 {
-    auto loadingScreenImage = std::unique_ptr<Image>();
+    auto loadingScreenImage = std::make_unique<Image>();
     loadingScreenImage->image = gpuDevice_.createImage(imageData.width, imageData.height);
     loadingScreenImage->memory = gpuDevice_.allocateImageMemory(loadingScreenImage->image,
                                                                 vk::MemoryPropertyFlagBits::eDeviceLocal);

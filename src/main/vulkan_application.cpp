@@ -28,39 +28,19 @@ float getAspectRatio(int width, int height)
     return static_cast<float>(width) / static_cast<float>(height);
 }
 
-void prepareScene()
+VulkanApplication::LoadResult loadSceneData(const std::filesystem::path& path, renderer::Renderer& renderer)
 {
-}
+    auto world = std::make_unique<world::World>(renderer);
 
-VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer& renderer)
-    : window_{window},
-      renderer_{renderer}
-{
-    // auto loadingScreenImage = createImageFromPath(core::getTexturesDir() / "loading_screen.png");
-    // if (loadingScreenImage)
-    // {
-    //     renderer_.setLoadingScreenImage(*loadingScreenImage);
-    // }
-}
+    // 1. Load scene
+    auto scene = scene::loadScene(path);
 
-VulkanApplication::~VulkanApplication() = default;
-
-void VulkanApplication::run()
-{
-    spdlog::info("Running");
-
-    auto scene = scene::loadScene(core::getScenesDir() / "demo.json");
-    camera_.setPosition(glm::vec3{0.0f, 8.0f, 24.0f});
-
-    activeWorld_ = std::make_unique<world::World>(renderer_);
+    // 2. Load assets
     auto pendingAssetData = renderer::AssetData{};
 
-    // Probably show some loading screen here...
-    // Move to separate func
     for (auto& prefabDef : scene->prefabs)
     {
-        activeWorld_->addPrefab(prefabDef.name,
-                                loadGLTFModel(core::getPrefabsDir() / prefabDef.path, pendingAssetData));
+        world->addPrefab(prefabDef.name, loadGLTFModel(core::getPrefabsDir() / prefabDef.path, pendingAssetData));
     }
 
     for (auto& skyboxDef : scene->skyboxes)
@@ -75,32 +55,51 @@ void VulkanApplication::run()
 
         const auto handle = renderer::SkyboxHandleGenerator::generate();
 
-        activeWorld_->setSkybox(handle);
+        world->setSkybox(handle);
 
         pendingAssetData.skyboxData.emplace(handle, std::move(skyboxData));
     }
 
+    // 3. Create entities
     for (const auto& sceneEntity : scene->entities)
     {
-        auto entity = activeWorld_->createEntity();
+        auto entity = world->createEntity();
 
         if (sceneEntity.renderComponent.has_value())
         {
-            auto& renderComponent = activeWorld_->addComponent<world::RenderComponent>(entity);
-            renderComponent.prefab = activeWorld_->prefab(sceneEntity.renderComponent->prefabId);
+            auto& renderComponent = world->addComponent<world::RenderComponent>(entity);
+            renderComponent.prefab = world->prefab(sceneEntity.renderComponent->prefabId);
         }
         if (sceneEntity.transformComponent.has_value())
         {
-            auto& transformComponent = activeWorld_->addComponent<world::TransformComponent>(entity);
+            auto& transformComponent = world->addComponent<world::TransformComponent>(entity);
             transformComponent.position = sceneEntity.transformComponent->position;
             transformComponent.rotation = sceneEntity.transformComponent->rotation;
             transformComponent.scale = sceneEntity.transformComponent->scale;
         }
-
-        // directionalLight_.direction = scene.directionalLight.direction;
     }
 
-    renderer_.setData(pendingAssetData);
+    world->setDirectionalLight(scene->directionalLight.direction);
+
+    return VulkanApplication::LoadResult{std::move(world), std::move(pendingAssetData)};
+}
+
+VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer& renderer)
+    : window_{window},
+      renderer_{renderer}
+{
+
+    renderer_.setLoadingScreenImage(createImageFromPath(core::getTexturesDir() / "loading_screen.png"));
+}
+
+VulkanApplication::~VulkanApplication() = default;
+
+void VulkanApplication::run()
+{
+    spdlog::info("Running");
+
+    currentState_ = ApplicationState::SceneLoading;
+    loadScene(core::getScenesDir() / "demo.json");
 
     constexpr auto maxFps = std::chrono::duration<double>(1.0 / 60.0);
     auto lastTime = std::chrono::steady_clock::now();
@@ -119,19 +118,26 @@ void VulkanApplication::run()
             camera_.setAspectRatio(getAspectRatio(window_.width(), window_.height()));
         }
 
-        // if (currentState_ == ApplicationState::SceneLoading && pendingWorld_)
-        //{
-        //  if (pendingWorld_->isReady())
-        //  {
-        //      activeWorld_ = std::move(pendingWorld_);
-        //      currentState_ = ApplicationState::SceneActive;
-        //  }
-        //  else
-        //  {
-        //  renderer_.renderLoadingScreen();
-        // }
-        // }
-        // else if (currentState_ == ApplicationState::SceneActive && activeWorld_)
+        if (currentState_ == ApplicationState::SceneLoading)
+        {
+            if (sceneLoadFuture_.valid()
+                && sceneLoadFuture_.wait_for(std::chrono::seconds{0}) == std::future_status::ready)
+            {
+                auto result = sceneLoadFuture_.get();
+
+                activeWorld_ = std::move(result.world);
+                renderer_.setData(result.data);
+
+                camera_.setPosition(glm::vec3{0.0f, 8.0f, 24.0f});
+
+                currentState_ = ApplicationState::SceneActive;
+            }
+            else
+            {
+                renderer_.renderLoadingScreen();
+            }
+        }
+        else if (currentState_ == ApplicationState::SceneActive && activeWorld_)
         {
             updateCamera(static_cast<float>(deltaTime));
 
@@ -196,4 +202,13 @@ void VulkanApplication::updateCamera(float deltaTime)
         movement = glm::normalize(movement) * speed * deltaTime;
         camera_.setPosition(camera_.position() + movement);
     }
+}
+
+void VulkanApplication::loadScene(const std::filesystem::path& scenePath)
+{
+    sceneLoadFuture_ = std::async(std::launch::async,
+                                  [this, scenePath]()
+                                  {
+                                      return loadSceneData(scenePath, renderer_);
+                                  });
 }

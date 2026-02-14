@@ -4,7 +4,10 @@
 #pragma once
 
 #include <renderer/camera.h>
+#include <renderer/data.h>
 
+#include <filesystem>
+#include <future>
 #include <memory>
 
 namespace renderer
@@ -34,16 +37,25 @@ class VulkanApplication
     VulkanApplication(window::Window& window, renderer::Renderer& renderer);
     ~VulkanApplication();
 
+    struct LoadResult
+    {
+        std::unique_ptr<world::World> world;
+        renderer::AssetData data;
+    };
+
     void run();
 
   private:
     void updateCamera(float deltaTime);
+    void loadScene(const std::filesystem::path& scenePath);
 
   private:
     window::Window& window_;
     renderer::Renderer& renderer_;
     renderer::Camera camera_;
+
     ApplicationState currentState_{ApplicationState::SceneLoading};
+    std::future<LoadResult> sceneLoadFuture_;
+
     std::unique_ptr<world::World> activeWorld_{nullptr};
-    std::unique_ptr<world::World> pendingWorld_{nullptr};
 };
