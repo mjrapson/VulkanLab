@@ -17,18 +17,28 @@ Entity World::createEntity()
 
 void World::destroyEntity(Entity entity)
 {
-    renderComponents_.erase(entity);
-    transformComponents_.erase(entity);
+    std::apply(
+        [entity](auto&... storage)
+        {
+            (storage.erase(entity), ...);
+        },
+        components_);
 }
 
 void World::addPrefab(const std::string& name, std::unique_ptr<Prefab> prefab)
 {
+    assert(!prefabs_.contains(name) && "Prefab already exists and will be overwritten");
     prefabs_[name] = std::move(prefab);
 }
 
-Prefab* World::prefab(const std::string& name) const
+Prefab* World::prefab(std::string_view name) const
 {
-    return prefabs_.at(name).get();
+    if (auto itr = prefabs_.find(std::string{name}); itr != prefabs_.end())
+    {
+        return itr->second.get();
+    }
+
+    return nullptr;
 }
 
 void World::setSkybox(renderer::SkyboxHandle handle)
@@ -41,9 +51,9 @@ const std::optional<renderer::SkyboxHandle>& World::activeSkybox() const
     return activeSkybox_;
 }
 
-const DirectionalLightComponent& World::directionalLight() const
+void World::setDirectionalLight(const glm::vec3& direction)
 {
-    return directionalLight_;
+    directionalLight_.direction = direction;
 }
 
 void World::update(const renderer::Camera& camera)

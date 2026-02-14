@@ -27,25 +27,17 @@ void RenderSystem::update(const renderer::Camera& camera)
     for (auto& [entity, renderComponent] : world_.getAllComponents<RenderComponent>())
     {
         auto prefab = renderComponent.prefab;
-        if (!prefab)
-        {
-            continue;
-        }
-
-        if (prefab->meshInstances.empty())
+        if (!prefab || prefab->meshInstances.empty())
         {
             continue;
         }
 
         auto transformComponent = world_.getComponent<TransformComponent>(entity);
-        if (!transformComponent)
-        {
-            continue;
-        }
+        assert(transformComponent && "Entity with render component missing transform");
 
-        auto transformMatrix = glm::translate(glm::mat4(1.0f), transformComponent->position)
-                               * glm::toMat4(glm::quat(glm::radians(transformComponent->rotation)))
-                               * glm::scale(glm::mat4(1.0f), transformComponent->scale);
+        const auto transformMatrix = glm::translate(glm::mat4(1.0f), transformComponent->position)
+                                     * glm::toMat4(glm::quat(glm::radians(transformComponent->rotation)))
+                                     * glm::scale(glm::mat4(1.0f), transformComponent->scale);
 
         for (const auto& instance : prefab->meshInstances)
         {

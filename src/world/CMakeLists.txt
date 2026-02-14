@@ -2,10 +2,10 @@ add_library(World STATIC)
 
 target_sources(World
     PUBLIC
-        include/world/components/directional_light_component.h
         include/world/components/render_component.h
         include/world/components/transform_component.h
         include/world/systems/render_system.h
+        include/world/directional_light.h
         include/world/entity.h
         include/world/prefab.h
         include/world/world.h

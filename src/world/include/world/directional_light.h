@@ -7,7 +7,7 @@
 
 namespace world
 {
-struct DirectionalLightComponent
+struct DirectionalLight
 {
     glm::vec3 direction{0.0f};
 };

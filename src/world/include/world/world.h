@@ -4,15 +4,18 @@
 #pragma once
 
 #include "entity.h"
-#include "world/components/directional_light_component.h"
 #include "world/components/render_component.h"
 #include "world/components/transform_component.h"
+#include "world/directional_light.h"
 #include "world/systems/render_system.h"
 
 #include <renderer/handles.h>
 
+#include <cassert>
 #include <memory>
-#include <stdexcept>
+#include <optional>
+#include <string_view>
+#include <tuple>
 #include <unordered_map>
 
 namespace renderer
@@ -27,6 +30,12 @@ struct Prefab;
 
 class World
 {
+    template <typename Component>
+    using ComponentStorage = std::unordered_map<Entity, Component>;
+
+    using RenderComponentStorage = ComponentStorage<RenderComponent>;
+    using TransformComponentStorage = ComponentStorage<TransformComponent>;
+
   public:
     World(renderer::Renderer& renderer);
 
@@ -40,12 +49,12 @@ class World
     void destroyEntity(Entity entity);
 
     void addPrefab(const std::string& name, std::unique_ptr<Prefab> prefab);
-    Prefab* prefab(const std::string& name) const;
+    Prefab* prefab(std::string_view name) const;
 
     void setSkybox(renderer::SkyboxHandle handle);
     const std::optional<renderer::SkyboxHandle>& activeSkybox() const;
 
-    const DirectionalLightComponent& directionalLight() const;
+    void setDirectionalLight(const glm::vec3& direction);
 
     void update(const renderer::Camera& camera);
 
@@ -54,10 +63,8 @@ class World
     {
         auto& storage = getStorage<Component>();
         auto [itr, inserted] = storage.emplace(entity, Component(std::forward<Args>(args)...));
-        if (!inserted)
-        {
-            throw std::logic_error("Component already exists on this entity");
-        }
+
+        assert(inserted && "Component already exists on this entity");
 
         return itr->second;
     }
@@ -81,13 +88,7 @@ class World
     }
 
     template <typename Component>
-    auto& getAllComponents()
-    {
-        return getStorage<Component>();
-    }
-
-    template <typename Component>
-    const auto& getAllComponents() const
+    const auto& getAllComponents()
     {
         return getStorage<Component>();
     }
@@ -96,30 +97,25 @@ class World
     template <typename Component>
     auto& getStorage()
     {
-        static_assert(std::is_same_v<Component, RenderComponent> || std::is_same_v<Component, TransformComponent>,
-                      "Component type unknown");
+        return std::get<ComponentStorage<Component>>(components_);
+    }
 
-        if constexpr (std::is_same_v<Component, RenderComponent>)
-        {
-            return renderComponents_;
-        }
-        if constexpr (std::is_same_v<Component, TransformComponent>)
-        {
-            return transformComponents_;
-        }
+    template <typename Component>
+    const auto& getStorage() const
+    {
+        return std::get<ComponentStorage<Component>>(components_);
     }
 
   private:
     // Components
-    std::unordered_map<Entity, RenderComponent> renderComponents_;
-    std::unordered_map<Entity, TransformComponent> transformComponents_;
-    DirectionalLightComponent directionalLight_;
+    std::tuple<RenderComponentStorage, TransformComponentStorage> components_;
 
     // Systems
     RenderSystem renderSystem_;
 
     // State
     std::optional<renderer::SkyboxHandle> activeSkybox_;
+    DirectionalLight directionalLight_;
 
     std::unordered_map<std::string, std::unique_ptr<Prefab>> prefabs_;
     Entity nextEntity{0};
