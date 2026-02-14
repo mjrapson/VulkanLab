@@ -3,6 +3,7 @@
 
 #include "world/systems/render_system.h"
 
+#include <renderer/camera.h>
 #include <renderer/renderer.h>
 
 #include "world/world.h"
@@ -22,7 +23,11 @@ RenderSystem::RenderSystem(renderer::Renderer& renderer, World& world)
 
 void RenderSystem::update(const renderer::Camera& camera)
 {
-    auto meshDrawCommands = std::vector<renderer::DrawCommand>{};
+    auto drawInfo = renderer::Renderer::SceneDrawInfo{};
+    drawInfo.skyboxHandle = world_.activeSkybox();
+    drawInfo.cameraProjection = camera.projection();
+    drawInfo.cameraView = camera.view();
+    drawInfo.globalLightDirection = world_.globalLightDirection();
 
     for (auto& [entity, renderComponent] : world_.getAllComponents<RenderComponent>())
     {
@@ -44,11 +49,12 @@ void RenderSystem::update(const renderer::Camera& camera)
 
             for (const auto& meshHandle : instance.subMeshes)
             {
-                meshDrawCommands.push_back(renderer::DrawCommand{meshHandle, transformMatrix * instance.transform});
+                drawInfo.drawCommands.push_back(
+                    renderer::DrawCommand{meshHandle, transformMatrix * instance.transform});
             }
         }
     }
 
-    renderer_.renderScene(meshDrawCommands, world_.activeSkybox(), camera);
+    renderer_.renderScene(drawInfo);
 }
 } // namespace world

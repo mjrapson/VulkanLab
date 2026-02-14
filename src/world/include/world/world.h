@@ -54,7 +54,8 @@ class World
     void setSkybox(renderer::SkyboxHandle handle);
     const std::optional<renderer::SkyboxHandle>& activeSkybox() const;
 
-    void setDirectionalLight(const glm::vec3& direction);
+    void setGlobalLightDirection(const glm::vec3& direction);
+    const glm::vec3& globalLightDirection() const;
 
     void update(const renderer::Camera& camera);
 

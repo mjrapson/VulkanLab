@@ -26,7 +26,6 @@ class Window;
 namespace renderer
 {
 struct AssetData;
-class Camera;
 class GeometryPass;
 class GpuDevice;
 struct ImageData;
@@ -47,9 +46,17 @@ class Renderer
 
     void setLoadingScreenImage(const ImageData& imageData);
 
-    void renderScene(std::span<const DrawCommand> drawCommands,
-                     std::optional<renderer::SkyboxHandle> skyboxHandle,
-                     const Camera& camera);
+    struct SceneDrawInfo
+    {
+        std::vector<DrawCommand> drawCommands;
+        std::optional<renderer::SkyboxHandle> skyboxHandle;
+        glm::mat4 cameraProjection;
+        glm::mat4 cameraView;
+        glm::vec3 globalLightDirection;
+    };
+
+    void renderScene(const SceneDrawInfo& info);
+
     void renderLoadingScreen();
 
     void windowResized(int width, int height);

@@ -51,9 +51,14 @@ const std::optional<renderer::SkyboxHandle>& World::activeSkybox() const
     return activeSkybox_;
 }
 
-void World::setDirectionalLight(const glm::vec3& direction)
+void World::setGlobalLightDirection(const glm::vec3& direction)
 {
     directionalLight_.direction = direction;
+}
+
+const glm::vec3& World::globalLightDirection() const
+{
+    return directionalLight_.direction;
 }
 
 void World::update(const renderer::Camera& camera)

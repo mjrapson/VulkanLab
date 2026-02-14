@@ -99,16 +99,14 @@ void Renderer::setLoadingScreenImage(const ImageData& imageData)
     loadingScreenPass_->rebuild(std::move(loadingScreenImage));
 }
 
-void Renderer::renderScene(std::span<const DrawCommand> drawCommands,
-                           std::optional<renderer::SkyboxHandle> skyboxHandle,
-                           const Camera& camera)
+void Renderer::renderScene(const SceneDrawInfo& info)
 {
     renderFrame(
-        [this, &drawCommands, &skyboxHandle, &camera](uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
+        [this, &info](uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
         {
             auto cameraBuffer = CameraBufferObject{};
-            cameraBuffer.projection = camera.projection();
-            cameraBuffer.view = camera.view();
+            cameraBuffer.projection = info.cameraProjection;
+            cameraBuffer.view = info.cameraView;
             memcpy(cameraUbos_[currentFrameIndex_].mappedMemory, &cameraBuffer, sizeof(cameraBuffer));
 
             gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
@@ -123,7 +121,7 @@ void Renderer::renderScene(std::span<const DrawCommand> drawCommands,
 
             skyboxPass_->recordCommands(currentFrameIndex_,
                                         commandBuffer,
-                                        skyboxHandle.value(),
+                                        info.skyboxHandle.value(),
                                         swapchain_.views[imageIndex]);
             geometryPass_->recordCommands(currentFrameIndex_,
                                           commandBuffer,
@@ -132,7 +130,7 @@ void Renderer::renderScene(std::span<const DrawCommand> drawCommands,
                                           meshGpuData_,
                                           materialGpuData_,
                                           swapchain_.views[imageIndex],
-                                          drawCommands);
+                                          info.drawCommands);
 
             gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
                                              commandBuffer,
@@ -614,9 +612,10 @@ void Renderer::uploadSkyboxes(const SkyboxDataContainer& data)
                                          vk::ImageAspectFlagBits::eColor,
                                          6);
         void* mappedMemory = stagingMemory.mapMemory(0, VK_WHOLE_SIZE);
-        for (auto face = 0; face < 6; ++face)
+        for (auto face = size_t{0}; face < 6; ++face)
         {
-            std::memcpy(mappedMemory + (face * imageSize), skyboxData.imageData.at(face).data.data(), imageSize);
+            auto dst = static_cast<uint8_t*>(mappedMemory) + (face * imageSize);
+            std::memcpy(dst, skyboxData.imageData.at(face).data.data(), imageSize);
         }
         stagingMemory.unmapMemory();
         gpuDevice_.copyBufferToImage(cmd, stagingBuffer, skybox.image, width, height, 6);

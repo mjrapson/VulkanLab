@@ -79,7 +79,7 @@ VulkanApplication::LoadResult loadSceneData(const std::filesystem::path& path, r
         }
     }
 
-    world->setDirectionalLight(scene->directionalLight.direction);
+    world->setGlobalLightDirection(scene->directionalLight.direction);
 
     return VulkanApplication::LoadResult{std::move(world), std::move(pendingAssetData)};
 }
