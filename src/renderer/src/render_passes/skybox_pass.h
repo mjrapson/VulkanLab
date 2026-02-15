@@ -22,11 +22,9 @@ class SkyboxPass
   public:
     SkyboxPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent);
 
-    void initialize(uint32_t maxFramesInFlight, std::span<BufferObject> cameraBuffers);
+    void regenerateDescriptorSets(std::span<BufferObject> cameraBuffers, const SkyboxContainer& skyboxes);
 
     void resize(const vk::Extent2D& extent);
-
-    void rebuild(const std::unordered_map<SkyboxHandle, Skybox, core::Hash<SkyboxHandle>>& skyboxes);
 
     void recordCommands(uint32_t frameIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
@@ -34,7 +32,6 @@ class SkyboxPass
                         vk::ImageView colorTargetImageView);
 
   private:
-    void createCameraDescriptorSets(uint32_t count, std::span<BufferObject> cameraBuffers);
     void createPipeline(const vk::Format& surfaceFormat);
 
   private:

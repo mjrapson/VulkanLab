@@ -39,25 +39,35 @@ GeometryPass::GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surface
     createPipeline(surfaceFormat);
 }
 
-void GeometryPass::initialize(uint32_t maxFramesInFlight, std::span<BufferObject> cameraBuffers)
-
+void GeometryPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffers, const MaterialContainer& materials)
 {
-    cameraDescriptor_.resize(maxFramesInFlight);
+    // Camera descriptor sets
+    cameraDescriptorSets_.clear();
 
-    createCameraDescriptorSets(maxFramesInFlight, cameraBuffers);
-}
+    cameraDescriptor_.resize(static_cast<uint32_t>(cameraBuffers.size()));
+    cameraDescriptorSets_ = std::move(cameraDescriptor_.allocateSets(static_cast<uint32_t>(cameraBuffers.size())));
 
-void GeometryPass::resize(const vk::Extent2D& extent)
-{
-    extent_ = extent;
+    for (auto frameIndex = size_t{0}; frameIndex < cameraBuffers.size(); ++frameIndex)
+    {
+        auto bufferInfo = vk::DescriptorBufferInfo{};
+        bufferInfo.buffer = cameraBuffers[frameIndex].buffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range = VK_WHOLE_SIZE;
 
-    depthImage_ = gpuDevice_.createDepthImage(extent.width, extent.height);
-    depthImageMemory_ = gpuDevice_.allocateImageMemory(depthImage_, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    depthImageView_ = gpuDevice_.createDepthImageView(depthImage_);
-}
+        auto uboWrite = vk::WriteDescriptorSet{};
+        uboWrite.dstSet = cameraDescriptorSets_.at(frameIndex);
+        uboWrite.dstBinding = 0;
+        uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
+        uboWrite.descriptorCount = 1;
+        uboWrite.pBufferInfo = &bufferInfo;
 
-void GeometryPass::rebuild(const std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>>& materials)
-{
+        auto writes = std::array{uboWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+    }
+
+    // Material descriptor sets
+    materialDescriptorSets_.clear();
+
     materialDescriptor_.resize(static_cast<uint32_t>(materials.size()));
     for (const auto& [handle, material] : materials)
     {
@@ -80,6 +90,15 @@ void GeometryPass::rebuild(const std::unordered_map<MaterialHandle, Material, co
         std::array writes{uboWrite, textureWrite};
         gpuDevice_.device().updateDescriptorSets(writes, {});
     }
+}
+
+void GeometryPass::resize(const vk::Extent2D& extent)
+{
+    extent_ = extent;
+
+    depthImage_ = gpuDevice_.createDepthImage(extent.width, extent.height);
+    depthImageMemory_ = gpuDevice_.allocateImageMemory(depthImage_, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    depthImageView_ = gpuDevice_.createDepthImageView(depthImage_);
 }
 
 void GeometryPass::recordCommands(
@@ -169,29 +188,6 @@ void GeometryPass::recordCommands(
     }
 
     commandBuffer.endRendering();
-}
-
-void GeometryPass::createCameraDescriptorSets(uint32_t count, std::span<BufferObject> cameraBuffers)
-{
-    cameraDescriptorSets_ = std::move(cameraDescriptor_.allocateSets(count));
-
-    for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
-    {
-        auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = cameraBuffers[frameIndex].buffer;
-        bufferInfo.offset = 0;
-        bufferInfo.range = VK_WHOLE_SIZE;
-
-        auto uboWrite = vk::WriteDescriptorSet{};
-        uboWrite.dstSet = cameraDescriptorSets_.at(static_cast<size_t>(frameIndex));
-        uboWrite.dstBinding = 0;
-        uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
-        uboWrite.descriptorCount = 1;
-        uboWrite.pBufferInfo = &bufferInfo;
-
-        auto writes = std::array{uboWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
-    }
 }
 
 void GeometryPass::createPipeline(const vk::Format& surfaceFormat)

@@ -4,10 +4,10 @@
 #pragma once
 
 #include "renderer/descriptor_set_allocator.h"
+#include "renderer/gpu_objects.h"
+#include "renderer/handles.h"
 
 #include <vulkan/vulkan_raii.hpp>
-
-#include <vector>
 
 namespace renderer
 {
@@ -19,31 +19,25 @@ class LoadingScreenPass
   public:
     LoadingScreenPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent);
 
-    void initialize(uint32_t maxFramesInFlight);
+    void regenerateDescriptorSets(const ImageContainer& loadingScreenImages);
 
     void resize(const vk::Extent2D& extent);
 
-    void rebuild(std::unique_ptr<Image> loadingScreenImage);
-
-    void recordCommands(uint32_t frameIndex,
-                        const vk::raii::CommandBuffer& commandBuffer,
+    void recordCommands(const vk::raii::CommandBuffer& commandBuffer,
+                        ImageHandle loadingScreenHandle,
                         vk::ImageView colorTargetImageView);
 
   private:
-    void createImageDescriptorSet();
-
     void createPipeline(const vk::Format& surfaceFormat);
 
   private:
     const GpuDevice& gpuDevice_;
     vk::Extent2D extent_;
 
-    std::unique_ptr<Image> loadingScreenImage_;
-
     vk::raii::PipelineLayout pipelineLayout_{nullptr};
     vk::raii::Pipeline pipeline_{nullptr};
 
     DescriptorSetAllocator imageDescriptor_;
-    std::vector<vk::raii::DescriptorSet> imageDescriptorSets_;
+    std::unordered_map<ImageHandle, vk::raii::DescriptorSet, core::Hash<ImageHandle>> imageDescriptorSets_;
 };
 } // namespace renderer

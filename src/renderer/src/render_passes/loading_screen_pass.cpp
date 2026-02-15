@@ -26,38 +26,22 @@ LoadingScreenPass::LoadingScreenPass(const GpuDevice& gpuDevice,
     createPipeline(surfaceFormat);
 }
 
-void LoadingScreenPass::initialize(uint32_t maxFramesInFlight)
+void LoadingScreenPass::regenerateDescriptorSets(const ImageContainer& loadingScreenImages)
 {
-    imageDescriptor_.resize(maxFramesInFlight);
-}
+    imageDescriptorSets_.clear();
 
-void LoadingScreenPass::resize(const vk::Extent2D& extent)
-{
-    extent_ = extent;
-}
-
-void LoadingScreenPass::rebuild(std::unique_ptr<Image> loadingScreenImage)
-{
-    loadingScreenImage_ = std::move(loadingScreenImage);
-
-    if (!loadingScreenImage_)
+    imageDescriptor_.resize(static_cast<uint32_t>(loadingScreenImages.size()));
+    for (const auto& [handle, image] : loadingScreenImages)
     {
-        return;
-    }
+        imageDescriptorSets_.emplace(handle, std::move(imageDescriptor_.allocateSets(1)[0]));
 
-    const auto count = imageDescriptor_.size();
-
-    imageDescriptorSets_ = imageDescriptor_.allocateSets(count);
-
-    for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
-    {
         auto imageInfo = vk::DescriptorImageInfo{};
-        imageInfo.imageView = loadingScreenImage_->view;
-        imageInfo.sampler = loadingScreenImage_->sampler;
+        imageInfo.imageView = image.view;
+        imageInfo.sampler = image.sampler;
         imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
         auto imageWrite = vk::WriteDescriptorSet{};
-        imageWrite.dstSet = *imageDescriptorSets_.at(frameIndex);
+        imageWrite.dstSet = *imageDescriptorSets_.at(handle);
         imageWrite.dstBinding = 0;
         imageWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
         imageWrite.descriptorCount = 1;
@@ -68,15 +52,15 @@ void LoadingScreenPass::rebuild(std::unique_ptr<Image> loadingScreenImage)
     }
 }
 
-void LoadingScreenPass::recordCommands(uint32_t frameIndex,
-                                       const vk::raii::CommandBuffer& commandBuffer,
+void LoadingScreenPass::resize(const vk::Extent2D& extent)
+{
+    extent_ = extent;
+}
+
+void LoadingScreenPass::recordCommands(const vk::raii::CommandBuffer& commandBuffer,
+                                       ImageHandle loadingScreenHandle,
                                        vk::ImageView colorTargetImageView)
 {
-    if (!loadingScreenImage_)
-    {
-        return;
-    }
-
     const auto clearColor = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
 
     auto attachmentInfo = vk::RenderingAttachmentInfo{};
@@ -97,7 +81,7 @@ void LoadingScreenPass::recordCommands(uint32_t frameIndex,
     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                      pipelineLayout_,
                                      0,
-                                     *imageDescriptorSets_.at(frameIndex),
+                                     *imageDescriptorSets_.at(loadingScreenHandle),
                                      nullptr);
 
     commandBuffer.setViewport(

@@ -44,7 +44,7 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
-    void setLoadingScreenImage(const ImageData& imageData);
+    void setLoadingScreenImageData(const ImageDataContainer& imageData);
 
     struct SceneDrawInfo
     {
@@ -57,7 +57,7 @@ class Renderer
 
     void renderScene(const SceneDrawInfo& info);
 
-    void renderLoadingScreen();
+    void renderLoadingScreen(ImageHandle loadingScreenHandle);
 
     void windowResized(int width, int height);
 
@@ -74,7 +74,7 @@ class Renderer
 
     void renderFrame(std::function<void(uint32_t, const vk::raii::CommandBuffer&)> recordCommands);
 
-    void uploadImages(const ImageDataContainer& data);
+    ImageContainer uploadImages(const ImageDataContainer& data);
     void uploadMeshes(const MeshDataContainer& data);
     void uploadMaterials(const MaterialDataContainer& data);
     void uploadSkyboxes(const SkyboxDataContainer& data);
@@ -104,10 +104,11 @@ class Renderer
     BufferObject materialUbo_;
     std::vector<BufferObject> cameraUbos_;
 
-    std::unordered_map<MeshHandle, Mesh, core::Hash<MeshHandle>> meshGpuData_;
-    std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>> materialGpuData_;
-    std::unordered_map<ImageHandle, Image, core::Hash<ImageHandle>> imageGpuData_;
-    std::unordered_map<SkyboxHandle, Skybox, core::Hash<SkyboxHandle>> skyboxGpuData_;
+    MeshContainer meshGpuData_;
+    MaterialContainer materialGpuData_;
+    ImageContainer imageGpuData_;
+    SkyboxContainer skyboxGpuData_;
+    ImageContainer loadingScreenGpuData_;
 
     std::unique_ptr<LoadingScreenPass> loadingScreenPass_{nullptr};
     std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};

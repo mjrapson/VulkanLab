@@ -55,6 +55,7 @@ class VulkanApplication
     renderer::Camera camera_;
 
     ApplicationState currentState_{ApplicationState::SceneLoading};
+    renderer::ImageHandle loadingScreenHandle_;
     std::future<LoadResult> sceneLoadFuture_;
 
     std::unique_ptr<world::World> activeWorld_{nullptr};

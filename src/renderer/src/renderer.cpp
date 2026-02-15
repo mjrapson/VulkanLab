@@ -48,55 +48,11 @@ Renderer::Renderer(const window::Window& window)
 
 Renderer::~Renderer() = default;
 
-void Renderer::setLoadingScreenImage(const ImageData& imageData)
+void Renderer::setLoadingScreenImageData(const ImageDataContainer& imageData)
 {
-    auto loadingScreenImage = std::make_unique<Image>();
-    loadingScreenImage->image = gpuDevice_.createImage(imageData.width, imageData.height);
-    loadingScreenImage->memory = gpuDevice_.allocateImageMemory(loadingScreenImage->image,
-                                                                vk::MemoryPropertyFlagBits::eDeviceLocal);
+    loadingScreenGpuData_ = uploadImages(imageData);
 
-    const auto imageSize = imageData.width * imageData.height * imageData.components;
-    auto stagingBuffer = gpuDevice_.createStagingBuffer(imageSize);
-
-    auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
-
-    void* data = stagingMemory.mapMemory(0, imageSize);
-    std::memcpy(data, imageData.data.data(), imageSize);
-    stagingMemory.unmapMemory();
-
-    auto commandBuffers = gpuDevice_.createCommandBuffers(commandPool_, 1);
-    auto& cmd = commandBuffers[0];
-    cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-
-    gpuDevice_.transitionImageLayout(*loadingScreenImage->image,
-                                     *cmd,
-                                     vk::ImageLayout::eUndefined,
-                                     vk::ImageLayout::eTransferDstOptimal,
-                                     {}, // srcAccess
-                                     vk::AccessFlagBits2::eTransferWrite,
-                                     vk::PipelineStageFlagBits2::eTopOfPipe,
-                                     vk::PipelineStageFlagBits2::eTransfer,
-                                     vk::ImageAspectFlagBits::eColor);
-
-    gpuDevice_.copyBufferToImage(cmd, stagingBuffer, loadingScreenImage->image, imageData.width, imageData.height);
-
-    gpuDevice_.transitionImageLayout(*loadingScreenImage->image,
-                                     *cmd,
-                                     vk::ImageLayout::eTransferDstOptimal,
-                                     vk::ImageLayout::eShaderReadOnlyOptimal,
-                                     vk::AccessFlagBits2::eTransferWrite,
-                                     vk::AccessFlagBits2::eShaderRead,
-                                     vk::PipelineStageFlagBits2::eTransfer,
-                                     vk::PipelineStageFlagBits2::eFragmentShader,
-                                     vk::ImageAspectFlagBits::eColor);
-
-    loadingScreenImage->view = gpuDevice_.createImageView(loadingScreenImage->image);
-    loadingScreenImage->sampler = gpuDevice_.createSampler();
-
-    cmd.end();
-    gpuDevice_.submitCommandBuffer(cmd);
-
-    loadingScreenPass_->rebuild(std::move(loadingScreenImage));
+    loadingScreenPass_->regenerateDescriptorSets(loadingScreenGpuData_);
 }
 
 void Renderer::renderScene(const SceneDrawInfo& info)
@@ -144,10 +100,10 @@ void Renderer::renderScene(const SceneDrawInfo& info)
         });
 }
 
-void Renderer::renderLoadingScreen()
+void Renderer::renderLoadingScreen(ImageHandle loadingScreenHandle)
 {
     renderFrame(
-        [this](uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
+        [this, &loadingScreenHandle](uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
         {
             gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
                                              commandBuffer,
@@ -159,7 +115,7 @@ void Renderer::renderLoadingScreen()
                                              vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
                                              vk::ImageAspectFlagBits::eColor);
 
-            loadingScreenPass_->recordCommands(currentFrameIndex_, commandBuffer, swapchain_.views[imageIndex]);
+            loadingScreenPass_->recordCommands(commandBuffer, loadingScreenHandle, swapchain_.views[imageIndex]);
 
             gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
                                              commandBuffer,
@@ -246,7 +202,7 @@ void Renderer::setData(const AssetData& data)
     uploadMeshes(data.meshData);
 
     // Images
-    uploadImages(data.imageData);
+    imageGpuData_ = uploadImages(data.imageData);
 
     // Materials
     uploadMaterials(data.materialData);
@@ -254,8 +210,8 @@ void Renderer::setData(const AssetData& data)
     // Skyboxes
     uploadSkyboxes(data.skyboxData);
 
-    skyboxPass_->rebuild(skyboxGpuData_);
-    geometryPass_->rebuild(materialGpuData_);
+    skyboxPass_->regenerateDescriptorSets(cameraUbos_, skyboxGpuData_);
+    geometryPass_->regenerateDescriptorSets(cameraUbos_, materialGpuData_);
 }
 
 void Renderer::createSwapchain()
@@ -306,13 +262,8 @@ void Renderer::createRenderPasses()
     const auto extent = swapchain_.extent;
 
     loadingScreenPass_ = std::make_unique<LoadingScreenPass>(gpuDevice_, format, extent);
-    loadingScreenPass_->initialize(maxFramesInFlight);
-
     skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_, format, extent);
-    skyboxPass_->initialize(maxFramesInFlight, cameraUbos_);
-
     geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_, format, extent);
-    geometryPass_->initialize(maxFramesInFlight, cameraUbos_);
 }
 
 void Renderer::recreateSwapchain()
@@ -402,9 +353,9 @@ void Renderer::renderFrame(std::function<void(uint32_t, const vk::raii::CommandB
     gpuDevice_.device().waitIdle();
 }
 
-void Renderer::uploadImages(const ImageDataContainer& data)
+ImageContainer Renderer::uploadImages(const ImageDataContainer& data)
 {
-
+    auto container = ImageContainer{};
     for (const auto& [handle, imageData] : data)
     {
         auto commandBuffers = gpuDevice_.createCommandBuffers(commandPool_, 1);
@@ -449,11 +400,13 @@ void Renderer::uploadImages(const ImageDataContainer& data)
         image.view = gpuDevice_.createImageView(image.image);
         image.sampler = gpuDevice_.createSampler();
 
-        imageGpuData_.emplace(handle, std::move(image));
+        container.emplace(handle, std::move(image));
 
         cmd.end();
         gpuDevice_.submitCommandBuffer(cmd);
     }
+
+    return container;
 }
 
 void Renderer::uploadMeshes(const MeshDataContainer& data)

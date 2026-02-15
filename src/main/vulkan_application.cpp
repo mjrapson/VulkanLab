@@ -86,10 +86,16 @@ VulkanApplication::LoadResult loadSceneData(const std::filesystem::path& path, r
 
 VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer& renderer)
     : window_{window},
-      renderer_{renderer}
+      renderer_{renderer},
+      loadingScreenHandle_{renderer::ImageHandleGenerator::generate()}
 {
 
-    renderer_.setLoadingScreenImage(createImageFromPath(core::getTexturesDir() / "loading_screen.png"));
+    // Support only one loading screen for now, but later map multiple handles for different screens
+    auto loadingScreenImageData = renderer::ImageDataContainer{};
+    loadingScreenImageData.emplace(loadingScreenHandle_,
+                                   createImageFromPath(core::getTexturesDir() / "loading_screen.png"));
+
+    renderer_.setLoadingScreenImageData(loadingScreenImageData);
 }
 
 VulkanApplication::~VulkanApplication() = default;
@@ -134,7 +140,7 @@ void VulkanApplication::run()
             }
             else
             {
-                renderer_.renderLoadingScreen();
+                renderer_.renderLoadingScreen(loadingScreenHandle_);
             }
         }
         else if (currentState_ == ApplicationState::SceneActive && activeWorld_)

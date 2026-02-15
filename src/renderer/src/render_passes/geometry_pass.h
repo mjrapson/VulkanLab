@@ -22,11 +22,9 @@ class GeometryPass
   public:
     GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent);
 
-    void initialize(uint32_t maxFramesInFlight, std::span<BufferObject> cameraBuffers);
+    void regenerateDescriptorSets(std::span<BufferObject> cameraBuffers, const MaterialContainer& materials);
 
     void resize(const vk::Extent2D& extent);
-
-    void rebuild(const std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>>& materials);
 
     void recordCommands(uint32_t frameIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
@@ -38,7 +36,6 @@ class GeometryPass
                         std::span<const DrawCommand> drawCommands);
 
   private:
-    void createCameraDescriptorSets(uint32_t count, std::span<BufferObject> cameraBuffers);
     void createPipeline(const vk::Format& surfaceFormat);
 
   private:

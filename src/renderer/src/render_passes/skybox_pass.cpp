@@ -28,20 +28,35 @@ SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice, const vk::Format& surfaceForm
     createPipeline(surfaceFormat);
 }
 
-void SkyboxPass::initialize(uint32_t maxFramesInFlight, std::span<BufferObject> cameraBuffers)
+void SkyboxPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffers, const SkyboxContainer& skyboxes)
 {
-    cameraDescriptor_.resize(maxFramesInFlight);
+    // Camera descriptor sets
+    cameraDescriptorSets_.clear();
 
-    createCameraDescriptorSets(maxFramesInFlight, cameraBuffers);
-}
+    cameraDescriptor_.resize(static_cast<uint32_t>(cameraBuffers.size()));
+    cameraDescriptorSets_ = std::move(cameraDescriptor_.allocateSets(static_cast<uint32_t>(cameraBuffers.size())));
 
-void SkyboxPass::resize(const vk::Extent2D& extent)
-{
-    extent_ = extent;
-}
+    for (auto frameIndex = size_t{0}; frameIndex < cameraBuffers.size(); ++frameIndex)
+    {
+        auto bufferInfo = vk::DescriptorBufferInfo{};
+        bufferInfo.buffer = cameraBuffers[frameIndex].buffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range = VK_WHOLE_SIZE;
 
-void SkyboxPass::rebuild(const std::unordered_map<SkyboxHandle, Skybox, core::Hash<SkyboxHandle>>& skyboxes)
-{
+        auto uboWrite = vk::WriteDescriptorSet{};
+        uboWrite.dstSet = cameraDescriptorSets_.at(frameIndex);
+        uboWrite.dstBinding = 0;
+        uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
+        uboWrite.descriptorCount = 1;
+        uboWrite.pBufferInfo = &bufferInfo;
+
+        auto writes = std::array{uboWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+    }
+
+    // Skybox descriptor sets
+    skyboxDescriptorSets_.clear();
+
     skyboxDescriptor_.resize(static_cast<uint32_t>(skyboxes.size()));
     for (const auto& [handle, skybox] : skyboxes)
     {
@@ -63,6 +78,11 @@ void SkyboxPass::rebuild(const std::unordered_map<SkyboxHandle, Skybox, core::Ha
         std::array writes{textureWrite};
         gpuDevice_.device().updateDescriptorSets(writes, {});
     }
+}
+
+void SkyboxPass::resize(const vk::Extent2D& extent)
+{
+    extent_ = extent;
 }
 
 void SkyboxPass::recordCommands(uint32_t frameIndex,
@@ -107,29 +127,6 @@ void SkyboxPass::recordCommands(uint32_t frameIndex,
     commandBuffer.draw(36, 1, 0, 0);
 
     commandBuffer.endRendering();
-}
-
-void SkyboxPass::createCameraDescriptorSets(uint32_t count, std::span<BufferObject> cameraBuffers)
-{
-    cameraDescriptorSets_ = cameraDescriptor_.allocateSets(count);
-
-    for (auto frameIndex = uint32_t{0}; frameIndex < count; ++frameIndex)
-    {
-        auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = cameraBuffers[frameIndex].buffer;
-        bufferInfo.offset = 0;
-        bufferInfo.range = VK_WHOLE_SIZE;
-
-        auto uboWrite = vk::WriteDescriptorSet{};
-        uboWrite.dstSet = cameraDescriptorSets_.at(static_cast<size_t>(frameIndex));
-        uboWrite.dstBinding = 0;
-        uboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
-        uboWrite.descriptorCount = 1;
-        uboWrite.pBufferInfo = &bufferInfo;
-
-        auto writes = std::array{uboWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
-    }
 }
 
 void SkyboxPass::createPipeline(const vk::Format& surfaceFormat)
