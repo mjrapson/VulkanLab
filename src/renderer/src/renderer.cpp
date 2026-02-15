@@ -43,6 +43,7 @@ Renderer::Renderer(const window::Window& window)
 
     spdlog::info("Creating render passes");
     createCameraBuffers();
+    createDirectionalLightBuffers();
     createRenderPasses();
 }
 
@@ -64,6 +65,10 @@ void Renderer::renderScene(const SceneDrawInfo& info)
             cameraBuffer.projection = info.cameraProjection;
             cameraBuffer.view = info.cameraView;
             memcpy(cameraUbos_[currentFrameIndex_].mappedMemory, &cameraBuffer, sizeof(cameraBuffer));
+
+            auto directionalLightBuffer = DirectionalLightUboData{};
+            directionalLightBuffer.direction = info.globalLightDirection;
+            memcpy(directionalLightUbo_.mappedMemory, &directionalLightBuffer, sizeof(DirectionalLightUboData));
 
             gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
                                              commandBuffer,
@@ -211,7 +216,7 @@ void Renderer::setData(const AssetData& data)
     uploadSkyboxes(data.skyboxData);
 
     skyboxPass_->regenerateDescriptorSets(cameraUbos_, skyboxGpuData_);
-    geometryPass_->regenerateDescriptorSets(cameraUbos_, materialGpuData_);
+    geometryPass_->regenerateDescriptorSets(cameraUbos_, materialGpuData_, directionalLightGpuData_);
 }
 
 void Renderer::createSwapchain()
@@ -254,6 +259,20 @@ void Renderer::createCameraBuffers()
 
         cameraUbos_.push_back(std::move(cameraUbo));
     }
+}
+
+void Renderer::createDirectionalLightBuffers()
+{
+    directionalLightUbo_ = BufferObject{};
+    directionalLightUbo_.buffer = gpuDevice_.createUniformBuffer(sizeof(DirectionalLightUboData));
+    directionalLightUbo_.memory = gpuDevice_.allocateStagingBufferMemory(directionalLightUbo_.buffer);
+    directionalLightUbo_.mappedMemory = directionalLightUbo_.memory.mapMemory(0, VK_WHOLE_SIZE);
+
+    auto bufferInfo = vk::DescriptorBufferInfo{};
+    bufferInfo.buffer = *directionalLightUbo_.buffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range = VK_WHOLE_SIZE;
+    directionalLightGpuData_.bufferInfo = bufferInfo;
 }
 
 void Renderer::createRenderPasses()

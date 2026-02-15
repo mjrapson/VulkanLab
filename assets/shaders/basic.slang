@@ -26,6 +26,11 @@ struct MaterialData
     uint hasDiffuseImage;
 };
 
+struct DirectionalLightData
+{
+    float3 direction;
+}
+
 [[vk::binding(0, 0)]]
 ConstantBuffer<CameraData> camera;
 
@@ -34,6 +39,9 @@ ConstantBuffer<MaterialData> material;
 
 [[vk::binding(1, 1)]]
 Sampler2D texture;
+
+[[vk::binding(0, 2)]]
+ConstantBuffer<DirectionalLightData> directionalLight;
 
 struct VertexOutput 
 {
@@ -69,7 +77,7 @@ float4 fragMain(VertexOutput inVert) : SV_Target
         color = material.diffuseColor;
     }
 
-    float3 directionalLightDirection = normalize(float3(-1.0f, -1.0f, 0.0));
+    float3 directionalLightDirection = normalize(directionalLight.direction);
     float3 directionalLightColor = float3(0.8f, 0.8f, 0.8f);
     float NdotL = max(dot(normalize(inVert.normal), -directionalLightDirection), 0.0);
 

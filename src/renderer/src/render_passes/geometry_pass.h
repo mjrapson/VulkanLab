@@ -22,7 +22,9 @@ class GeometryPass
   public:
     GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent);
 
-    void regenerateDescriptorSets(std::span<BufferObject> cameraBuffers, const MaterialContainer& materials);
+    void regenerateDescriptorSets(std::span<BufferObject> cameraBuffers,
+                                  const MaterialContainer& materials,
+                                  const DirectionalLight& directionalLight);
 
     void resize(const vk::Extent2D& extent);
 
@@ -52,8 +54,10 @@ class GeometryPass
 
     DescriptorSetAllocator cameraDescriptor_;
     DescriptorSetAllocator materialDescriptor_;
+    DescriptorSetAllocator directionalLightDescriptor_;
 
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
     std::unordered_map<MaterialHandle, vk::raii::DescriptorSet, core::Hash<MaterialHandle>> materialDescriptorSets_;
+    vk::raii::DescriptorSet directionalLightDescriptorSet_{nullptr};
 };
 } // namespace renderer

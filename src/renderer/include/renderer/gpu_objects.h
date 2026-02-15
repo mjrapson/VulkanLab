@@ -35,6 +35,11 @@ struct MaterialUboData
     uint _padding[3];
 };
 
+struct DirectionalLight
+{
+    vk::DescriptorBufferInfo bufferInfo;
+};
+
 struct DirectionalLightUboData
 {
     glm::vec3 direction;

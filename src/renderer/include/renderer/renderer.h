@@ -68,6 +68,7 @@ class Renderer
     void createCommandBuffers();
     void createSyncObjects();
     void createCameraBuffers();
+    void createDirectionalLightBuffers();
     void createRenderPasses();
 
     void recreateSwapchain();
@@ -102,6 +103,7 @@ class Renderer
     BufferObject meshVertexBuffer_;
     BufferObject meshIndexBuffer_;
     BufferObject materialUbo_;
+    BufferObject directionalLightUbo_;
     std::vector<BufferObject> cameraUbos_;
 
     MeshContainer meshGpuData_;
@@ -109,6 +111,7 @@ class Renderer
     ImageContainer imageGpuData_;
     SkyboxContainer skyboxGpuData_;
     ImageContainer loadingScreenGpuData_;
+    DirectionalLight directionalLightGpuData_;
 
     std::unique_ptr<LoadingScreenPass> loadingScreenPass_{nullptr};
     std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};

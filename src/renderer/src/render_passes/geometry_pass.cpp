@@ -28,18 +28,25 @@ constexpr auto materialDescriptorBindings = std::array{
     vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 };
 
+constexpr auto directionalLightDescriptorBindings = std::array{
+    vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eFragment},
+};
+
 GeometryPass::GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent)
     : gpuDevice_{gpuDevice},
       extent_{extent},
       cameraDescriptor_{gpuDevice_, cameraDescriptorBindings},
-      materialDescriptor_{gpuDevice_, materialDescriptorBindings}
+      materialDescriptor_{gpuDevice_, materialDescriptorBindings},
+      directionalLightDescriptor_{gpuDevice_, directionalLightDescriptorBindings}
 {
     resize(extent);
 
     createPipeline(surfaceFormat);
 }
 
-void GeometryPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffers, const MaterialContainer& materials)
+void GeometryPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffers,
+                                            const MaterialContainer& materials,
+                                            const DirectionalLight& directionalLight)
 {
     // Camera descriptor sets
     cameraDescriptorSets_.clear();
@@ -87,9 +94,23 @@ void GeometryPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffer
         textureWrite.descriptorCount = 1;
         textureWrite.pImageInfo = &material.imageInfo;
 
-        std::array writes{uboWrite, textureWrite};
+        auto writes = std::array{uboWrite, textureWrite};
         gpuDevice_.device().updateDescriptorSets(writes, {});
     }
+
+    // Directional light descriptor sets
+    directionalLightDescriptor_.resize(1);
+    directionalLightDescriptorSet_ = std::move(directionalLightDescriptor_.allocateSets(1)[0]);
+
+    auto dirLightUboWrite = vk::WriteDescriptorSet{};
+    dirLightUboWrite.dstSet = *directionalLightDescriptorSet_;
+    dirLightUboWrite.dstBinding = 0;
+    dirLightUboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+    dirLightUboWrite.descriptorCount = 1;
+    dirLightUboWrite.pBufferInfo = &directionalLight.bufferInfo;
+
+    auto dirLightWrite = std::array{dirLightUboWrite};
+    gpuDevice_.device().updateDescriptorSets(dirLightWrite, {});
 }
 
 void GeometryPass::resize(const vk::Extent2D& extent)
@@ -184,6 +205,12 @@ void GeometryPass::recordCommands(
                                          *materialDescriptorSets_.at(gpuMesh.materialHandle.value()),
                                          gpuMaterial.bufferOffset);
 
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         *pipelineLayout_,
+                                         2,
+                                         *directionalLightDescriptorSet_,
+                                         uint32_t{0});
+
         commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexBufferOffset, gpuMesh.vertexBufferOffset, 0);
     }
 
@@ -255,7 +282,9 @@ void GeometryPass::createPipeline(const vk::Format& surfaceFormat)
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    const auto descriptorSetLayouts = std::array{*cameraDescriptor_.layout(), *materialDescriptor_.layout()};
+    const auto descriptorSetLayouts = std::array{*cameraDescriptor_.layout(),
+                                                 *materialDescriptor_.layout(),
+                                                 *directionalLightDescriptor_.layout()};
 
     if (gpuDevice_.exceedsPushConstantLimit(sizeof(PushConstants)))
     {
