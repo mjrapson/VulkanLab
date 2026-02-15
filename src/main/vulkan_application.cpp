@@ -121,7 +121,7 @@ void VulkanApplication::run()
         if (window_.resized())
         {
             renderer_.windowResized(window_.width(), window_.height());
-            camera_.setAspectRatio(getAspectRatio(window_.width(), window_.height()));
+            camera_.aspectRatio = getAspectRatio(window_.width(), window_.height());
         }
 
         if (currentState_ == ApplicationState::SceneLoading)
@@ -134,7 +134,7 @@ void VulkanApplication::run()
                 activeWorld_ = std::move(result.world);
                 renderer_.setData(result.data);
 
-                camera_.setPosition(glm::vec3{0.0f, 8.0f, 24.0f});
+                camera_.position = glm::vec3{0.0f, 8.0f, 24.0f};
 
                 currentState_ = ApplicationState::SceneActive;
             }
@@ -166,10 +166,9 @@ void VulkanApplication::updateCamera(float deltaTime)
 
     auto movement = glm::vec3{0.0f};
 
-    auto worldUp = glm::vec3(0, 1, 0);
-    auto forward = glm::normalize(camera_.front());
-    auto right = glm::normalize(glm::cross(forward, worldUp));
-    auto up = glm::normalize(glm::cross(right, forward));
+    const auto forward = camera_.front();
+    const auto up = camera_.up();
+    const auto turningAngle = glm::radians(turnSpeed * deltaTime);
 
     auto inputHandler = window_.inputHandler();
 
@@ -185,12 +184,12 @@ void VulkanApplication::updateCamera(float deltaTime)
 
     if (inputHandler.isKeyPressed(GLFW_KEY_A))
     {
-        camera_.setYaw(camera_.yaw() - (turnSpeed * deltaTime));
+        camera_.orientation = glm::normalize(glm::angleAxis(turningAngle, glm::vec3{0, 1, 0}) * camera_.orientation);
     }
 
     if (inputHandler.isKeyPressed(GLFW_KEY_D))
     {
-        camera_.setYaw(camera_.yaw() + (turnSpeed * deltaTime));
+        camera_.orientation = glm::normalize(glm::angleAxis(-turningAngle, glm::vec3{0, 1, 0}) * camera_.orientation);
     }
 
     if (inputHandler.isKeyPressed(GLFW_KEY_E))
@@ -206,7 +205,7 @@ void VulkanApplication::updateCamera(float deltaTime)
     if (glm::length(movement) > 0.0f)
     {
         movement = glm::normalize(movement) * speed * deltaTime;
-        camera_.setPosition(camera_.position() + movement);
+        camera_.position = (camera_.position + movement);
     }
 }
 

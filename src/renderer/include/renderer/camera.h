@@ -3,47 +3,49 @@
 
 #pragma once
 
-#include <glm/glm.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/transform.hpp>
 
 namespace renderer
 {
-class Camera
+struct Camera
 {
-  public:
-    Camera();
+    glm::vec3 position{0.0f, 0.0f, 0.0f};
+    glm::quat orientation{1, 0, 0, 0};
+    float fieldOfView{45.0f};
+    float nearPlane{0.1f};
+    float farPlane{1000.0f};
+    float aspectRatio{1.0f};
 
-    const glm::vec3& position() const;
-    const glm::vec3& front() const;
-    const glm::vec3& up() const;
-    float yaw() const;
-    float roll() const;
-    float pitch() const;
-    float aspectRatio() const;
+    glm::vec3 front() const
+    {
+        return orientation * glm::vec3{0, 0, -1};
+    }
 
-    void setPosition(const glm::vec3& position);
-    void setFront(const glm::vec3& front);
-    void setUp(const glm::vec3& up);
-    void setYaw(float yaw);
-    void setRoll(float roll);
-    void setPitch(float pitch);
-    void setAspectRatio(float aspectRatio);
+    glm::vec3 right() const
+    {
+        return orientation * glm::vec3{1, 0, 0};
+    }
 
-    const glm::mat4 projection() const;
-    const glm::mat4 view() const;
+    glm::vec3 up() const
+    {
+        return orientation * glm::vec3{0, 1, 0};
+    }
 
-  private:
-    void normalize();
+    glm::mat4 projection() const
+    {
+        auto projection = glm::perspective(glm::radians(fieldOfView), aspectRatio, nearPlane, farPlane);
+        projection[1][1] *= -1.0f;
 
-  private:
-    glm::vec3 position_{0.0f, 0.0f, 0.0f};
-    glm::vec3 front_{0.0f, 0.0f, -1.0f};
-    glm::vec3 up_{0.0f, 1.0f, 0.0f};
-    float fieldOfView_{45.0f};
-    float nearPlane_{0.1f};
-    float farPlane_{1000.0f};
-    float pitch_{0.0f};
-    float yaw_{-90.0f};
-    float roll_{0.0f};
-    float aspectRatio_{1.0f};
+        return projection;
+    }
+
+    glm::mat4 view() const
+    {
+        return glm::lookAt(position, position + front(), up());
+    }
 };
 } // namespace renderer

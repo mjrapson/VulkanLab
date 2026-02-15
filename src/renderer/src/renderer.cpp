@@ -3,7 +3,6 @@
 #include "render_passes/geometry_pass.h"
 #include "render_passes/loading_screen_pass.h"
 #include "render_passes/skybox_pass.h"
-#include "renderer/camera.h"
 #include "renderer/data.h"
 
 #include <window/window.h>

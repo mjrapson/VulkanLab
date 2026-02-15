@@ -21,7 +21,6 @@ target_sources(Renderer
         src/render_passes/loading_screen_pass.h
         src/render_passes/skybox_pass.cpp
         src/render_passes/skybox_pass.h
-        src/camera.cpp
         src/descriptor_set_allocator.cpp
         src/gpu_device.cpp
         src/instance.cpp
