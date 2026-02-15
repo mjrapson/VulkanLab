@@ -20,12 +20,9 @@ class GpuDevice;
 class GeometryPass
 {
   public:
-    explicit GeometryPass(const GpuDevice& gpuDevice);
+    GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent);
 
-    void initialize(const vk::Extent2D& extent,
-                    const vk::Format& surfaceFormat,
-                    uint32_t maxFramesInFlight,
-                    std::span<BufferObject> cameraBuffers);
+    void initialize(uint32_t maxFramesInFlight, std::span<BufferObject> cameraBuffers);
 
     void resize(const vk::Extent2D& extent);
 

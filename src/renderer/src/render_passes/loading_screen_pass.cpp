@@ -14,20 +14,20 @@ constexpr auto imageDescriptorBindings = std::array{
     vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 };
 
-LoadingScreenPass::LoadingScreenPass(const GpuDevice& gpuDevice)
+LoadingScreenPass::LoadingScreenPass(const GpuDevice& gpuDevice,
+                                     const vk::Format& surfaceFormat,
+                                     const vk::Extent2D& extent)
     : gpuDevice_{gpuDevice},
+      extent_{extent},
       imageDescriptor_{gpuDevice_, imageDescriptorBindings}
-{
-}
-
-void LoadingScreenPass::initialize(const vk::Extent2D& extent,
-                                   const vk::Format& surfaceFormat,
-                                   uint32_t maxFramesInFlight)
 {
     resize(extent);
 
     createPipeline(surfaceFormat);
+}
 
+void LoadingScreenPass::initialize(uint32_t maxFramesInFlight)
+{
     imageDescriptor_.resize(maxFramesInFlight);
 }
 

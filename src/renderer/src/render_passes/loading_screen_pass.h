@@ -17,9 +17,9 @@ struct Image;
 class LoadingScreenPass
 {
   public:
-    explicit LoadingScreenPass(const GpuDevice& gpuDevice);
+    LoadingScreenPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent);
 
-    void initialize(const vk::Extent2D& extent, const vk::Format& surfaceFormat, uint32_t maxFramesInFlight);
+    void initialize(uint32_t maxFramesInFlight);
 
     void resize(const vk::Extent2D& extent);
 

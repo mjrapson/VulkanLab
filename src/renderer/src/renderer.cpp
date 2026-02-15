@@ -302,14 +302,17 @@ void Renderer::createCameraBuffers()
 
 void Renderer::createRenderPasses()
 {
-    loadingScreenPass_ = std::make_unique<LoadingScreenPass>(gpuDevice_);
-    loadingScreenPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight);
+    const auto format = swapchain_.surfaceFormat.format;
+    const auto extent = swapchain_.extent;
 
-    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_);
-    skyboxPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight, cameraUbos_);
+    loadingScreenPass_ = std::make_unique<LoadingScreenPass>(gpuDevice_, format, extent);
+    loadingScreenPass_->initialize(maxFramesInFlight);
 
-    geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_);
-    geometryPass_->initialize(swapchain_.extent, swapchain_.surfaceFormat.format, maxFramesInFlight, cameraUbos_);
+    skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_, format, extent);
+    skyboxPass_->initialize(maxFramesInFlight, cameraUbos_);
+
+    geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_, format, extent);
+    geometryPass_->initialize(maxFramesInFlight, cameraUbos_);
 }
 
 void Renderer::recreateSwapchain()

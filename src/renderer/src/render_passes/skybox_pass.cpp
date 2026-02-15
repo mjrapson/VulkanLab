@@ -17,22 +17,19 @@ constexpr auto skyboxDescriptorBindings = std::array{
     vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 };
 
-SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice)
+SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent)
     : gpuDevice_{gpuDevice},
+      extent_{extent},
       cameraDescriptor_{gpuDevice_, cameraDescriptorBindings},
       skyboxDescriptor_{gpuDevice_, skyboxDescriptorBindings}
-{
-}
-
-void SkyboxPass::initialize(const vk::Extent2D& extent,
-                            const vk::Format& surfaceFormat,
-                            uint32_t maxFramesInFlight,
-                            std::span<BufferObject> cameraBuffers)
 {
     resize(extent);
 
     createPipeline(surfaceFormat);
+}
 
+void SkyboxPass::initialize(uint32_t maxFramesInFlight, std::span<BufferObject> cameraBuffers)
+{
     cameraDescriptor_.resize(maxFramesInFlight);
 
     createCameraDescriptorSets(maxFramesInFlight, cameraBuffers);

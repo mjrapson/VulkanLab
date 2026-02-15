@@ -28,23 +28,20 @@ constexpr auto materialDescriptorBindings = std::array{
     vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 };
 
-GeometryPass::GeometryPass(const GpuDevice& gpuDevice)
+GeometryPass::GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent)
     : gpuDevice_{gpuDevice},
+      extent_{extent},
       cameraDescriptor_{gpuDevice_, cameraDescriptorBindings},
       materialDescriptor_{gpuDevice_, materialDescriptorBindings}
-{
-}
-
-void GeometryPass::initialize(const vk::Extent2D& extent,
-                              const vk::Format& surfaceFormat,
-                              uint32_t maxFramesInFlight,
-                              std::span<BufferObject> cameraBuffers)
-
 {
     resize(extent);
 
     createPipeline(surfaceFormat);
+}
 
+void GeometryPass::initialize(uint32_t maxFramesInFlight, std::span<BufferObject> cameraBuffers)
+
+{
     cameraDescriptor_.resize(maxFramesInFlight);
 
     createCameraDescriptorSets(maxFramesInFlight, cameraBuffers);
