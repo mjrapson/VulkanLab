@@ -2,6 +2,7 @@ add_library(Core STATIC)
 
 target_sources(Core
     PUBLIC
+        include/core/box.h
         include/core/file_system.h
         include/core/handle.h
         include/core/input_handler.h

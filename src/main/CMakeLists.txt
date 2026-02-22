@@ -36,6 +36,7 @@ file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 
 set(SHADER_FILENAMES
     basic
+    shadowmap
     skybox
     loading_screen
 )

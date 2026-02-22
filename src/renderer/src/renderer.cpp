@@ -2,14 +2,20 @@
 
 #include "render_passes/geometry_pass.h"
 #include "render_passes/loading_screen_pass.h"
+#include "render_passes/shadow_map_pass.h"
 #include "render_passes/skybox_pass.h"
+#include "renderer/camera.h"
 #include "renderer/data.h"
 
+#include <core/box.h>
 #include <window/window.h>
 
 #include <spdlog/spdlog.h>
 
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+#include <glm/gtx/string_cast.hpp>
+#include <iostream>
 
 #include <ranges>
 
@@ -55,18 +61,42 @@ void Renderer::setLoadingScreenImageData(const ImageDataContainer& imageData)
     loadingScreenPass_->regenerateDescriptorSets(loadingScreenGpuData_);
 }
 
-void Renderer::renderScene(const SceneDrawInfo& info)
+void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
 {
     renderFrame(
-        [this, &info](uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
+        [this, &camera, &info](uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
         {
             auto cameraBuffer = CameraBufferObject{};
-            cameraBuffer.projection = info.cameraProjection;
-            cameraBuffer.view = info.cameraView;
+            cameraBuffer.projection = camera.projection();
+            cameraBuffer.view = camera.view();
             memcpy(cameraUbos_[currentFrameIndex_].mappedMemory, &cameraBuffer, sizeof(cameraBuffer));
+
+            const auto shadowDistance = 50.0f;
+            const auto cameraFrustum = camera.frustumSlice(camera.nearPlane, camera.nearPlane + shadowDistance);
+            const auto cameraFrustumMidPoint = cameraFrustum.midPoint();
+
+            const auto up = std::abs(info.globalLightDirection.y) > 0.99f ? glm::vec3{0, 0, 1} : glm::vec3{0, 1, 0};
+
+            // "Pretend" the directional light is far away along its -direction
+            const auto mimicLightPosition = cameraFrustumMidPoint - info.globalLightDirection * shadowDistance;
+            const auto lightRight = glm::normalize(glm::cross(info.globalLightDirection, up));
+            const auto lightUp = glm::normalize(glm::cross(info.globalLightDirection, lightRight));
+
+            const auto lightViewMatrix = glm::lookAt(mimicLightPosition, cameraFrustumMidPoint, lightUp);
+            const auto lightSpaceFrustum = viewTransform(cameraFrustum, lightViewMatrix);
+            const auto frustumAABB = lightSpaceFrustum.boudingBox();
+
+            // near and far plane reversed for light space
+            const auto near = -frustumAABB.max.z;
+            const auto far = -frustumAABB.min.z;
+
+            const auto lightProjectionMatrix =
+                glm::ortho(frustumAABB.min.x, frustumAABB.max.x, frustumAABB.min.y, frustumAABB.max.y, near, far);
 
             auto directionalLightBuffer = DirectionalLightUboData{};
             directionalLightBuffer.direction = info.globalLightDirection;
+            directionalLightBuffer.lightSpaceView = lightViewMatrix;
+            directionalLightBuffer.lightSpaceProjection = lightProjectionMatrix;
             memcpy(directionalLightUbo_.mappedMemory, &directionalLightBuffer, sizeof(DirectionalLightUboData));
 
             gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
@@ -78,6 +108,12 @@ void Renderer::renderScene(const SceneDrawInfo& info)
                                              vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
                                              vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
                                              vk::ImageAspectFlagBits::eColor);
+
+            shadowMapPass_->recordCommands(commandBuffer,
+                                           meshVertexBuffer_.buffer,
+                                           meshIndexBuffer_.buffer,
+                                           meshGpuData_,
+                                           info.drawCommands);
 
             skyboxPass_->recordCommands(currentFrameIndex_,
                                         commandBuffer,
@@ -216,6 +252,7 @@ void Renderer::setData(const AssetData& data)
 
     skyboxPass_->regenerateDescriptorSets(cameraUbos_, skyboxGpuData_);
     geometryPass_->regenerateDescriptorSets(cameraUbos_, materialGpuData_, directionalLightGpuData_);
+    shadowMapPass_->regenerateDescriptorSets(directionalLightGpuData_);
 }
 
 void Renderer::createSwapchain()
@@ -282,6 +319,7 @@ void Renderer::createRenderPasses()
     loadingScreenPass_ = std::make_unique<LoadingScreenPass>(gpuDevice_, format, extent);
     skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_, format, extent);
     geometryPass_ = std::make_unique<GeometryPass>(gpuDevice_, format, extent);
+    shadowMapPass_ = std::make_unique<ShadowMapPass>(gpuDevice_);
 }
 
 void Renderer::recreateSwapchain()

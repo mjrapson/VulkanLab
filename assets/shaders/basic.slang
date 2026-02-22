@@ -29,6 +29,9 @@ struct MaterialData
 struct DirectionalLightData
 {
     float3 direction;
+    uint _padding1;
+    float4x4 lightSpaceView;
+    float4x4 lightSpaceProjection;
 }
 
 [[vk::binding(0, 0)]]

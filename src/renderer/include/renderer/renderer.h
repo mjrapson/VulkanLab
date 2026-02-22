@@ -26,10 +26,12 @@ class Window;
 namespace renderer
 {
 struct AssetData;
+struct Camera;
 class GeometryPass;
 class GpuDevice;
 struct ImageData;
 class LoadingScreenPass;
+class ShadowMapPass;
 class SkyboxPass;
 
 class Renderer
@@ -50,12 +52,10 @@ class Renderer
     {
         std::vector<DrawCommand> drawCommands;
         std::optional<renderer::SkyboxHandle> skyboxHandle;
-        glm::mat4 cameraProjection;
-        glm::mat4 cameraView;
         glm::vec3 globalLightDirection;
     };
 
-    void renderScene(const SceneDrawInfo& info);
+    void renderScene(const Camera& camera, const SceneDrawInfo& info);
 
     void renderLoadingScreen(ImageHandle loadingScreenHandle);
 
@@ -116,5 +116,6 @@ class Renderer
     std::unique_ptr<LoadingScreenPass> loadingScreenPass_{nullptr};
     std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};
     std::unique_ptr<GeometryPass> geometryPass_{nullptr};
+    std::unique_ptr<ShadowMapPass> shadowMapPass_{nullptr};
 };
 } // namespace renderer

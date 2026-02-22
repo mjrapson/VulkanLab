@@ -7,6 +7,7 @@ target_sources(Renderer
         include/renderer/data.h
         include/renderer/descriptor_set_allocator.h
         include/renderer/draw_command.h
+        include/renderer/frustum.h
         include/renderer/gpu_device.h
         include/renderer/gpu_objects.h
         include/renderer/handles.h
@@ -19,6 +20,8 @@ target_sources(Renderer
         src/render_passes/geometry_pass.h
         src/render_passes/loading_screen_pass.cpp
         src/render_passes/loading_screen_pass.h
+        src/render_passes/shadow_map_pass.cpp
+        src/render_passes/shadow_map_pass.h
         src/render_passes/skybox_pass.cpp
         src/render_passes/skybox_pass.h
         src/descriptor_set_allocator.cpp

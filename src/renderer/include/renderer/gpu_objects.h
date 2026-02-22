@@ -43,7 +43,9 @@ struct DirectionalLight
 struct DirectionalLightUboData
 {
     glm::vec3 direction;
-    uint _padding[3];
+    uint _padding1;
+    glm::mat4 lightSpaceView;
+    glm::mat4 lightSpaceProjection;
 };
 
 struct Mesh

@@ -25,8 +25,6 @@ void RenderSystem::update(const renderer::Camera& camera)
 {
     auto drawInfo = renderer::Renderer::SceneDrawInfo{};
     drawInfo.skyboxHandle = world_.activeSkybox();
-    drawInfo.cameraProjection = camera.projection();
-    drawInfo.cameraView = camera.view();
     drawInfo.globalLightDirection = world_.globalLightDirection();
 
     for (auto& [entity, renderComponent] : world_.getAllComponents<RenderComponent>())
@@ -55,6 +53,6 @@ void RenderSystem::update(const renderer::Camera& camera)
         }
     }
 
-    renderer_.renderScene(drawInfo);
+    renderer_.renderScene(camera, drawInfo);
 }
 } // namespace world
