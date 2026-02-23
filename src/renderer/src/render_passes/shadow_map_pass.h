@@ -25,7 +25,7 @@ class ShadowMapPass
     void recordCommands(const vk::raii::CommandBuffer& commandBuffer,
                         const vk::raii::Buffer& vertexBuffer,
                         const vk::raii::Buffer& indexBuffer,
-                        const std::unordered_map<MeshHandle, Mesh, core::Hash<MeshHandle>>& meshGpuData,
+                        const MeshContainer& meshGpuData,
                         std::span<const DrawCommand> drawCommands);
 
   private:

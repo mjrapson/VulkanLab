@@ -32,8 +32,8 @@ class GeometryPass
                         const vk::raii::CommandBuffer& commandBuffer,
                         const vk::raii::Buffer& vertexBuffer,
                         const vk::raii::Buffer& indexBuffer,
-                        const std::unordered_map<MeshHandle, Mesh, core::Hash<MeshHandle>>& meshGpuData,
-                        const std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>>& materialGpuData,
+                        const MeshContainer& meshGpuData,
+                        const MaterialContainer& materialGpuData,
                         vk::ImageView colorTargetImageView,
                         std::span<const DrawCommand> drawCommands);
 

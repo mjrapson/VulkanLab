@@ -122,15 +122,14 @@ void GeometryPass::resize(const vk::Extent2D& extent)
     depthImageView_ = gpuDevice_.createDepthImageView(depthImage_);
 }
 
-void GeometryPass::recordCommands(
-    uint32_t frameIndex,
-    const vk::raii::CommandBuffer& commandBuffer,
-    const vk::raii::Buffer& vertexBuffer,
-    const vk::raii::Buffer& indexBuffer,
-    const std::unordered_map<MeshHandle, Mesh, core::Hash<MeshHandle>>& meshGpuData,
-    const std::unordered_map<MaterialHandle, Material, core::Hash<MaterialHandle>>& materialGpuData,
-    vk::ImageView colorTargetImageView,
-    std::span<const DrawCommand> drawCommands)
+void GeometryPass::recordCommands(uint32_t frameIndex,
+                                  const vk::raii::CommandBuffer& commandBuffer,
+                                  const vk::raii::Buffer& vertexBuffer,
+                                  const vk::raii::Buffer& indexBuffer,
+                                  const MeshContainer& meshGpuData,
+                                  const MaterialContainer& materialGpuData,
+                                  vk::ImageView colorTargetImageView,
+                                  std::span<const DrawCommand> drawCommands)
 {
     gpuDevice_.transitionImageLayout(
         depthImage_,
