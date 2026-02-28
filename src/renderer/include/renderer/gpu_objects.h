@@ -23,8 +23,9 @@ using ImageContainer = core::HandleContainer<ImageHandle, Image>;
 struct Material
 {
     uint32_t bufferOffset;
-    vk::DescriptorBufferInfo bufferInfo;
-    vk::DescriptorImageInfo imageInfo;
+    vk::DeviceSize size;
+    std::optional<ImageHandle> diffuseImageHandle;
+    // TODO std::optional<SamplerHandle> diffuseImageSampler;
 };
 using MaterialContainer = core::HandleContainer<MaterialHandle, Material>;
 
@@ -33,11 +34,6 @@ struct MaterialUboData
     glm::vec4 diffuseColor;
     uint hasDiffuseTexture;
     uint _padding[3];
-};
-
-struct DirectionalLight
-{
-    vk::DescriptorBufferInfo bufferInfo;
 };
 
 struct DirectionalLightUboData

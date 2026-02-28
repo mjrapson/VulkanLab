@@ -3,19 +3,19 @@
 
 #pragma once
 
-#include "renderer/buffer_object.h"
+#include "renderer/buffers.h"
 #include "renderer/data.h"
 #include "renderer/draw_command.h"
 #include "renderer/gpu_device.h"
 #include "renderer/gpu_objects.h"
 #include "renderer/handles.h"
 #include "renderer/instance.h"
+#include "renderer/resources.h"
 #include "renderer/swapchain.h"
 
 #include <vulkan/vulkan_raii.hpp>
 
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 namespace window
@@ -99,19 +99,8 @@ class Renderer
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
 
-    Image emptyImage_;
-    BufferObject meshVertexBuffer_;
-    BufferObject meshIndexBuffer_;
-    BufferObject materialUbo_;
-    BufferObject directionalLightUbo_;
-    std::vector<BufferObject> cameraUbos_;
-
-    MeshContainer meshGpuData_;
-    MaterialContainer materialGpuData_;
-    ImageContainer imageGpuData_;
-    SkyboxContainer skyboxGpuData_;
-    ImageContainer loadingScreenGpuData_;
-    DirectionalLight directionalLightGpuData_;
+    Buffers buffers_;
+    Resources resources_;
 
     std::unique_ptr<LoadingScreenPass> loadingScreenPass_{nullptr};
     std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};

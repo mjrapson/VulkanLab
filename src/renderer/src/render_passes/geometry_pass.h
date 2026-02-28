@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include "renderer/buffer_object.h"
 #include "renderer/descriptor_set_allocator.h"
 #include "renderer/draw_command.h"
-#include "renderer/gpu_objects.h"
 
 #include <vulkan/vulkan_raii.hpp>
 
@@ -16,24 +14,22 @@
 namespace renderer
 {
 class GpuDevice;
+struct Buffers;
+struct Resources;
 
 class GeometryPass
 {
   public:
     GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent);
 
-    void regenerateDescriptorSets(std::span<BufferObject> cameraBuffers,
-                                  const MaterialContainer& materials,
-                                  const DirectionalLight& directionalLight);
+    void regenerateDescriptorSets(const Buffers& buffers, const Resources& resources);
 
     void resize(const vk::Extent2D& extent);
 
     void recordCommands(uint32_t frameIndex,
                         const vk::raii::CommandBuffer& commandBuffer,
-                        const vk::raii::Buffer& vertexBuffer,
-                        const vk::raii::Buffer& indexBuffer,
-                        const MeshContainer& meshGpuData,
-                        const MaterialContainer& materialGpuData,
+                        const Buffers& buffers,
+                        const Resources& resources,
                         vk::ImageView colorTargetImageView,
                         std::span<const DrawCommand> drawCommands);
 

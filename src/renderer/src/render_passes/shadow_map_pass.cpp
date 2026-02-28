@@ -3,8 +3,9 @@
 
 #include "shadow_map_pass.h"
 
-#include "renderer/draw_command.h"
+#include "renderer/buffers.h"
 #include "renderer/gpu_device.h"
+#include "renderer/resources.h"
 #include "renderer/vertex_layout.h"
 
 #include <core/file_system.h>
@@ -35,27 +36,31 @@ ShadowMapPass::ShadowMapPass(const GpuDevice& gpuDevice)
     depthImageView_ = gpuDevice_.createDepthImageView(depthImage_);
 }
 
-void ShadowMapPass::regenerateDescriptorSets(const DirectionalLight& directionalLight)
+void ShadowMapPass::regenerateDescriptorSets(const Buffers& buffers)
 {
     // Directional light descriptor sets
     directionalLightDescriptor_.resize(1);
     directionalLightDescriptorSet_ = std::move(directionalLightDescriptor_.allocateSets(1)[0]);
+
+    auto bufferInfo = vk::DescriptorBufferInfo{};
+    bufferInfo.buffer = *buffers.directionalLightBuffer.buffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range = VK_WHOLE_SIZE;
 
     auto dirLightUboWrite = vk::WriteDescriptorSet{};
     dirLightUboWrite.dstSet = *directionalLightDescriptorSet_;
     dirLightUboWrite.dstBinding = 0;
     dirLightUboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
     dirLightUboWrite.descriptorCount = 1;
-    dirLightUboWrite.pBufferInfo = &directionalLight.bufferInfo;
+    dirLightUboWrite.pBufferInfo = &bufferInfo;
 
     auto dirLightWrite = std::array{dirLightUboWrite};
     gpuDevice_.device().updateDescriptorSets(dirLightWrite, {});
 }
 
 void ShadowMapPass::recordCommands(const vk::raii::CommandBuffer& commandBuffer,
-                                   const vk::raii::Buffer& vertexBuffer,
-                                   const vk::raii::Buffer& indexBuffer,
-                                   const MeshContainer& meshGpuData,
+                                   const Buffers& buffers,
+                                   const Resources& resources,
                                    std::span<const DrawCommand> drawCommands)
 {
     gpuDevice_.transitionImageLayout(
@@ -85,8 +90,8 @@ void ShadowMapPass::recordCommands(const vk::raii::CommandBuffer& commandBuffer,
 
     commandBuffer.beginRendering(renderingInfo);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
-    commandBuffer.bindVertexBuffers(0, *vertexBuffer, {0});
-    commandBuffer.bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint32);
+    commandBuffer.bindVertexBuffers(0, *buffers.meshVertexBuffer.buffer, {0});
+    commandBuffer.bindIndexBuffer(*buffers.meshIndexBuffer.buffer, 0, vk::IndexType::eUint32);
 
     commandBuffer.setViewport(
         0,
@@ -101,7 +106,7 @@ void ShadowMapPass::recordCommands(const vk::raii::CommandBuffer& commandBuffer,
 
     for (const auto& drawCommand : drawCommands)
     {
-        auto& gpuMesh = meshGpuData.at(drawCommand.meshHandle);
+        auto& gpuMesh = resources.meshes.at(drawCommand.meshHandle);
 
         auto pushConstants = PushConstants{};
         pushConstants.modelTransform = drawCommand.transform;

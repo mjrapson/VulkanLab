@@ -5,27 +5,25 @@
 
 #include "renderer/descriptor_set_allocator.h"
 #include "renderer/draw_command.h"
-#include "renderer/gpu_objects.h"
 
 #include <vulkan/vulkan_raii.hpp>
-
-#include <unordered_map>
 
 namespace renderer
 {
 class GpuDevice;
+struct Buffers;
+struct Resources;
 
 class ShadowMapPass
 {
   public:
     explicit ShadowMapPass(const GpuDevice& gpuDevice);
 
-    void regenerateDescriptorSets(const DirectionalLight& directionalLight);
+    void regenerateDescriptorSets(const Buffers& buffers);
 
     void recordCommands(const vk::raii::CommandBuffer& commandBuffer,
-                        const vk::raii::Buffer& vertexBuffer,
-                        const vk::raii::Buffer& indexBuffer,
-                        const MeshContainer& meshGpuData,
+                        const Buffers& buffers,
+                        const Resources& resources,
                         std::span<const DrawCommand> drawCommands);
 
   private:

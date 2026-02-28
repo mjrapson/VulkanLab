@@ -15,9 +15,6 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
-#include <iostream>
-
-#include <ranges>
 
 namespace renderer
 {
@@ -56,9 +53,9 @@ Renderer::~Renderer() = default;
 
 void Renderer::setLoadingScreenImageData(const ImageDataContainer& imageData)
 {
-    loadingScreenGpuData_ = uploadImages(imageData);
+    resources_.loadingScreens = uploadImages(imageData);
 
-    loadingScreenPass_->regenerateDescriptorSets(loadingScreenGpuData_);
+    loadingScreenPass_->regenerateDescriptorSets(resources_.loadingScreens);
 }
 
 void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
@@ -69,7 +66,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
             auto cameraBuffer = CameraBufferObject{};
             cameraBuffer.projection = camera.projection();
             cameraBuffer.view = camera.view();
-            memcpy(cameraUbos_[currentFrameIndex_].mappedMemory, &cameraBuffer, sizeof(cameraBuffer));
+            memcpy(buffers_.cameraBuffers[currentFrameIndex_].mappedMemory, &cameraBuffer, sizeof(cameraBuffer));
 
             const auto shadowDistance = 50.0f;
             const auto cameraFrustum = camera.frustumSlice(camera.nearPlane, camera.nearPlane + shadowDistance);
@@ -97,7 +94,9 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
             directionalLightBuffer.direction = info.globalLightDirection;
             directionalLightBuffer.lightSpaceView = lightViewMatrix;
             directionalLightBuffer.lightSpaceProjection = lightProjectionMatrix;
-            memcpy(directionalLightUbo_.mappedMemory, &directionalLightBuffer, sizeof(DirectionalLightUboData));
+            memcpy(buffers_.directionalLightBuffer.mappedMemory,
+                   &directionalLightBuffer,
+                   sizeof(DirectionalLightUboData));
 
             gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
                                              commandBuffer,
@@ -109,22 +108,17 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                                              vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
                                              vk::ImageAspectFlagBits::eColor);
 
-            shadowMapPass_->recordCommands(commandBuffer,
-                                           meshVertexBuffer_.buffer,
-                                           meshIndexBuffer_.buffer,
-                                           meshGpuData_,
-                                           info.drawCommands);
+            shadowMapPass_->recordCommands(commandBuffer, buffers_, resources_, info.drawCommands);
 
             skyboxPass_->recordCommands(currentFrameIndex_,
                                         commandBuffer,
                                         info.skyboxHandle.value(),
                                         swapchain_.views[imageIndex]);
+
             geometryPass_->recordCommands(currentFrameIndex_,
                                           commandBuffer,
-                                          meshVertexBuffer_.buffer,
-                                          meshIndexBuffer_.buffer,
-                                          meshGpuData_,
-                                          materialGpuData_,
+                                          buffers_,
+                                          resources_,
                                           swapchain_.views[imageIndex],
                                           info.drawCommands);
 
@@ -193,8 +187,9 @@ void Renderer::setData(const AssetData& data)
     cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
 
     // Empty image (move this)
-    emptyImage_.image = gpuDevice_.createImage(1, 1);
-    emptyImage_.memory = gpuDevice_.allocateImageMemory(emptyImage_.image, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    resources_.emptyImage.image = gpuDevice_.createImage(1, 1);
+    resources_.emptyImage.memory = gpuDevice_.allocateImageMemory(resources_.emptyImage.image,
+                                                                  vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     const auto imageSize = 4; //  RGBA8
     auto stagingBuffer = gpuDevice_.createBuffer(imageSize,
@@ -210,7 +205,7 @@ void Renderer::setData(const AssetData& data)
     std::memcpy(mappedMemory, imageData.data(), imageSize);
     stagingMemory.unmapMemory();
 
-    gpuDevice_.transitionImageLayout(*emptyImage_.image,
+    gpuDevice_.transitionImageLayout(*resources_.emptyImage.image,
                                      *cmd,
                                      vk::ImageLayout::eUndefined,
                                      vk::ImageLayout::eTransferDstOptimal,
@@ -220,9 +215,9 @@ void Renderer::setData(const AssetData& data)
                                      vk::PipelineStageFlagBits2::eTransfer,
                                      vk::ImageAspectFlagBits::eColor);
 
-    gpuDevice_.copyBufferToImage(cmd, stagingBuffer, emptyImage_.image, 1, 1);
+    gpuDevice_.copyBufferToImage(cmd, stagingBuffer, resources_.emptyImage.image, 1, 1);
 
-    gpuDevice_.transitionImageLayout(*emptyImage_.image,
+    gpuDevice_.transitionImageLayout(*resources_.emptyImage.image,
                                      *cmd,
                                      vk::ImageLayout::eTransferDstOptimal,
                                      vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -232,8 +227,8 @@ void Renderer::setData(const AssetData& data)
                                      vk::PipelineStageFlagBits2::eFragmentShader,
                                      vk::ImageAspectFlagBits::eColor);
 
-    emptyImage_.view = gpuDevice_.createImageView(emptyImage_.image);
-    emptyImage_.sampler = gpuDevice_.createSampler();
+    resources_.emptyImage.view = gpuDevice_.createImageView(resources_.emptyImage.image);
+    resources_.emptyImage.sampler = gpuDevice_.createSampler();
 
     cmd.end();
     gpuDevice_.submitCommandBuffer(cmd);
@@ -242,7 +237,7 @@ void Renderer::setData(const AssetData& data)
     uploadMeshes(data.meshData);
 
     // Images
-    imageGpuData_ = uploadImages(data.imageData);
+    resources_.images = uploadImages(data.imageData);
 
     // Materials
     uploadMaterials(data.materialData);
@@ -250,9 +245,9 @@ void Renderer::setData(const AssetData& data)
     // Skyboxes
     uploadSkyboxes(data.skyboxData);
 
-    skyboxPass_->regenerateDescriptorSets(cameraUbos_, skyboxGpuData_);
-    geometryPass_->regenerateDescriptorSets(cameraUbos_, materialGpuData_, directionalLightGpuData_);
-    shadowMapPass_->regenerateDescriptorSets(directionalLightGpuData_);
+    skyboxPass_->regenerateDescriptorSets(buffers_, resources_);
+    geometryPass_->regenerateDescriptorSets(buffers_, resources_);
+    shadowMapPass_->regenerateDescriptorSets(buffers_);
 }
 
 void Renderer::createSwapchain()
@@ -293,22 +288,16 @@ void Renderer::createCameraBuffers()
         cameraUbo.memory = gpuDevice_.allocateStagingBufferMemory(cameraUbo.buffer);
         cameraUbo.mappedMemory = cameraUbo.memory.mapMemory(0, VK_WHOLE_SIZE);
 
-        cameraUbos_.push_back(std::move(cameraUbo));
+        buffers_.cameraBuffers.push_back(std::move(cameraUbo));
     }
 }
 
 void Renderer::createDirectionalLightBuffers()
 {
-    directionalLightUbo_ = BufferObject{};
-    directionalLightUbo_.buffer = gpuDevice_.createUniformBuffer(sizeof(DirectionalLightUboData));
-    directionalLightUbo_.memory = gpuDevice_.allocateStagingBufferMemory(directionalLightUbo_.buffer);
-    directionalLightUbo_.mappedMemory = directionalLightUbo_.memory.mapMemory(0, VK_WHOLE_SIZE);
-
-    auto bufferInfo = vk::DescriptorBufferInfo{};
-    bufferInfo.buffer = *directionalLightUbo_.buffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range = VK_WHOLE_SIZE;
-    directionalLightGpuData_.bufferInfo = bufferInfo;
+    buffers_.directionalLightBuffer.buffer = gpuDevice_.createUniformBuffer(sizeof(DirectionalLightUboData));
+    buffers_.directionalLightBuffer.memory = gpuDevice_.allocateStagingBufferMemory(
+        buffers_.directionalLightBuffer.buffer);
+    buffers_.directionalLightBuffer.mappedMemory = buffers_.directionalLightBuffer.memory.mapMemory(0, VK_WHOLE_SIZE);
 }
 
 void Renderer::createRenderPasses()
@@ -482,15 +471,15 @@ void Renderer::uploadMeshes(const MeshDataContainer& data)
 
     const auto vertexBufferSize = static_cast<uint32_t>(sizeof(core::Vertex) * totalVertices);
 
-    meshVertexBuffer_.buffer = gpuDevice_.createVertexBuffer(vertexBufferSize);
-    meshVertexBuffer_.memory = gpuDevice_.allocateDeviceBufferMemory(meshVertexBuffer_.buffer);
+    buffers_.meshVertexBuffer.buffer = gpuDevice_.createVertexBuffer(vertexBufferSize);
+    buffers_.meshVertexBuffer.memory = gpuDevice_.allocateDeviceBufferMemory(buffers_.meshVertexBuffer.buffer);
 
     auto vertexStagingBuffer = gpuDevice_.createStagingBuffer(vertexBufferSize);
     auto vertexStagingBufferMemory = gpuDevice_.allocateStagingBufferMemory(vertexStagingBuffer);
 
     const auto indexBufferSize = static_cast<uint32_t>(sizeof(uint32_t) * totalIndices);
-    meshIndexBuffer_.buffer = gpuDevice_.createIndexBuffer(indexBufferSize);
-    meshIndexBuffer_.memory = gpuDevice_.allocateDeviceBufferMemory(meshIndexBuffer_.buffer);
+    buffers_.meshIndexBuffer.buffer = gpuDevice_.createIndexBuffer(indexBufferSize);
+    buffers_.meshIndexBuffer.memory = gpuDevice_.allocateDeviceBufferMemory(buffers_.meshIndexBuffer.buffer);
 
     auto indexStagingBuffer = gpuDevice_.createStagingBuffer(indexBufferSize);
     auto indexStagingBufferMemory = gpuDevice_.allocateStagingBufferMemory(indexStagingBuffer);
@@ -523,14 +512,14 @@ void Renderer::uploadMeshes(const MeshDataContainer& data)
         currentVertexOffset += meshData.vertices.size();
         currentIndexOffset += meshData.indices.size();
 
-        meshGpuData_.emplace(handle, std::move(mesh));
+        resources_.meshes.emplace(handle, std::move(mesh));
     }
 
     vertexStagingBufferMemory.unmapMemory();
     indexStagingBufferMemory.unmapMemory();
 
-    gpuDevice_.copyBuffer(cmd, vertexStagingBuffer, meshVertexBuffer_.buffer, vertexBufferSize);
-    gpuDevice_.copyBuffer(cmd, indexStagingBuffer, meshIndexBuffer_.buffer, indexBufferSize);
+    gpuDevice_.copyBuffer(cmd, vertexStagingBuffer, buffers_.meshVertexBuffer.buffer, vertexBufferSize);
+    gpuDevice_.copyBuffer(cmd, indexStagingBuffer, buffers_.meshIndexBuffer.buffer, indexBufferSize);
 
     cmd.end();
     gpuDevice_.submitCommandBuffer(cmd);
@@ -544,50 +533,29 @@ void Renderer::uploadMaterials(const MaterialDataContainer& data)
 
     const auto uboStride = gpuDevice_.calculateAlignedUboStride(sizeof(MaterialUboData));
 
-    materialUbo_.buffer = gpuDevice_.createUniformBuffer(uboStride * data.size());
-    materialUbo_.memory = gpuDevice_.allocateStagingBufferMemory(materialUbo_.buffer);
-    void* mapped = materialUbo_.memory.mapMemory(0, VK_WHOLE_SIZE);
+    buffers_.materialBuffer.buffer = gpuDevice_.createUniformBuffer(uboStride * data.size());
+    buffers_.materialBuffer.memory = gpuDevice_.allocateStagingBufferMemory(buffers_.materialBuffer.buffer);
+    void* mapped = buffers_.materialBuffer.memory.mapMemory(0, VK_WHOLE_SIZE);
 
     auto offset = uint32_t{0};
     for (const auto& [handle, materialData] : data)
     {
         auto material = Material{};
         material.bufferOffset = offset;
+        material.size = uboStride;
+        material.diffuseImageHandle = materialData.diffuseImage;
 
         auto bufferData = MaterialUboData{};
         bufferData.diffuseColor = glm::vec4{materialData.diffuseColour, 1.0f};
         bufferData.hasDiffuseTexture = materialData.diffuseImage ? 1 : 0;
-
         std::memcpy(static_cast<std::byte*>(mapped) + offset, &bufferData, sizeof(MaterialUboData));
 
         offset += static_cast<uint32_t>(uboStride);
 
-        auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = *materialUbo_.buffer;
-        bufferInfo.offset = 0;
-        bufferInfo.range = uboStride;
-
-        material.bufferInfo = bufferInfo;
-
-        auto imageInfo = vk::DescriptorImageInfo{};
-        if (materialData.diffuseImage)
-        {
-            imageInfo.imageView = *imageGpuData_.at(materialData.diffuseImage.value()).view;
-            imageInfo.sampler = *imageGpuData_.at(materialData.diffuseImage.value()).sampler;
-        }
-        else
-        {
-            imageInfo.imageView = *emptyImage_.view;
-            imageInfo.sampler = *emptyImage_.sampler;
-        }
-        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-        material.imageInfo = imageInfo;
-
-        materialGpuData_.emplace(handle, std::move(material));
+        resources_.materials.emplace(handle, std::move(material));
     }
 
-    materialUbo_.memory.unmapMemory();
+    buffers_.materialBuffer.memory.unmapMemory();
 
     cmd.end();
     gpuDevice_.submitCommandBuffer(cmd);
@@ -645,7 +613,7 @@ void Renderer::uploadSkyboxes(const SkyboxDataContainer& data)
         skybox.view = gpuDevice_.createCubemapImageView(skybox.image);
         skybox.sampler = gpuDevice_.createSampler();
 
-        skyboxGpuData_.emplace(handle, std::move(skybox));
+        resources_.skyboxes.emplace(handle, std::move(skybox));
 
         cmd.end();
         gpuDevice_.submitCommandBuffer(cmd);

@@ -3,7 +3,9 @@
 
 #include "skybox_pass.h"
 
+#include "renderer/buffers.h"
 #include "renderer/gpu_device.h"
+#include "renderer/resources.h"
 
 #include <core/file_system.h>
 
@@ -28,18 +30,19 @@ SkyboxPass::SkyboxPass(const GpuDevice& gpuDevice, const vk::Format& surfaceForm
     createPipeline(surfaceFormat);
 }
 
-void SkyboxPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffers, const SkyboxContainer& skyboxes)
+void SkyboxPass::regenerateDescriptorSets(const Buffers& buffers, const Resources& resources)
 {
     // Camera descriptor sets
     cameraDescriptorSets_.clear();
 
-    cameraDescriptor_.resize(static_cast<uint32_t>(cameraBuffers.size()));
-    cameraDescriptorSets_ = std::move(cameraDescriptor_.allocateSets(static_cast<uint32_t>(cameraBuffers.size())));
+    cameraDescriptor_.resize(static_cast<uint32_t>(buffers.cameraBuffers.size()));
+    cameraDescriptorSets_ = std::move(
+        cameraDescriptor_.allocateSets(static_cast<uint32_t>(buffers.cameraBuffers.size())));
 
-    for (auto frameIndex = size_t{0}; frameIndex < cameraBuffers.size(); ++frameIndex)
+    for (auto frameIndex = size_t{0}; frameIndex < buffers.cameraBuffers.size(); ++frameIndex)
     {
         auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = cameraBuffers[frameIndex].buffer;
+        bufferInfo.buffer = buffers.cameraBuffers[frameIndex].buffer;
         bufferInfo.offset = 0;
         bufferInfo.range = VK_WHOLE_SIZE;
 
@@ -57,8 +60,8 @@ void SkyboxPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffers,
     // Skybox descriptor sets
     skyboxDescriptorSets_.clear();
 
-    skyboxDescriptor_.resize(static_cast<uint32_t>(skyboxes.size()));
-    for (const auto& [handle, skybox] : skyboxes)
+    skyboxDescriptor_.resize(static_cast<uint32_t>(resources.skyboxes.size()));
+    for (const auto& [handle, skybox] : resources.skyboxes)
     {
         auto sets = skyboxDescriptor_.allocateSets(1);
         skyboxDescriptorSets_.emplace(handle, std::move(sets[0]));

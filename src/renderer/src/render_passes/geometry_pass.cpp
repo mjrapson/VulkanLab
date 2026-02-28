@@ -3,8 +3,9 @@
 
 #include "geometry_pass.h"
 
-#include "renderer/draw_command.h"
+#include "renderer/buffers.h"
 #include "renderer/gpu_device.h"
+#include "renderer/resources.h"
 #include "renderer/vertex_layout.h"
 
 #include <core/file_system.h>
@@ -29,7 +30,7 @@ constexpr auto materialDescriptorBindings = std::array{
 };
 
 constexpr auto directionalLightDescriptorBindings = std::array{
-    vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eFragment},
+    vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
 };
 
 GeometryPass::GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surfaceFormat, const vk::Extent2D& extent)
@@ -44,20 +45,19 @@ GeometryPass::GeometryPass(const GpuDevice& gpuDevice, const vk::Format& surface
     createPipeline(surfaceFormat);
 }
 
-void GeometryPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffers,
-                                            const MaterialContainer& materials,
-                                            const DirectionalLight& directionalLight)
+void GeometryPass::regenerateDescriptorSets(const Buffers& buffers, const Resources& resources)
 {
     // Camera descriptor sets
     cameraDescriptorSets_.clear();
 
-    cameraDescriptor_.resize(static_cast<uint32_t>(cameraBuffers.size()));
-    cameraDescriptorSets_ = std::move(cameraDescriptor_.allocateSets(static_cast<uint32_t>(cameraBuffers.size())));
+    cameraDescriptor_.resize(static_cast<uint32_t>(buffers.cameraBuffers.size()));
+    cameraDescriptorSets_ = std::move(
+        cameraDescriptor_.allocateSets(static_cast<uint32_t>(buffers.cameraBuffers.size())));
 
-    for (auto frameIndex = size_t{0}; frameIndex < cameraBuffers.size(); ++frameIndex)
+    for (auto frameIndex = size_t{0}; frameIndex < buffers.cameraBuffers.size(); ++frameIndex)
     {
         auto bufferInfo = vk::DescriptorBufferInfo{};
-        bufferInfo.buffer = cameraBuffers[frameIndex].buffer;
+        bufferInfo.buffer = buffers.cameraBuffers[frameIndex].buffer;
         bufferInfo.offset = 0;
         bufferInfo.range = VK_WHOLE_SIZE;
 
@@ -75,24 +75,42 @@ void GeometryPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffer
     // Material descriptor sets
     materialDescriptorSets_.clear();
 
-    materialDescriptor_.resize(static_cast<uint32_t>(materials.size()));
-    for (const auto& [handle, material] : materials)
+    materialDescriptor_.resize(static_cast<uint32_t>(resources.materials.size()));
+    for (const auto& [handle, material] : resources.materials)
     {
         materialDescriptorSets_.emplace(handle, std::move(materialDescriptor_.allocateSets(1)[0]));
+
+        auto bufferInfo = vk::DescriptorBufferInfo{};
+        bufferInfo.buffer = *buffers.materialBuffer.buffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range = material.size;
 
         auto uboWrite = vk::WriteDescriptorSet{};
         uboWrite.dstSet = *materialDescriptorSets_.at(handle);
         uboWrite.dstBinding = 0;
         uboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
         uboWrite.descriptorCount = 1;
-        uboWrite.pBufferInfo = &material.bufferInfo;
+        uboWrite.pBufferInfo = &bufferInfo;
+
+        auto imageInfo = vk::DescriptorImageInfo{};
+        if (auto imageHandle = material.diffuseImageHandle)
+        {
+            imageInfo.imageView = *resources.images.at(imageHandle.value()).view;
+            imageInfo.sampler = *resources.images.at(imageHandle.value()).sampler;
+        }
+        else
+        {
+            imageInfo.imageView = *resources.emptyImage.view;
+            imageInfo.sampler = *resources.emptyImage.sampler;
+        }
+        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
         auto textureWrite = vk::WriteDescriptorSet{};
         textureWrite.dstSet = *materialDescriptorSets_.at(handle);
         textureWrite.dstBinding = 1;
         textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
         textureWrite.descriptorCount = 1;
-        textureWrite.pImageInfo = &material.imageInfo;
+        textureWrite.pImageInfo = &imageInfo;
 
         auto writes = std::array{uboWrite, textureWrite};
         gpuDevice_.device().updateDescriptorSets(writes, {});
@@ -102,12 +120,17 @@ void GeometryPass::regenerateDescriptorSets(std::span<BufferObject> cameraBuffer
     directionalLightDescriptor_.resize(1);
     directionalLightDescriptorSet_ = std::move(directionalLightDescriptor_.allocateSets(1)[0]);
 
+    auto bufferInfo = vk::DescriptorBufferInfo{};
+    bufferInfo.buffer = *buffers.directionalLightBuffer.buffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range = VK_WHOLE_SIZE;
+
     auto dirLightUboWrite = vk::WriteDescriptorSet{};
     dirLightUboWrite.dstSet = *directionalLightDescriptorSet_;
     dirLightUboWrite.dstBinding = 0;
-    dirLightUboWrite.descriptorType = vk::DescriptorType::eUniformBufferDynamic;
+    dirLightUboWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
     dirLightUboWrite.descriptorCount = 1;
-    dirLightUboWrite.pBufferInfo = &directionalLight.bufferInfo;
+    dirLightUboWrite.pBufferInfo = &bufferInfo;
 
     auto dirLightWrite = std::array{dirLightUboWrite};
     gpuDevice_.device().updateDescriptorSets(dirLightWrite, {});
@@ -124,10 +147,8 @@ void GeometryPass::resize(const vk::Extent2D& extent)
 
 void GeometryPass::recordCommands(uint32_t frameIndex,
                                   const vk::raii::CommandBuffer& commandBuffer,
-                                  const vk::raii::Buffer& vertexBuffer,
-                                  const vk::raii::Buffer& indexBuffer,
-                                  const MeshContainer& meshGpuData,
-                                  const MaterialContainer& materialGpuData,
+                                  const Buffers& buffers,
+                                  const Resources& resources,
                                   vk::ImageView colorTargetImageView,
                                   std::span<const DrawCommand> drawCommands)
 {
@@ -166,13 +187,19 @@ void GeometryPass::recordCommands(uint32_t frameIndex,
 
     commandBuffer.beginRendering(renderingInfo);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
-    commandBuffer.bindVertexBuffers(0, *vertexBuffer, {0});
-    commandBuffer.bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint32);
+    commandBuffer.bindVertexBuffers(0, *buffers.meshVertexBuffer.buffer, {0});
+    commandBuffer.bindIndexBuffer(*buffers.meshIndexBuffer.buffer, 0, vk::IndexType::eUint32);
 
     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                      pipelineLayout_,
                                      0,
                                      *cameraDescriptorSets_.at(frameIndex),
+                                     nullptr);
+
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                     *pipelineLayout_,
+                                     2,
+                                     *directionalLightDescriptorSet_,
                                      nullptr);
 
     commandBuffer.setViewport(
@@ -182,7 +209,7 @@ void GeometryPass::recordCommands(uint32_t frameIndex,
 
     for (const auto& drawCommand : drawCommands)
     {
-        auto& gpuMesh = meshGpuData.at(drawCommand.meshHandle);
+        auto& gpuMesh = resources.meshes.at(drawCommand.meshHandle);
         if (!gpuMesh.materialHandle)
         {
             continue;
@@ -197,18 +224,12 @@ void GeometryPass::recordCommands(uint32_t frameIndex,
                                     0,
                                     vk::ArrayProxy<const PushConstants>{pushConstants});
 
-        const auto& gpuMaterial = materialGpuData.at(gpuMesh.materialHandle.value());
+        const auto& gpuMaterial = resources.materials.at(gpuMesh.materialHandle.value());
         commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                          pipelineLayout_,
                                          1,
                                          *materialDescriptorSets_.at(gpuMesh.materialHandle.value()),
                                          gpuMaterial.bufferOffset);
-
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                         *pipelineLayout_,
-                                         2,
-                                         *directionalLightDescriptorSet_,
-                                         uint32_t{0});
 
         commandBuffer.drawIndexed(gpuMesh.indexCount, 1, gpuMesh.indexBufferOffset, gpuMesh.vertexBufferOffset, 0);
     }

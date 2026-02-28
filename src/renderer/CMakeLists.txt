@@ -3,6 +3,7 @@ add_library(Renderer STATIC)
 target_sources(Renderer
     PUBLIC
         include/renderer/buffer_object.h
+        include/renderer/buffers.h
         include/renderer/camera.h
         include/renderer/data.h
         include/renderer/descriptor_set_allocator.h
@@ -13,6 +14,7 @@ target_sources(Renderer
         include/renderer/handles.h
         include/renderer/instance.h
         include/renderer/renderer.h
+        include/renderer/resources.h
         include/renderer/swapchain.h
         include/renderer/vertex_layout.h
     PRIVATE
