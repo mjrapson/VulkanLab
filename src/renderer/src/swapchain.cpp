@@ -94,7 +94,8 @@ void Swapchain::initialize(uint32_t preferredFramesInFlight, vk::Extent2D window
     swapChainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive;
     swapChainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
     swapChainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
-    swapChainCreateInfo.presentMode = vk::PresentModeKHR::eFifo, swapChainCreateInfo.clipped = true;
+    swapChainCreateInfo.presentMode = vk::PresentModeKHR::eFifo;
+    swapChainCreateInfo.clipped = true;
 
     swapchain_ = vk::raii::SwapchainKHR(device_, swapChainCreateInfo);
     images_ = swapchain_.getImages();
