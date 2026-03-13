@@ -30,6 +30,7 @@ target_sources(Renderer
         src/gpu_device.cpp
         src/instance.cpp
         src/renderer.cpp
+        src/swapchain.cpp
 )
 
 target_include_directories(Renderer

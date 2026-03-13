@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "renderer/swapchain.h"
-
 #include <vulkan/vulkan_raii.hpp>
 
 #include <filesystem>
@@ -22,8 +20,6 @@ class GpuDevice
 
     GpuDevice(GpuDevice&& other) = delete;
     GpuDevice& operator=(GpuDevice&& other) = delete;
-
-    Swapchain createSwapchain(const vk::raii::SurfaceKHR& surface, uint32_t width, uint32_t height) const;
 
     vk::raii::CommandPool createCommandPool() const;
 
@@ -95,15 +91,13 @@ class GpuDevice
     vk::raii::DeviceMemory allocateStagingBufferMemory(const vk::raii::Buffer& buffer) const;
     vk::raii::DeviceMemory allocateImageMemory(const vk::raii::Image& image, vk::MemoryPropertyFlags properties) const;
 
-    vk::SurfaceFormatKHR getSurfaceFormat(const vk::SurfaceKHR& surface) const;
-
-    vk::Result present(const vk::PresentInfoKHR& info) const;
-
     vk::DeviceSize calculateAlignedUboStride(size_t uboSize) const;
 
     bool exceedsPushConstantLimit(size_t size) const;
 
     const vk::raii::Device& device() const;
+    const vk::raii::PhysicalDevice& physicalDevice() const;
+    const vk::raii::Queue& presentQueue() const;
 
   private:
     void pickPhysicalDevice(const vk::raii::Instance& instance);

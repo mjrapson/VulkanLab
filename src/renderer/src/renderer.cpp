@@ -30,12 +30,12 @@ Renderer::Renderer(const window::Window& window)
     : instance_{context_, window.requiredExtensions()},
       surface_{window.createVulkanSurface(instance_.instance())},
       gpuDevice_{instance_.instance(), surface_},
-      windowWidth_{window.width()},
-      windowHeight_{window.height()},
+      swapchain_{gpuDevice_.device(), gpuDevice_.physicalDevice(), surface_},
+      windowExtent_{static_cast<uint32_t>(window.width()), static_cast<uint32_t>(window.height())},
       commandPool_{gpuDevice_.createCommandPool()}
 {
     spdlog::info("Creating swapchain");
-    createSwapchain();
+    swapchain_.initialize(maxFramesInFlight, windowExtent_);
 
     spdlog::info("Creating command buffers");
     createCommandBuffers();
@@ -61,7 +61,7 @@ void Renderer::setLoadingScreenImageData(const ImageDataContainer& imageData)
 void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
 {
     renderFrame(
-        [this, &camera, &info](uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
+        [this, &camera, &info](const vk::raii::CommandBuffer& commandBuffer)
         {
             auto cameraBuffer = CameraBufferObject{};
             cameraBuffer.projection = camera.projection();
@@ -98,7 +98,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                    &directionalLightBuffer,
                    sizeof(DirectionalLightUboData));
 
-            gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
+            gpuDevice_.transitionImageLayout(swapchain_.currentImage(),
                                              commandBuffer,
                                              vk::ImageLayout::eUndefined,
                                              vk::ImageLayout::eColorAttachmentOptimal,
@@ -113,16 +113,16 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
             skyboxPass_->recordCommands(currentFrameIndex_,
                                         commandBuffer,
                                         info.skyboxHandle.value(),
-                                        swapchain_.views[imageIndex]);
+                                        swapchain_.currentImageView());
 
             geometryPass_->recordCommands(currentFrameIndex_,
                                           commandBuffer,
                                           buffers_,
                                           resources_,
-                                          swapchain_.views[imageIndex],
+                                          swapchain_.currentImageView(),
                                           info.drawCommands);
 
-            gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
+            gpuDevice_.transitionImageLayout(swapchain_.currentImage(),
                                              commandBuffer,
                                              vk::ImageLayout::eColorAttachmentOptimal,
                                              vk::ImageLayout::ePresentSrcKHR,
@@ -137,9 +137,9 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
 void Renderer::renderLoadingScreen(ImageHandle loadingScreenHandle)
 {
     renderFrame(
-        [this, &loadingScreenHandle](uint32_t imageIndex, const vk::raii::CommandBuffer& commandBuffer)
+        [this, &loadingScreenHandle](const vk::raii::CommandBuffer& commandBuffer)
         {
-            gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
+            gpuDevice_.transitionImageLayout(swapchain_.currentImage(),
                                              commandBuffer,
                                              vk::ImageLayout::eUndefined,
                                              vk::ImageLayout::eColorAttachmentOptimal,
@@ -149,9 +149,9 @@ void Renderer::renderLoadingScreen(ImageHandle loadingScreenHandle)
                                              vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
                                              vk::ImageAspectFlagBits::eColor);
 
-            loadingScreenPass_->recordCommands(commandBuffer, loadingScreenHandle, swapchain_.views[imageIndex]);
+            loadingScreenPass_->recordCommands(commandBuffer, loadingScreenHandle, swapchain_.currentImageView());
 
-            gpuDevice_.transitionImageLayout(swapchain_.images[imageIndex],
+            gpuDevice_.transitionImageLayout(swapchain_.currentImage(),
                                              commandBuffer,
                                              vk::ImageLayout::eColorAttachmentOptimal,
                                              vk::ImageLayout::ePresentSrcKHR,
@@ -165,8 +165,8 @@ void Renderer::renderLoadingScreen(ImageHandle loadingScreenHandle)
 
 void Renderer::windowResized(int width, int height)
 {
-    windowWidth_ = width;
-    windowHeight_ = height;
+    windowExtent_.width = static_cast<uint32_t>(width);
+    windowExtent_.height = static_cast<uint32_t>(height);
 
     if (width == 0 && height == 0)
     {
@@ -177,7 +177,7 @@ void Renderer::windowResized(int width, int height)
         windowMinimized_ = false;
     }
 
-    windowResized_ = true;
+    swapchain_.markOutOfDate();
 }
 
 void Renderer::setData(const AssetData& data)
@@ -250,13 +250,6 @@ void Renderer::setData(const AssetData& data)
     shadowMapPass_->regenerateDescriptorSets(buffers_);
 }
 
-void Renderer::createSwapchain()
-{
-    swapchain_ = gpuDevice_.createSwapchain(surface_,
-                                            static_cast<uint32_t>(windowWidth_),
-                                            static_cast<uint32_t>(windowHeight_));
-}
-
 void Renderer::createCommandBuffers()
 {
     commandBuffers_ = gpuDevice_.createCommandBuffers(commandPool_, maxFramesInFlight);
@@ -264,15 +257,8 @@ void Renderer::createCommandBuffers()
 
 void Renderer::createSyncObjects()
 {
-    for ([[maybe_unused]] auto _ : std::views::repeat(0, swapchain_.images.size()))
-    {
-        renderFinishedSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
-    }
-
     for ([[maybe_unused]] auto _ : std::views::repeat(0, maxFramesInFlight))
     {
-        presentCompleteSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
-
         auto fenceCreateInfo = vk::FenceCreateInfo{};
         fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
         drawFences_.emplace_back(gpuDevice_.device(), fenceCreateInfo);
@@ -302,8 +288,8 @@ void Renderer::createDirectionalLightBuffers()
 
 void Renderer::createRenderPasses()
 {
-    const auto format = swapchain_.surfaceFormat.format;
-    const auto extent = swapchain_.extent;
+    const auto format = swapchain_.imageFormat();
+    const auto extent = swapchain_.extent();
 
     loadingScreenPass_ = std::make_unique<LoadingScreenPass>(gpuDevice_, format, extent);
     skyboxPass_ = std::make_unique<SkyboxPass>(gpuDevice_, format, extent);
@@ -311,24 +297,7 @@ void Renderer::createRenderPasses()
     shadowMapPass_ = std::make_unique<ShadowMapPass>(gpuDevice_);
 }
 
-void Renderer::recreateSwapchain()
-{
-    if (windowMinimized_)
-    {
-        return;
-    }
-
-    gpuDevice_.device().waitIdle();
-
-    swapchain_ = Swapchain{};
-    createSwapchain();
-
-    loadingScreenPass_->resize(swapchain_.extent);
-    skyboxPass_->resize(swapchain_.extent);
-    geometryPass_->resize(swapchain_.extent);
-}
-
-void Renderer::renderFrame(std::function<void(uint32_t, const vk::raii::CommandBuffer&)> recordCommands)
+void Renderer::renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands)
 {
     if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
         != vk::Result::eSuccess)
@@ -336,19 +305,23 @@ void Renderer::renderFrame(std::function<void(uint32_t, const vk::raii::CommandB
         throw std::runtime_error("Device unable to wait for fence to signal");
     }
 
-    auto result = vk::Result{};
-    auto imageIndex = uint32_t{};
-
-    try
+    if (windowMinimized_)
     {
-        std::tie(result,
-                 imageIndex) = swapchain_.swapchain.acquireNextImage(UINT64_MAX,
-                                                                     *presentCompleteSemaphores_.at(currentFrameIndex_),
-                                                                     nullptr);
+        return;
     }
-    catch (const vk::OutOfDateKHRError&)
+
+    if (swapchain_.outOfDate())
     {
-        recreateSwapchain();
+        gpuDevice_.device().waitIdle();
+        swapchain_.initialize(maxFramesInFlight, windowExtent_);
+
+        loadingScreenPass_->resize(swapchain_.extent());
+        skyboxPass_->resize(swapchain_.extent());
+        geometryPass_->resize(swapchain_.extent());
+    }
+
+    if (!swapchain_.acquireNextImage())
+    {
         return;
     }
 
@@ -356,12 +329,12 @@ void Renderer::renderFrame(std::function<void(uint32_t, const vk::raii::CommandB
     commandBuffer.reset();
     commandBuffer.begin({});
 
-    recordCommands(imageIndex, commandBuffer);
+    recordCommands(commandBuffer);
 
     commandBuffer.end();
 
-    auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
-    auto signalSemaphores = std::array{*renderFinishedSemaphores_.at(imageIndex)};
+    auto waitSemaphores = std::array{*swapchain_.currentPresentCompleteSemaphore()};
+    auto signalSemaphores = std::array{*swapchain_.currentRenderFinishedSemaphore()};
 
     gpuDevice_.device().resetFences(*drawFences_.at(currentFrameIndex_));
     gpuDevice_.submitCommandBuffer(commandBuffer,
@@ -370,32 +343,11 @@ void Renderer::renderFrame(std::function<void(uint32_t, const vk::raii::CommandB
                                    signalSemaphores,
                                    *drawFences_.at(currentFrameIndex_));
 
-    auto presentInfo = vk::PresentInfoKHR{};
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &*renderFinishedSemaphores_.at(imageIndex);
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &*swapchain_.swapchain;
-    presentInfo.pImageIndices = &imageIndex;
-
-    try
-    {
-        result = gpuDevice_.present(presentInfo);
-    }
-    catch (const vk::OutOfDateKHRError&)
-    {
-        recreateSwapchain();
-        return;
-    }
-
-    if (result == vk::Result::eSuboptimalKHR || windowResized_)
-    {
-        windowResized_ = false;
-        recreateSwapchain();
-    }
-
-    currentFrameIndex_ = (currentFrameIndex_ + 1) & maxFramesInFlight;
+    swapchain_.present(gpuDevice_.presentQueue());
 
     gpuDevice_.device().waitIdle();
+
+    currentFrameIndex_ = (currentFrameIndex_ + 1) % maxFramesInFlight;
 }
 
 ImageContainer Renderer::uploadImages(const ImageDataContainer& data)

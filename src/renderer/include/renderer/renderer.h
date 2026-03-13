@@ -64,16 +64,13 @@ class Renderer
     void setData(const AssetData& data);
 
   private:
-    void createSwapchain();
     void createCommandBuffers();
     void createSyncObjects();
     void createCameraBuffers();
     void createDirectionalLightBuffers();
     void createRenderPasses();
 
-    void recreateSwapchain();
-
-    void renderFrame(std::function<void(uint32_t, const vk::raii::CommandBuffer&)> recordCommands);
+    void renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands);
 
     ImageContainer uploadImages(const ImageDataContainer& data);
     void uploadMeshes(const MeshDataContainer& data);
@@ -87,15 +84,11 @@ class Renderer
     GpuDevice gpuDevice_;
     Swapchain swapchain_;
 
-    int windowWidth_{0};
-    int windowHeight_{0};
-    bool windowResized_{false};
+    vk::Extent2D windowExtent_;
     bool windowMinimized_{false};
 
     vk::raii::CommandPool commandPool_{nullptr};
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
-    std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
-    std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
 
