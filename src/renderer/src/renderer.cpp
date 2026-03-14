@@ -6,6 +6,7 @@
 #include "render_passes/skybox_pass.h"
 #include "renderer/camera.h"
 #include "renderer/data.h"
+#include "renderer/transition_barrier.h"
 
 #include <core/box.h>
 #include <window/window.h>
@@ -98,15 +99,11 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                    &directionalLightBuffer,
                    sizeof(DirectionalLightUboData));
 
-            gpuDevice_.transitionImageLayout(swapchain_.currentImage(),
-                                             commandBuffer,
-                                             vk::ImageLayout::eUndefined,
-                                             vk::ImageLayout::eColorAttachmentOptimal,
-                                             {},
-                                             vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
-                                             vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                                             vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
-                                             vk::ImageAspectFlagBits::eColor);
+            transitionImageLayout(swapchain_.currentImage(),
+                                  commandBuffer,
+                                  vk::ImageLayout::eUndefined,
+                                  vk::ImageLayout::eColorAttachmentOptimal,
+                                  vk::ImageAspectFlagBits::eColor);
 
             shadowMapPass_->recordCommands(commandBuffer, buffers_, resources_, info.drawCommands);
 
@@ -122,15 +119,11 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                                           swapchain_.currentImageView(),
                                           info.drawCommands);
 
-            gpuDevice_.transitionImageLayout(swapchain_.currentImage(),
-                                             commandBuffer,
-                                             vk::ImageLayout::eColorAttachmentOptimal,
-                                             vk::ImageLayout::ePresentSrcKHR,
-                                             vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
-                                             {},                                                 // dstAccessMask
-                                             vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                                             vk::PipelineStageFlagBits2::eBottomOfPipe,          // dstStage
-                                             vk::ImageAspectFlagBits::eColor);
+            transitionImageLayout(swapchain_.currentImage(),
+                                  commandBuffer,
+                                  vk::ImageLayout::eColorAttachmentOptimal,
+                                  vk::ImageLayout::ePresentSrcKHR,
+                                  vk::ImageAspectFlagBits::eColor);
         });
 }
 
@@ -139,27 +132,19 @@ void Renderer::renderLoadingScreen(ImageHandle loadingScreenHandle)
     renderFrame(
         [this, &loadingScreenHandle](const vk::raii::CommandBuffer& commandBuffer)
         {
-            gpuDevice_.transitionImageLayout(swapchain_.currentImage(),
-                                             commandBuffer,
-                                             vk::ImageLayout::eUndefined,
-                                             vk::ImageLayout::eColorAttachmentOptimal,
-                                             {},
-                                             vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
-                                             vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                                             vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
-                                             vk::ImageAspectFlagBits::eColor);
+            transitionImageLayout(swapchain_.currentImage(),
+                                  commandBuffer,
+                                  vk::ImageLayout::eUndefined,
+                                  vk::ImageLayout::eColorAttachmentOptimal,
+                                  vk::ImageAspectFlagBits::eColor);
 
             loadingScreenPass_->recordCommands(commandBuffer, loadingScreenHandle, swapchain_.currentImageView());
 
-            gpuDevice_.transitionImageLayout(swapchain_.currentImage(),
-                                             commandBuffer,
-                                             vk::ImageLayout::eColorAttachmentOptimal,
-                                             vk::ImageLayout::ePresentSrcKHR,
-                                             vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
-                                             {},                                                 // dstAccessMask
-                                             vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-                                             vk::PipelineStageFlagBits2::eBottomOfPipe,          // dstStage
-                                             vk::ImageAspectFlagBits::eColor);
+            transitionImageLayout(swapchain_.currentImage(),
+                                  commandBuffer,
+                                  vk::ImageLayout::eColorAttachmentOptimal,
+                                  vk::ImageLayout::ePresentSrcKHR,
+                                  vk::ImageAspectFlagBits::eColor);
         });
 }
 
@@ -205,27 +190,19 @@ void Renderer::setData(const AssetData& data)
     std::memcpy(mappedMemory, imageData.data(), imageSize);
     stagingMemory.unmapMemory();
 
-    gpuDevice_.transitionImageLayout(*resources_.emptyImage.image,
-                                     *cmd,
-                                     vk::ImageLayout::eUndefined,
-                                     vk::ImageLayout::eTransferDstOptimal,
-                                     {}, // srcAccess
-                                     vk::AccessFlagBits2::eTransferWrite,
-                                     vk::PipelineStageFlagBits2::eTopOfPipe,
-                                     vk::PipelineStageFlagBits2::eTransfer,
-                                     vk::ImageAspectFlagBits::eColor);
+    transitionImageLayout(*resources_.emptyImage.image,
+                          *cmd,
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eTransferDstOptimal,
+                          vk::ImageAspectFlagBits::eColor);
 
     gpuDevice_.copyBufferToImage(cmd, stagingBuffer, resources_.emptyImage.image, 1, 1);
 
-    gpuDevice_.transitionImageLayout(*resources_.emptyImage.image,
-                                     *cmd,
-                                     vk::ImageLayout::eTransferDstOptimal,
-                                     vk::ImageLayout::eShaderReadOnlyOptimal,
-                                     vk::AccessFlagBits2::eTransferWrite,
-                                     vk::AccessFlagBits2::eShaderRead,
-                                     vk::PipelineStageFlagBits2::eTransfer,
-                                     vk::PipelineStageFlagBits2::eFragmentShader,
-                                     vk::ImageAspectFlagBits::eColor);
+    transitionImageLayout(*resources_.emptyImage.image,
+                          *cmd,
+                          vk::ImageLayout::eTransferDstOptimal,
+                          vk::ImageLayout::eShaderReadOnlyOptimal,
+                          vk::ImageAspectFlagBits::eColor);
 
     resources_.emptyImage.view = gpuDevice_.createImageView(resources_.emptyImage.image);
     resources_.emptyImage.sampler = gpuDevice_.createSampler();
@@ -372,27 +349,19 @@ ImageContainer Renderer::uploadImages(const ImageDataContainer& data)
         std::memcpy(mappedMemory, imageData.data.data(), imageSize);
         stagingMemory.unmapMemory();
 
-        gpuDevice_.transitionImageLayout(*image.image,
-                                         *cmd,
-                                         vk::ImageLayout::eUndefined,
-                                         vk::ImageLayout::eTransferDstOptimal,
-                                         {}, // srcAccess
-                                         vk::AccessFlagBits2::eTransferWrite,
-                                         vk::PipelineStageFlagBits2::eTopOfPipe,
-                                         vk::PipelineStageFlagBits2::eTransfer,
-                                         vk::ImageAspectFlagBits::eColor);
+        transitionImageLayout(*image.image,
+                              *cmd,
+                              vk::ImageLayout::eUndefined,
+                              vk::ImageLayout::eTransferDstOptimal,
+                              vk::ImageAspectFlagBits::eColor);
 
         gpuDevice_.copyBufferToImage(cmd, stagingBuffer, image.image, imageData.width, imageData.height);
 
-        gpuDevice_.transitionImageLayout(*image.image,
-                                         *cmd,
-                                         vk::ImageLayout::eTransferDstOptimal,
-                                         vk::ImageLayout::eShaderReadOnlyOptimal,
-                                         vk::AccessFlagBits2::eTransferWrite,
-                                         vk::AccessFlagBits2::eShaderRead,
-                                         vk::PipelineStageFlagBits2::eTransfer,
-                                         vk::PipelineStageFlagBits2::eFragmentShader,
-                                         vk::ImageAspectFlagBits::eColor);
+        transitionImageLayout(*image.image,
+                              *cmd,
+                              vk::ImageLayout::eTransferDstOptimal,
+                              vk::ImageLayout::eShaderReadOnlyOptimal,
+                              vk::ImageAspectFlagBits::eColor);
 
         image.view = gpuDevice_.createImageView(image.image);
         image.sampler = gpuDevice_.createSampler();
@@ -533,16 +502,12 @@ void Renderer::uploadSkyboxes(const SkyboxDataContainer& data)
         auto stagingBuffer = gpuDevice_.createStagingBuffer(imageSize * 6);
         auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
 
-        gpuDevice_.transitionImageLayout(*skybox.image,
-                                         *cmd,
-                                         vk::ImageLayout::eUndefined,
-                                         vk::ImageLayout::eTransferDstOptimal,
-                                         {}, // srcAccess
-                                         vk::AccessFlagBits2::eTransferWrite,
-                                         vk::PipelineStageFlagBits2::eTopOfPipe,
-                                         vk::PipelineStageFlagBits2::eTransfer,
-                                         vk::ImageAspectFlagBits::eColor,
-                                         6);
+        transitionImageLayout(*skybox.image,
+                              *cmd,
+                              vk::ImageLayout::eUndefined,
+                              vk::ImageLayout::eTransferDstOptimal,
+                              vk::ImageAspectFlagBits::eColor,
+                              6);
         void* mappedMemory = stagingMemory.mapMemory(0, VK_WHOLE_SIZE);
         for (auto face = size_t{0}; face < 6; ++face)
         {
@@ -551,16 +516,12 @@ void Renderer::uploadSkyboxes(const SkyboxDataContainer& data)
         }
         stagingMemory.unmapMemory();
         gpuDevice_.copyBufferToImage(cmd, stagingBuffer, skybox.image, width, height, 6);
-        gpuDevice_.transitionImageLayout(*skybox.image,
-                                         *cmd,
-                                         vk::ImageLayout::eTransferDstOptimal,
-                                         vk::ImageLayout::eShaderReadOnlyOptimal,
-                                         vk::AccessFlagBits2::eTransferWrite,
-                                         vk::AccessFlagBits2::eShaderRead,
-                                         vk::PipelineStageFlagBits2::eTransfer,
-                                         vk::PipelineStageFlagBits2::eFragmentShader,
-                                         vk::ImageAspectFlagBits::eColor,
-                                         6);
+        transitionImageLayout(*skybox.image,
+                              *cmd,
+                              vk::ImageLayout::eTransferDstOptimal,
+                              vk::ImageLayout::eShaderReadOnlyOptimal,
+                              vk::ImageAspectFlagBits::eColor,
+                              6);
 
         skybox.view = gpuDevice_.createCubemapImageView(skybox.image);
         skybox.sampler = gpuDevice_.createSampler();

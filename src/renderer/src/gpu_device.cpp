@@ -381,40 +381,6 @@ vk::raii::Sampler GpuDevice::createSampler() const
     return vk::raii::Sampler(device_, samplerInfo);
 }
 
-void GpuDevice::transitionImageLayout(const vk::Image& image,
-                                      const vk::CommandBuffer& commandBuffer,
-                                      vk::ImageLayout oldLayout,
-                                      vk::ImageLayout newLayout,
-                                      vk::AccessFlags2 srcAccessMask,
-                                      vk::AccessFlags2 dstAccessMask,
-                                      vk::PipelineStageFlags2 srcStageMask,
-                                      vk::PipelineStageFlags2 dstStageMask,
-                                      const vk::ImageAspectFlags& aspectFlags,
-                                      uint32_t layerCount) const
-{
-    auto barrier = vk::ImageMemoryBarrier2{};
-    barrier.srcStageMask = srcStageMask;
-    barrier.srcAccessMask = srcAccessMask;
-    barrier.dstStageMask = dstStageMask;
-    barrier.dstAccessMask = dstAccessMask;
-    barrier.oldLayout = oldLayout;
-    barrier.newLayout = newLayout;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = aspectFlags;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = layerCount;
-
-    auto dependencyInfo = vk::DependencyInfo{};
-    dependencyInfo.imageMemoryBarrierCount = 1;
-    dependencyInfo.pImageMemoryBarriers = &barrier;
-
-    commandBuffer.pipelineBarrier2(dependencyInfo);
-}
-
 vk::raii::DeviceMemory GpuDevice::allocateBufferMemory(const vk::raii::Buffer& buffer,
                                                        vk::MemoryPropertyFlags properties) const
 {

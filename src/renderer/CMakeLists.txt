@@ -16,6 +16,7 @@ target_sources(Renderer
         include/renderer/renderer.h
         include/renderer/resources.h
         include/renderer/swapchain.h
+        include/renderer/transition_barrier.h
         include/renderer/vertex_layout.h
     PRIVATE
         src/render_passes/geometry_pass.cpp
@@ -31,6 +32,7 @@ target_sources(Renderer
         src/instance.cpp
         src/renderer.cpp
         src/swapchain.cpp
+        src/transition_barrier.cpp
 )
 
 target_include_directories(Renderer

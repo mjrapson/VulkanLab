@@ -6,6 +6,7 @@
 #include "renderer/buffers.h"
 #include "renderer/gpu_device.h"
 #include "renderer/resources.h"
+#include "renderer/transition_barrier.h"
 #include "renderer/vertex_layout.h"
 
 #include <core/file_system.h>
@@ -152,16 +153,11 @@ void GeometryPass::recordCommands(uint32_t frameIndex,
                                   vk::ImageView colorTargetImageView,
                                   std::span<const DrawCommand> drawCommands)
 {
-    gpuDevice_.transitionImageLayout(
-        depthImage_,
-        commandBuffer,
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eDepthAttachmentOptimal,
-        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-        vk::ImageAspectFlagBits::eDepth);
+    transitionImageLayout(depthImage_,
+                          commandBuffer,
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eDepthAttachmentOptimal,
+                          vk::ImageAspectFlagBits::eDepth);
 
     const auto clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 

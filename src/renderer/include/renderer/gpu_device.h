@@ -74,17 +74,6 @@ class GpuDevice
 
     vk::raii::Sampler createSampler() const;
 
-    void transitionImageLayout(const vk::Image& image,
-                               const vk::CommandBuffer& commandBuffer,
-                               vk::ImageLayout oldLayout,
-                               vk::ImageLayout newLayout,
-                               vk::AccessFlags2 srcAccessMask,
-                               vk::AccessFlags2 dstAccessMask,
-                               vk::PipelineStageFlags2 srcStageMask,
-                               vk::PipelineStageFlags2 dstStageMask,
-                               const vk::ImageAspectFlags& aspectFlags,
-                               uint32_t layerCount = 1) const;
-
     vk::raii::DeviceMemory allocateBufferMemory(const vk::raii::Buffer& buffer,
                                                 vk::MemoryPropertyFlags properties) const;
     vk::raii::DeviceMemory allocateDeviceBufferMemory(const vk::raii::Buffer& buffer) const;
