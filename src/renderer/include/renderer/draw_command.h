@@ -11,7 +11,8 @@ namespace renderer
 {
 struct DrawCommand
 {
-    renderer::MeshHandle meshHandle;
+    MeshHandle meshHandle;
+    MaterialHandle materialHandle;
     glm::mat4 transform;
 };
 } // namespace renderer

@@ -6,6 +6,7 @@ target_sources(Core
         include/core/file_system.h
         include/core/handle.h
         include/core/input_handler.h
+        include/core/memory.h
         include/core/vertex.h
     PRIVATE
         src/file_system.cpp

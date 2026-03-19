@@ -20,6 +20,7 @@ class RenderSystem
   public:
     RenderSystem(renderer::Renderer& renderer, World& world);
 
+    void initialize();
     void update(const renderer::Camera& camera);
 
   private:

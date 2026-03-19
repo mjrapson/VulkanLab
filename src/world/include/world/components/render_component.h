@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include "world/prefab.h"
+#include "assets/prefab.h"
 
 namespace world
 {
 struct RenderComponent
 {
-    Prefab* prefab;
+    assets::Prefab* prefab{nullptr};
 };
 } // namespace world

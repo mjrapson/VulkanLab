@@ -3,12 +3,17 @@
 
 #include "world/world.h"
 
+#include <assets/prefab.h>
+#include <assets/skybox.h>
+
 namespace world
 {
 World::World(renderer::Renderer& renderer)
     : renderSystem_{renderer, *this}
 {
 }
+
+World::~World() = default;
 
 Entity World::createEntity()
 {
@@ -25,13 +30,13 @@ void World::destroyEntity(Entity entity)
         components_);
 }
 
-void World::addPrefab(const std::string& name, std::unique_ptr<Prefab> prefab)
+void World::addPrefab(const std::string& name, std::unique_ptr<assets::Prefab> prefab)
 {
     assert(!prefabs_.contains(name) && "Prefab already exists and will be overwritten");
     prefabs_[name] = std::move(prefab);
 }
 
-Prefab* World::prefab(std::string_view name) const
+assets::Prefab* World::prefab(std::string_view name) const
 {
     if (auto itr = prefabs_.find(std::string{name}); itr != prefabs_.end())
     {
@@ -39,6 +44,12 @@ Prefab* World::prefab(std::string_view name) const
     }
 
     return nullptr;
+}
+
+void World::addSkybox(const std::string& name, std::unique_ptr<assets::Skybox> skybox)
+{
+    assert(!skyboxes_.contains(name) && "Skybox already exists and will be overwritten");
+    skyboxes_[name] = std::move(skybox);
 }
 
 void World::setSkybox(renderer::SkyboxHandle handle)
@@ -59,6 +70,11 @@ void World::setGlobalLightDirection(const glm::vec3& direction)
 const glm::vec3& World::globalLightDirection() const
 {
     return directionalLight_.direction;
+}
+
+void World::initialize()
+{
+    renderSystem_.initialize();
 }
 
 void World::update(const renderer::Camera& camera)

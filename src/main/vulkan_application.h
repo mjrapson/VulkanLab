@@ -4,7 +4,6 @@
 #pragma once
 
 #include <renderer/camera.h>
-#include <renderer/data.h>
 
 #include <filesystem>
 #include <future>
@@ -19,6 +18,11 @@ namespace window
 {
 class Window;
 } // namespace window
+
+namespace assets
+{
+class LoadingScreen;
+}
 
 namespace world
 {
@@ -40,7 +44,6 @@ class VulkanApplication
     struct LoadResult
     {
         std::unique_ptr<world::World> world;
-        renderer::AssetData data;
     };
 
     void run();
@@ -55,7 +58,7 @@ class VulkanApplication
     renderer::Camera camera_;
 
     ApplicationState currentState_{ApplicationState::SceneLoading};
-    renderer::ImageHandle loadingScreenHandle_;
+    std::unique_ptr<assets::LoadingScreen> loadingScreen_{nullptr};
     std::future<LoadResult> sceneLoadFuture_;
 
     std::unique_ptr<world::World> activeWorld_{nullptr};

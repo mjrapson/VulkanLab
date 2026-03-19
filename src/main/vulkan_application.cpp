@@ -6,6 +6,9 @@
 #include "gltf_loader.h"
 #include "image_loader.h"
 
+#include <assets/loading_screen.h>
+#include <assets/prefab.h>
+#include <assets/skybox.h>
 #include <core/file_system.h>
 #include <core/input_handler.h>
 #include <renderer/camera.h>
@@ -36,28 +39,22 @@ VulkanApplication::LoadResult loadSceneData(const std::filesystem::path& path, r
     auto scene = scene::loadScene(path);
 
     // 2. Load assets
-    auto pendingAssetData = renderer::AssetData{};
-
-    for (auto& prefabDef : scene->prefabs)
+    for (const auto& prefabDef : scene->prefabs)
     {
-        world->addPrefab(prefabDef.name, loadGLTFModel(core::getPrefabsDir() / prefabDef.path, pendingAssetData));
+        world->addPrefab(prefabDef.name, loadGLTFModel(core::getPrefabsDir() / prefabDef.path));
     }
 
-    for (auto& skyboxDef : scene->skyboxes)
+    for (const auto& skyboxDef : scene->skyboxes)
     {
-        auto skyboxData = renderer::SkyboxData{};
-        skyboxData.imageData[0] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pxPath);
-        skyboxData.imageData[1] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pyPath);
-        skyboxData.imageData[2] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pzPath);
-        skyboxData.imageData[3] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nxPath);
-        skyboxData.imageData[4] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nyPath);
-        skyboxData.imageData[5] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nzPath);
+        auto skyboxImages = std::array<std::unique_ptr<assets::ImageData>, 6>{};
+        skyboxImages[0] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pxPath);
+        skyboxImages[1] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pyPath);
+        skyboxImages[2] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.pzPath);
+        skyboxImages[3] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nxPath);
+        skyboxImages[4] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nyPath);
+        skyboxImages[5] = createImageFromPath(core::getSkyboxesDir() / skyboxDef.nzPath);
 
-        const auto handle = renderer::SkyboxHandleGenerator::generate();
-
-        world->setSkybox(handle);
-
-        pendingAssetData.skyboxData.emplace(handle, std::move(skyboxData));
+        world->addSkybox(skyboxDef.name, std::make_unique<assets::Skybox>(std::move(skyboxImages)));
     }
 
     // 3. Create entities
@@ -81,21 +78,17 @@ VulkanApplication::LoadResult loadSceneData(const std::filesystem::path& path, r
 
     world->setGlobalLightDirection(scene->directionalLight.direction);
 
-    return VulkanApplication::LoadResult{std::move(world), std::move(pendingAssetData)};
+    return VulkanApplication::LoadResult{std::move(world)};
 }
 
 VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer& renderer)
     : window_{window},
-      renderer_{renderer},
-      loadingScreenHandle_{renderer::ImageHandleGenerator::generate()}
+      renderer_{renderer}
 {
-
-    // Support only one loading screen for now, but later map multiple handles for different screens
-    auto loadingScreenImageData = renderer::ImageDataContainer{};
-    loadingScreenImageData.emplace(loadingScreenHandle_,
-                                   createImageFromPath(core::getTexturesDir() / "loading_screen.png"));
-
-    renderer_.setLoadingScreenImageData(loadingScreenImageData);
+    loadingScreen_ = std::make_unique<assets::LoadingScreen>(
+        createImageFromPath(core::getTexturesDir() / "loading_screen.png"));
+    loadingScreen_->setRenderHandle(
+        renderer_.addLoadingScreenImage(loadingScreen_->width(), loadingScreen_->height(), loadingScreen_->data()));
 }
 
 VulkanApplication::~VulkanApplication() = default;
@@ -124,32 +117,41 @@ void VulkanApplication::run()
             camera_.aspectRatio = getAspectRatio(window_.width(), window_.height());
         }
 
+        updateCamera(static_cast<float>(deltaTime));
+
+        /*
+            If we are loading a scene and it is ready - transition to it. All CPU data is ready,
+            but we need to upload GPU data in this loop as currently we only sync with the GPU on this
+            thread.
+
+            If the the async task loading the CPU data for the scene isn't ready, continue displaying
+            the loading screen.
+        */
         if (currentState_ == ApplicationState::SceneLoading)
         {
             if (sceneLoadFuture_.valid()
                 && sceneLoadFuture_.wait_for(std::chrono::seconds{0}) == std::future_status::ready)
             {
-                auto result = sceneLoadFuture_.get();
-
-                activeWorld_ = std::move(result.world);
-                renderer_.setData(result.data);
-
+                /* Reset camera - this should really be defined by the scene where it wants to start */
                 camera_.position = glm::vec3{0.0f, 8.0f, 24.0f};
-
                 currentState_ = ApplicationState::SceneActive;
+
+                /* Update the active world */
+                auto result = sceneLoadFuture_.get();
+                activeWorld_ = std::move(result.world);
+                activeWorld_->initialize();
             }
             else
             {
-                renderer_.renderLoadingScreen(loadingScreenHandle_);
+                renderer_.renderLoadingScreen(*loadingScreen_->renderHandle());
             }
         }
         else if (currentState_ == ApplicationState::SceneActive && activeWorld_)
         {
-            updateCamera(static_cast<float>(deltaTime));
-
             activeWorld_->update(camera_);
         }
 
+        /* Crude FPS limit - this needs to be replaced by a proper frame sync */
         const auto frameFinishTime = std::chrono::steady_clock::now();
         const auto frameDuration = frameFinishTime - frameStartTime;
         if (frameDuration < maxFps)

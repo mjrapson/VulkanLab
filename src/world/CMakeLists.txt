@@ -7,7 +7,6 @@ target_sources(World
         include/world/systems/render_system.h
         include/world/directional_light.h
         include/world/entity.h
-        include/world/prefab.h
         include/world/world.h
     PRIVATE
         src/systems/render_system.cpp
@@ -24,6 +23,7 @@ target_link_libraries(World
         Core
         Scene
         Renderer
+        Assets
         spdlog
         pch
 )

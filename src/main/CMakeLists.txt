@@ -24,6 +24,7 @@ target_link_libraries(VulkanDemo
     Window
     Scene
     Renderer
+    Assets
     World
     glfw
     spdlog

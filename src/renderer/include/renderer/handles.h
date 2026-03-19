@@ -5,29 +5,13 @@
 
 #include <core/handle.h>
 
+#include "renderer/gpu_objects.h"
+
 namespace renderer
 {
-struct MaterialTag
-{
-};
-using MaterialHandle = core::Handle<MaterialTag>;
-using MaterialHandleGenerator = core::HandleGenerator<MaterialTag>;
-
-struct MeshTag
-{
-};
-using MeshHandle = core::Handle<MeshTag>;
-using MeshHandleGenerator = core::HandleGenerator<MeshTag>;
-
-struct ImageTag
-{
-};
-using ImageHandle = core::Handle<ImageTag>;
-using ImageHandleGenerator = core::HandleGenerator<ImageTag>;
-
-struct SkyboxTag
-{
-};
-using SkyboxHandle = core::Handle<SkyboxTag>;
-using SkyboxHandleGenerator = core::HandleGenerator<SkyboxTag>;
+using MaterialHandle = core::Handle<Material>;
+using MeshHandle = core::Handle<Mesh>;
+using ImageHandle = core::Handle<Image>;
+using SkyboxHandle = core::Handle<Skybox>;
+using LoadingScreenHandle = core::Handle<LoadingScreen>;
 } // namespace renderer

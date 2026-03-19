@@ -5,8 +5,11 @@
 
 #include "image_loader.h"
 
-#include <renderer/data.h>
-#include <world/prefab.h>
+#include <assets/image.h>
+#include <assets/image_data.h>
+#include <assets/material.h>
+#include <assets/mesh.h>
+#include <assets/prefab.h>
 
 #include <core/vertex.h>
 
@@ -30,6 +33,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <memory>
 #include <vector>
 
 glm::vec3 readColor(const std::vector<double>& color)
@@ -88,12 +92,12 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
     const float* normals = reinterpret_cast<const float*>(
         &normalBuffer.data[normalBufferView.byteOffset + normalAcessor.byteOffset]);
 
-    const auto& texAcessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
-    const auto& texBufferView = model.bufferViews[texAcessor.bufferView];
-    const auto& texBuffer = model.buffers[texBufferView.buffer];
+    // const auto& texAcessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+    // const auto& texBufferView = model.bufferViews[texAcessor.bufferView];
+    // const auto& texBuffer = model.buffers[texBufferView.buffer];
 
-    const float* texcoords = reinterpret_cast<const float*>(
-        &texBuffer.data[texBufferView.byteOffset + texAcessor.byteOffset]);
+    // const float* texcoords = reinterpret_cast<const float*>(
+    //     &texBuffer.data[texBufferView.byteOffset + texAcessor.byteOffset]);
 
     auto vertices = std::vector<core::Vertex>{};
     for (auto i = size_t{0}; i < posAcessor.count; ++i)
@@ -101,7 +105,7 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
         auto v = core::Vertex{};
         v.position = glm::vec3(positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]);
         v.normal = glm::vec3(normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]);
-        v.textureUV = glm::vec2(texcoords[i * 2 + 0], texcoords[i * 2 + 1]);
+        // v.textureUV = glm::vec2(texcoords[i * 2 + 0], texcoords[i * 2 + 1]);
         vertices.push_back(v);
     }
 
@@ -111,8 +115,8 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
 void parseNode(int index,
                tinygltf::Model& model,
                const glm::mat4& parentTransform,
-               world::Prefab& prefab,
-               const std::vector<std::vector<renderer::MeshHandle>>& meshHandles)
+               assets::Prefab& prefab,
+               const std::vector<std::vector<assets::Mesh*>>& meshCache)
 {
     const auto& node = model.nodes[index];
 
@@ -148,19 +152,19 @@ void parseNode(int index,
 
     if (node.mesh >= 0)
     {
-        auto meshInstance = world::MeshInstance{};
-        meshInstance.subMeshes = meshHandles.at(node.mesh);
+        auto meshInstance = assets::MeshInstance{};
+        meshInstance.subMeshes = meshCache.at(node.mesh);
         meshInstance.transform = nodeToPrefab;
         prefab.meshInstances.push_back(std::move(meshInstance));
     }
 
     for (const auto& childIndex : node.children)
     {
-        parseNode(childIndex, model, nodeToPrefab, prefab, meshHandles);
+        parseNode(childIndex, model, nodeToPrefab, prefab, meshCache);
     }
 }
 
-std::unique_ptr<world::Prefab> loadGLTFModel(const std::filesystem::path& path, renderer::AssetData& assetData)
+std::unique_ptr<assets::Prefab> loadGLTFModel(const std::filesystem::path& path)
 {
     if (path.extension() != ".glb")
     {
@@ -190,64 +194,61 @@ std::unique_ptr<world::Prefab> loadGLTFModel(const std::filesystem::path& path, 
         return nullptr;
     }
 
-    auto imageHandles = std::unordered_map<std::string, renderer::ImageHandle>{};
-    auto materialHandles = std::unordered_map<std::string, renderer::MaterialHandle>{};
-    auto meshHandles = std::vector<std::vector<renderer::MeshHandle>>{};
+    auto imageCache = std::unordered_map<std::string, assets::Image*>{};
+    auto materialCache = std::unordered_map<std::string, assets::Material*>{};
+    auto meshCache = std::vector<std::vector<assets::Mesh*>>{};
 
-    auto prefab = std::make_unique<world::Prefab>();
+    auto prefab = std::make_unique<assets::Prefab>();
 
     for (const auto& tinyGltfImage : model.images)
     {
-        const auto handle = renderer::ImageHandleGenerator::generate();
-
-        imageHandles.emplace(tinyGltfImage.name, handle);
-
-        assetData.imageData.emplace(
-            handle,
+        auto image = std::make_unique<assets::Image>(
             createImageFromData(tinyGltfImage.width, tinyGltfImage.height, tinyGltfImage.image));
+
+        imageCache.emplace(tinyGltfImage.name, image.get());
+        prefab->images.push_back(std::move(image));
     }
 
     for (auto& gltfMaterial : model.materials)
     {
-        const auto handle = renderer::MaterialHandleGenerator::generate();
+        auto material = std::make_unique<assets::Material>();
 
-        materialHandles.emplace(gltfMaterial.name, handle);
-
-        auto materialData = renderer::MaterialData{};
-        materialData.diffuseColour = readColor(gltfMaterial.pbrMetallicRoughness.baseColorFactor);
+        material->setDiffuseColour(readColor(gltfMaterial.pbrMetallicRoughness.baseColorFactor));
 
         if (const auto index = gltfMaterial.pbrMetallicRoughness.baseColorTexture.index; index >= 0)
         {
-            materialData.diffuseImage = imageHandles.at(model.images[model.textures[index].source].name);
+            material->setDiffuseTexture(imageCache.at(model.images[model.textures[index].source].name));
         }
 
-        assetData.materialData.emplace(handle, std::move(materialData));
+        materialCache.emplace(gltfMaterial.name, material.get());
+        prefab->materials.push_back(std::move(material));
     }
 
     for (auto& gltfMesh : model.meshes)
     {
-        auto subMeshHandles = std::vector<renderer::MeshHandle>();
+        auto subMeshCache = std::vector<assets::Mesh*>();
         for (auto& primitive : gltfMesh.primitives)
         {
-            const auto handle = renderer::MeshHandleGenerator::generate();
+            auto mesh = std::make_unique<assets::Mesh>();
+            mesh->setVertices(readVertices(primitive, model));
+            mesh->setIndices(readIndices(primitive, model));
 
-            auto meshData = renderer::MeshData{};
-            meshData.vertices = readVertices(primitive, model);
-            meshData.indices = readIndices(primitive, model);
-            meshData.materialHandle = materialHandles.at(model.materials[primitive.material].name);
+            if (primitive.material >= 0)
+            {
+                mesh->setMaterial(materialCache.at(model.materials[primitive.material].name));
+            }
 
-            subMeshHandles.push_back(handle);
-
-            assetData.meshData.emplace(handle, std::move(meshData));
+            subMeshCache.push_back(mesh.get());
+            prefab->meshes.push_back(std::move(mesh));
         }
-        meshHandles.push_back(subMeshHandles);
+        meshCache.push_back(subMeshCache);
     }
 
     auto& gltfScene = model.scenes[model.defaultScene];
 
     for (auto& nodeIndex : gltfScene.nodes)
     {
-        parseNode(nodeIndex, model, glm::mat4{1.0f}, *prefab, meshHandles);
+        parseNode(nodeIndex, model, glm::mat4{1.0f}, *prefab, meshCache);
     }
 
     return prefab;

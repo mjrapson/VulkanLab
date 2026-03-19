@@ -3,6 +3,8 @@
 
 #include "image_loader.h"
 
+#include <assets/image_data.h>
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wconversion"
@@ -17,7 +19,7 @@
 
 #include <cstring>
 
-renderer::ImageData createImageFromPath(const std::filesystem::path& path)
+std::unique_ptr<assets::ImageData> createImageFromPath(const std::filesystem::path& path)
 {
     int width;
     int height;
@@ -32,29 +34,29 @@ renderer::ImageData createImageFromPath(const std::filesystem::path& path)
         throw std::runtime_error("Failed to load image: " + path.string());
     }
 
-    auto imageData = renderer::ImageData{};
-    imageData.width = static_cast<uint32_t>(width);
-    imageData.height = static_cast<uint32_t>(height);
-    imageData.components = static_cast<uint32_t>(STBI_rgb_alpha);
+    auto imageData = std::make_unique<assets::ImageData>();
+    imageData->width = static_cast<uint32_t>(width);
+    imageData->height = static_cast<uint32_t>(height);
+    imageData->components = static_cast<uint32_t>(STBI_rgb_alpha);
 
     const auto imageSize = width * height * STBI_rgb_alpha;
-    imageData.data = std::vector<std::byte>(static_cast<size_t>(imageSize));
-    std::memcpy(imageData.data.data(), stbiData, static_cast<size_t>(imageSize));
+    imageData->data = std::vector<std::byte>(static_cast<size_t>(imageSize));
+    std::memcpy(imageData->data.data(), stbiData, static_cast<size_t>(imageSize));
 
     stbi_image_free(stbiData);
 
     return imageData;
 }
 
-renderer::ImageData createImageFromData(int width, int height, const std::vector<unsigned char>& data)
+std::unique_ptr<assets::ImageData> createImageFromData(int width, int height, const std::vector<unsigned char>& data)
 {
-    auto imageData = renderer::ImageData{};
-    imageData.width = static_cast<uint32_t>(width);
-    imageData.height = static_cast<uint32_t>(height);
-    imageData.components = static_cast<uint32_t>(STBI_rgb_alpha);
-    imageData.data = std::vector<std::byte>(data.size());
+    auto imageData = std::make_unique<assets::ImageData>();
+    imageData->width = static_cast<uint32_t>(width);
+    imageData->height = static_cast<uint32_t>(height);
+    imageData->components = static_cast<uint32_t>(STBI_rgb_alpha);
+    imageData->data = std::vector<std::byte>(data.size());
 
-    std::memcpy(imageData.data.data(), data.data(), data.size());
+    std::memcpy(imageData->data.data(), data.data(), data.size());
 
     return imageData;
 }

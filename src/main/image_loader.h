@@ -3,10 +3,14 @@
 
 #pragma once
 
-#include "renderer/data.h"
-
 #include <filesystem>
 #include <memory>
+#include <vector>
 
-renderer::ImageData createImageFromPath(const std::filesystem::path& path);
-renderer::ImageData createImageFromData(int width, int height, const std::vector<unsigned char>& data);
+namespace assets
+{
+struct ImageData;
+}
+
+std::unique_ptr<assets::ImageData> createImageFromPath(const std::filesystem::path& path);
+std::unique_ptr<assets::ImageData> createImageFromData(int width, int height, const std::vector<unsigned char>& data);

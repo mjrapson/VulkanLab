@@ -6,14 +6,9 @@
 #include <filesystem>
 #include <memory>
 
-namespace renderer
-{
-struct AssetData;
-}
-
-namespace world
+namespace assets
 {
 class Prefab;
 }
 
-std::unique_ptr<world::Prefab> loadGLTFModel(const std::filesystem::path& path, renderer::AssetData& assetData);
+std::unique_ptr<assets::Prefab> loadGLTFModel(const std::filesystem::path& path);

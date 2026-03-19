@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "renderer/handles.h"
+#include <core/handle.h>
 
 #include <vulkan/vulkan_raii.hpp>
 
@@ -16,18 +16,15 @@ struct Image
     vk::raii::Image image{nullptr};
     vk::raii::ImageView view{nullptr};
     vk::raii::DeviceMemory memory{nullptr};
-    vk::raii::Sampler sampler{nullptr};
 };
-using ImageContainer = core::HandleContainer<ImageHandle, Image>;
 
 struct Material
 {
-    uint32_t bufferOffset;
+    vk::raii::Buffer uniformBuffer{nullptr};
+    vk::raii::DeviceMemory uniformBufferMemory{nullptr};
     vk::DeviceSize size;
-    std::optional<ImageHandle> diffuseImageHandle;
-    // TODO std::optional<SamplerHandle> diffuseImageSampler;
+    vk::raii::DescriptorSet descriptorSet{nullptr};
 };
-using MaterialContainer = core::HandleContainer<MaterialHandle, Material>;
 
 struct MaterialUboData
 {
@@ -46,20 +43,26 @@ struct DirectionalLightUboData
 
 struct Mesh
 {
-    uint32_t vertexBufferOffset;
-    uint32_t vertexCount;
-    uint32_t indexBufferOffset;
-    uint32_t indexCount;
-    std::optional<MaterialHandle> materialHandle;
+    vk::raii::Buffer vertexBuffer{nullptr};
+    vk::raii::DeviceMemory vertexBufferMemory{nullptr};
+    vk::raii::Buffer indexBuffer{nullptr};
+    vk::raii::DeviceMemory indexBufferMemory{nullptr};
+    uint32_t indexCount{};
 };
-using MeshContainer = core::HandleContainer<MeshHandle, Mesh>;
 
 struct Skybox
 {
     vk::raii::Image image{nullptr};
     vk::raii::ImageView view{nullptr};
     vk::raii::DeviceMemory memory{nullptr};
-    vk::raii::Sampler sampler{nullptr};
+    vk::raii::DescriptorSet descriptorSet{nullptr};
 };
-using SkyboxContainer = core::HandleContainer<SkyboxHandle, Skybox>;
+
+struct LoadingScreen
+{
+    vk::raii::Image image{nullptr};
+    vk::raii::ImageView view{nullptr};
+    vk::raii::DeviceMemory memory{nullptr};
+    vk::raii::DescriptorSet descriptorSet{nullptr};
+};
 } // namespace renderer

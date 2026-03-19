@@ -31,15 +31,6 @@ class GpuDevice
                              std::span<vk::Semaphore> signalSemaphores,
                              const vk::Fence& fence) const;
 
-    vk::raii::DescriptorPool createDescriptorPool(uint32_t maxSets, std::span<vk::DescriptorPoolSize> poolSizes) const;
-
-    vk::raii::DescriptorSetLayout
-    createDescriptorSetLayout(const std::span<const vk::DescriptorSetLayoutBinding>& bindings) const;
-
-    vk::raii::DescriptorSets createDescriptorSets(const vk::raii::DescriptorSetLayout& layout,
-                                                  const vk::raii::DescriptorPool& pool,
-                                                  uint32_t count) const;
-
     vk::raii::ShaderModule createShaderModule(const std::filesystem::path& filePath) const;
 
     vk::raii::Buffer createBuffer(const vk::DeviceSize& size,
@@ -81,8 +72,6 @@ class GpuDevice
     vk::raii::DeviceMemory allocateImageMemory(const vk::raii::Image& image, vk::MemoryPropertyFlags properties) const;
 
     vk::DeviceSize calculateAlignedUboStride(size_t uboSize) const;
-
-    bool exceedsPushConstantLimit(size_t size) const;
 
     const vk::raii::Device& device() const;
     const vk::raii::PhysicalDevice& physicalDevice() const;

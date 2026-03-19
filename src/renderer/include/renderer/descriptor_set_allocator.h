@@ -10,25 +10,26 @@
 
 namespace renderer
 {
-class GpuDevice;
-
 class DescriptorSetAllocator
 {
   public:
-    DescriptorSetAllocator(const GpuDevice& device, std::span<const vk::DescriptorSetLayoutBinding> bindings);
+    DescriptorSetAllocator(const vk::raii::Device& device, std::span<const vk::DescriptorSetLayoutBinding> bindings);
 
-    void resize(uint32_t maxSets);
-    vk::raii::DescriptorSets allocateSets(uint32_t count) const;
+    vk::raii::DescriptorSets allocateSets(uint32_t count);
+
+    void clear();
 
     const vk::raii::DescriptorSetLayout& layout() const;
 
-    uint32_t size() const;
+  private:
+    vk::raii::DescriptorSets allocateSets(uint32_t count, const vk::raii::DescriptorPool& pool) const;
+    void expandPools();
 
   private:
-    const GpuDevice& gpuDevice_;
+    const vk::raii::Device& device_;
     std::unordered_map<vk::DescriptorType, uint32_t> descriptorCounts_;
     vk::raii::DescriptorSetLayout layout_{nullptr};
-    vk::raii::DescriptorPool pool_{nullptr};
+    std::vector<vk::raii::DescriptorPool> pools_;
     uint32_t maxSets_{0};
 };
 } // namespace renderer

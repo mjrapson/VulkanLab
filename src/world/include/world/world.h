@@ -14,6 +14,7 @@
 #include <cassert>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
@@ -24,9 +25,14 @@ class Camera;
 class Renderer;
 } // namespace renderer
 
-namespace world
+namespace assets
 {
 struct Prefab;
+class Skybox;
+} // namespace assets
+
+namespace world
+{
 
 class World
 {
@@ -38,6 +44,7 @@ class World
 
   public:
     World(renderer::Renderer& renderer);
+    ~World();
 
     World(const World&) = delete;
     World& operator=(const World&) = delete;
@@ -48,15 +55,27 @@ class World
     Entity createEntity();
     void destroyEntity(Entity entity);
 
-    void addPrefab(const std::string& name, std::unique_ptr<Prefab> prefab);
-    Prefab* prefab(std::string_view name) const;
+    void addPrefab(const std::string& name, std::unique_ptr<assets::Prefab> prefab);
+    assets::Prefab* prefab(std::string_view name) const;
 
+    auto prefabs() const
+    {
+        return prefabs_ | std::ranges::views::values;
+    }
+
+    void addSkybox(const std::string& name, std::unique_ptr<assets::Skybox> skybox);
     void setSkybox(renderer::SkyboxHandle handle);
     const std::optional<renderer::SkyboxHandle>& activeSkybox() const;
+
+    auto skyboxes() const
+    {
+        return skyboxes_ | std::ranges::views::values;
+    }
 
     void setGlobalLightDirection(const glm::vec3& direction);
     const glm::vec3& globalLightDirection() const;
 
+    void initialize();
     void update(const renderer::Camera& camera);
 
     template <typename Component, typename... Args>
@@ -114,11 +133,13 @@ class World
     // Systems
     RenderSystem renderSystem_;
 
-    // State
+    // State - should really be a struct e.g. environment
     std::optional<renderer::SkyboxHandle> activeSkybox_;
     DirectionalLight directionalLight_;
 
-    std::unordered_map<std::string, std::unique_ptr<Prefab>> prefabs_;
+    // Assets - should really be in a container
+    std::unordered_map<std::string, std::unique_ptr<assets::Prefab>> prefabs_;
+    std::unordered_map<std::string, std::unique_ptr<assets::Skybox>> skyboxes_;
     Entity nextEntity{0};
 };
 } // namespace world

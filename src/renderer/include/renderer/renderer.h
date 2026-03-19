@@ -3,19 +3,18 @@
 
 #pragma once
 
-#include "renderer/buffers.h"
-#include "renderer/data.h"
+#include "renderer/descriptor_set_allocator.h"
 #include "renderer/draw_command.h"
 #include "renderer/gpu_device.h"
-#include "renderer/gpu_objects.h"
-#include "renderer/handles.h"
 #include "renderer/instance.h"
+#include "renderer/pipeline.h"
 #include "renderer/resources.h"
 #include "renderer/swapchain.h"
 
+#include <core/vertex.h>
+
 #include <vulkan/vulkan_raii.hpp>
 
-#include <memory>
 #include <vector>
 
 namespace window
@@ -25,18 +24,32 @@ class Window;
 
 namespace renderer
 {
-struct AssetData;
 struct Camera;
-class GeometryPass;
 class GpuDevice;
-struct ImageData;
-class LoadingScreenPass;
-class ShadowMapPass;
-class SkyboxPass;
 
 class Renderer
 {
   public:
+    struct MaterialData
+    {
+        glm::vec3 diffuseColor;
+        std::optional<ImageHandle> diffuseTexture;
+    };
+
+    struct FaceData
+    {
+        uint32_t width;
+        uint32_t height;
+        std::span<const std::byte> data;
+    };
+
+    struct SceneDrawInfo
+    {
+        std::vector<DrawCommand> drawCommands;
+        std::optional<renderer::SkyboxHandle> skyboxHandle;
+        glm::vec3 globalLightDirection;
+    };
+
     explicit Renderer(const window::Window& window);
     ~Renderer();
 
@@ -46,36 +59,34 @@ class Renderer
     Renderer(Renderer&& other) = delete;
     Renderer& operator=(Renderer&& other) = delete;
 
-    void setLoadingScreenImageData(const ImageDataContainer& imageData);
-
-    struct SceneDrawInfo
-    {
-        std::vector<DrawCommand> drawCommands;
-        std::optional<renderer::SkyboxHandle> skyboxHandle;
-        glm::vec3 globalLightDirection;
-    };
-
     void renderScene(const Camera& camera, const SceneDrawInfo& info);
+    void renderLoadingScreen(LoadingScreenHandle loadingScreenHandle);
 
-    void renderLoadingScreen(ImageHandle loadingScreenHandle);
+    void reset();
 
     void windowResized(int width, int height);
 
-    void setData(const AssetData& data);
+    LoadingScreenHandle addLoadingScreenImage(uint32_t width, uint32_t height, std::span<const std::byte> data);
+    ImageHandle addImage(uint32_t width, uint32_t height, std::span<const std::byte> data);
+    MaterialHandle addMaterial(const MaterialData& data);
+    MeshHandle addMesh(std::span<const core::Vertex> vertices, std::span<const uint32_t> indices);
+    SkyboxHandle addSkybox(const std::array<FaceData, 6>& data);
 
   private:
     void createCommandBuffers();
     void createSyncObjects();
     void createCameraBuffers();
     void createDirectionalLightBuffers();
-    void createRenderPasses();
+    void createShadowMapDescriptorSets();
+
+    void createShadowPass();
+    void createGeometryPass();
+    void createSkyboxPass();
+    void createLoadingScreenPass();
+
+    void resizeGeometryPass();
 
     void renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands);
-
-    ImageContainer uploadImages(const ImageDataContainer& data);
-    void uploadMeshes(const MeshDataContainer& data);
-    void uploadMaterials(const MaterialDataContainer& data);
-    void uploadSkyboxes(const SkyboxDataContainer& data);
 
   private:
     vk::raii::Context context_;
@@ -92,12 +103,41 @@ class Renderer
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
 
-    Buffers buffers_;
-    Resources resources_;
+    Image emptyImage_;
 
-    std::unique_ptr<LoadingScreenPass> loadingScreenPass_{nullptr};
-    std::unique_ptr<SkyboxPass> skyboxPass_{nullptr};
-    std::unique_ptr<GeometryPass> geometryPass_{nullptr};
-    std::unique_ptr<ShadowMapPass> shadowMapPass_{nullptr};
+    std::vector<vk::raii::Buffer> cameraUniformBuffers_;
+    std::vector<vk::raii::DeviceMemory> cameraUniformBuffersMemory_;
+    std::vector<void*> cameraUniformBuffersMappedMemory_;
+    std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
+
+    vk::raii::Buffer directionalLightUniformBuffer_{nullptr};
+    vk::raii::DeviceMemory directionalLightUniformBufferMemory_{nullptr};
+    void* directionalLightUniformBufferMappedMemory_{nullptr};
+    vk::raii::DescriptorSet directionalLightDescriptorSet_{nullptr};
+
+    vk::raii::DescriptorSet shadowMapDescriptorSet_{nullptr};
+
+    DescriptorSetAllocator cameraDescriptor_;
+    DescriptorSetAllocator materialDescriptor_;
+    DescriptorSetAllocator directionalLightDescriptor_;
+    DescriptorSetAllocator skyboxDescriptor_;
+    DescriptorSetAllocator loadingScreenImageDescriptor_;
+    DescriptorSetAllocator shadowMapImageDescriptor_;
+
+    Resources resources_;
+    vk::raii::Sampler imageSampler_{nullptr};
+
+    vk::raii::Image shadowMapImage_{nullptr};
+    vk::raii::DeviceMemory shadowMapImageMemory_{nullptr};
+    vk::raii::ImageView shadowMapImageView_{nullptr};
+
+    vk::raii::Image depthTargetImage_{nullptr};
+    vk::raii::DeviceMemory depthTargetImageMemory_{nullptr};
+    vk::raii::ImageView depthTargetImageView_{nullptr};
+
+    Pipeline shadowPass_;
+    Pipeline geometryPass_;
+    Pipeline skyboxPass_;
+    Pipeline loadingScreenPass_;
 };
 } // namespace renderer

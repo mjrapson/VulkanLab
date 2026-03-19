@@ -32,6 +32,8 @@ Window::Window(int width, int height, std::string_view title)
         throw std::runtime_error("Failed to create GLFW window");
     }
 
+    glfwGetWindowSize(window_, &width_, &height_);
+
     glfwSetWindowUserPointer(window_, this);
     glfwSetFramebufferSizeCallback(window_, framebufferResizeCallback);
     glfwSetKeyCallback(window_, keyCallback);
