@@ -85,29 +85,44 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
     const float* positions = reinterpret_cast<const float*>(
         &posBuffer.data[posBufferView.byteOffset + posAcessor.byteOffset]);
 
-    const auto& normalAcessor = model.accessors[primitive.attributes.at("NORMAL")];
-    const auto& normalBufferView = model.bufferViews[normalAcessor.bufferView];
-    const auto& normalBuffer = model.buffers[normalBufferView.buffer];
-
-    const float* normals = reinterpret_cast<const float*>(
-        &normalBuffer.data[normalBufferView.byteOffset + normalAcessor.byteOffset]);
-
-    // const auto& texAcessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
-    // const auto& texBufferView = model.bufferViews[texAcessor.bufferView];
-    // const auto& texBuffer = model.buffers[texBufferView.buffer];
-
-    // const float* texcoords = reinterpret_cast<const float*>(
-    //     &texBuffer.data[texBufferView.byteOffset + texAcessor.byteOffset]);
-
-    auto vertices = std::vector<core::Vertex>{};
-    for (auto i = size_t{0}; i < posAcessor.count; ++i)
+    auto vertices = std::vector<core::Vertex>{posAcessor.count};
+    for (auto i = size_t{0}; i < vertices.size(); ++i)
     {
-        auto v = core::Vertex{};
-        v.position = glm::vec3(positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]);
-        v.normal = glm::vec3(normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]);
-        // v.textureUV = glm::vec2(texcoords[i * 2 + 0], texcoords[i * 2 + 1]);
-        vertices.push_back(v);
+        vertices[i].position = glm::vec3(positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]);
     }
+
+    if (primitive.attributes.contains("NORMAL"))
+    {
+        const auto& normalAcessor = model.accessors[primitive.attributes.at("NORMAL")];
+        const auto& normalBufferView = model.bufferViews[normalAcessor.bufferView];
+        const auto& normalBuffer = model.buffers[normalBufferView.buffer];
+
+        const float* normals = reinterpret_cast<const float*>(
+            &normalBuffer.data[normalBufferView.byteOffset + normalAcessor.byteOffset]);
+
+        for (auto i = size_t{0}; i < vertices.size(); ++i)
+        {
+            vertices[i].normal = glm::vec3(normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]);
+        }
+    }
+    // else consider generating surface normals?
+
+    if (primitive.attributes.contains("TEXCOORD_0"))
+    {
+        const auto& texAcessor = model.accessors[primitive.attributes.at("TEXCOORD_0")];
+        const auto& texBufferView = model.bufferViews[texAcessor.bufferView];
+        const auto& texBuffer = model.buffers[texBufferView.buffer];
+
+        const float* texcoords = reinterpret_cast<const float*>(
+            &texBuffer.data[texBufferView.byteOffset + texAcessor.byteOffset]);
+
+        for (auto i = size_t{0}; i < vertices.size(); ++i)
+        {
+            vertices[i].textureUV = glm::vec2(texcoords[i * 2 + 0], texcoords[i * 2 + 1]);
+            ;
+        }
+    }
+    // else consider generating UV from a surface projection?
 
     return vertices;
 }
