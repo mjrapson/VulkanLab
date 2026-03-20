@@ -103,6 +103,13 @@ class Renderer
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
 
+    DescriptorSetAllocator cameraDescriptor_;
+    DescriptorSetAllocator materialDescriptor_;
+    DescriptorSetAllocator directionalLightDescriptor_;
+    DescriptorSetAllocator skyboxDescriptor_;
+    DescriptorSetAllocator loadingScreenImageDescriptor_;
+    DescriptorSetAllocator shadowMapImageDescriptor_;
+
     Image emptyImage_;
 
     std::vector<vk::raii::Buffer> cameraUniformBuffers_;
@@ -116,13 +123,6 @@ class Renderer
     vk::raii::DescriptorSet directionalLightDescriptorSet_{nullptr};
 
     vk::raii::DescriptorSet shadowMapDescriptorSet_{nullptr};
-
-    DescriptorSetAllocator cameraDescriptor_;
-    DescriptorSetAllocator materialDescriptor_;
-    DescriptorSetAllocator directionalLightDescriptor_;
-    DescriptorSetAllocator skyboxDescriptor_;
-    DescriptorSetAllocator loadingScreenImageDescriptor_;
-    DescriptorSetAllocator shadowMapImageDescriptor_;
 
     Resources resources_;
     vk::raii::Sampler imageSampler_{nullptr};
