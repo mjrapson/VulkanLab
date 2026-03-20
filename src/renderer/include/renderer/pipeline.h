@@ -33,6 +33,8 @@ struct PipelineDesc
     vk::Bool32 depthWriteEnable{vk::True};
     vk::CompareOp depthCompareOp{vk::CompareOp::eLess};
     vk::CullModeFlags cullMode{vk::CullModeFlagBits::eBack};
+    vk::ColorComponentFlags colourWriteMask{vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG
+                                            | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
 };
 
 Pipeline createPipeline(const vk::raii::Device& device,

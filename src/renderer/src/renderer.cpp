@@ -281,7 +281,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                 attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
                 attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
                 attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-                attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
+                attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 1.0f, 0.0f, 1.0f}};
 
                 auto renderingInfo = vk::RenderingInfo{};
                 renderingInfo.renderArea = {.offset = {0, 0}, .extent = windowExtent_};
@@ -340,7 +340,6 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
 
                 auto attachmentInfo = vk::RenderingAttachmentInfo{};
                 attachmentInfo.imageView = swapchain_.currentImageView();
-                ;
                 attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
                 attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
                 attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
@@ -876,6 +875,7 @@ void Renderer::createShadowPass()
     pd.depthBiasEnable = vk::True;
     pd.depthBiasConstantFactor = 0.0f;
     pd.depthBiasSlopeFactor = 0.0f;
+    pd.colourWriteMask = {};
 
     shadowPass_ = createPipeline(gpuDevice_.device(), gpuDevice_.physicalDevice(), pd);
 }

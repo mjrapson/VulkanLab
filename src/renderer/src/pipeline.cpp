@@ -75,7 +75,7 @@ Pipeline createPipeline(const vk::raii::Device& device,
 
     auto colorBlendAttachment = vk::PipelineColorBlendAttachmentState{};
     colorBlendAttachment.blendEnable = vk::False;
-    colorBlendAttachment.colorWriteMask = {};
+    colorBlendAttachment.colorWriteMask = desc.colourWriteMask;
 
     auto colorBlending = vk::PipelineColorBlendStateCreateInfo{};
     colorBlending.logicOpEnable = vk::False;
