@@ -33,7 +33,6 @@ class Skybox;
 
 namespace world
 {
-
 class World
 {
     template <typename Component>
@@ -52,6 +51,12 @@ class World
     World(World&& other) = delete;
     World& operator=(World&& other) = delete;
 
+    struct Environment
+    {
+        DirectionalLight directionalLight;
+        assets::Skybox* skybox{nullptr};
+    };
+
     Entity createEntity();
     void destroyEntity(Entity entity);
 
@@ -64,8 +69,7 @@ class World
     }
 
     void addSkybox(const std::string& name, std::unique_ptr<assets::Skybox> skybox);
-    void setSkybox(renderer::SkyboxHandle handle);
-    const std::optional<renderer::SkyboxHandle>& activeSkybox() const;
+    void setActiveSkybox(std::string_view name);
 
     auto skyboxes() const
     {
@@ -73,7 +77,8 @@ class World
     }
 
     void setGlobalLightDirection(const glm::vec3& direction);
-    const glm::vec3& globalLightDirection() const;
+
+    const Environment& environment() const;
 
     void initialize();
     void update(const renderer::Camera& camera);
@@ -133,9 +138,7 @@ class World
     // Systems
     RenderSystem renderSystem_;
 
-    // State - should really be a struct e.g. environment
-    std::optional<renderer::SkyboxHandle> activeSkybox_;
-    DirectionalLight directionalLight_;
+    Environment environment_;
 
     // Assets - should really be in a container
     std::unordered_map<std::string, std::unique_ptr<assets::Prefab>> prefabs_;

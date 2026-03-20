@@ -76,7 +76,14 @@ VulkanApplication::LoadResult loadSceneData(const std::filesystem::path& path, r
         }
     }
 
+    // 4. Setup world environment
     world->setGlobalLightDirection(scene->directionalLight.direction);
+
+    // For now just pick one - later add this to the scene defintion and allow changing
+    if (!scene->skyboxes.empty())
+    {
+        world->setActiveSkybox(scene->skyboxes.at(0).name);
+    }
 
     return VulkanApplication::LoadResult{std::move(world)};
 }

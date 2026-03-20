@@ -281,7 +281,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                 attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
                 attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
                 attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-                attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 1.0f, 0.0f, 1.0f}};
+                attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
 
                 auto renderingInfo = vk::RenderingInfo{};
                 renderingInfo.renderArea = {.offset = {0, 0}, .extent = windowExtent_};

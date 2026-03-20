@@ -52,24 +52,27 @@ void World::addSkybox(const std::string& name, std::unique_ptr<assets::Skybox> s
     skyboxes_[name] = std::move(skybox);
 }
 
-void World::setSkybox(renderer::SkyboxHandle handle)
+void World::setActiveSkybox(std::string_view name)
 {
-    activeSkybox_ = handle;
-}
-
-const std::optional<renderer::SkyboxHandle>& World::activeSkybox() const
-{
-    return activeSkybox_;
+    if (auto itr = skyboxes_.find(std::string{name}); itr != skyboxes_.end())
+    {
+        environment_.skybox = itr->second.get();
+    }
+    else
+    {
+        assert(false && "Skybox not found - setting active skybox to nullptr");
+        environment_.skybox = nullptr;
+    }
 }
 
 void World::setGlobalLightDirection(const glm::vec3& direction)
 {
-    directionalLight_.direction = direction;
+    environment_.directionalLight.direction = direction;
 }
 
-const glm::vec3& World::globalLightDirection() const
+const World::Environment& World::environment() const
 {
-    return directionalLight_.direction;
+    return environment_;
 }
 
 void World::initialize()

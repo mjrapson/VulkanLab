@@ -71,8 +71,11 @@ void RenderSystem::initialize()
 void RenderSystem::update(const renderer::Camera& camera)
 {
     auto drawInfo = renderer::Renderer::SceneDrawInfo{};
-    drawInfo.skyboxHandle = world_.activeSkybox();
-    drawInfo.globalLightDirection = world_.globalLightDirection();
+    if (world_.environment().skybox)
+    {
+        drawInfo.skyboxHandle = world_.environment().skybox->renderHandle();
+    }
+    drawInfo.globalLightDirection = world_.environment().directionalLight.direction;
 
     for (auto& [entity, renderComponent] : world_.getAllComponents<RenderComponent>())
     {
