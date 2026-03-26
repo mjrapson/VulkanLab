@@ -33,7 +33,7 @@ struct GeometryPassPushConstants
     glm::mat4 normalMatrix;
 };
 
-constexpr auto maxFramesInFlight = 2;
+constexpr auto maxFramesInFlight = uint32_t{2};
 constexpr auto shadowMapSize = uint32_t{2048};
 
 constexpr auto cameraDescriptorBindings = std::array{
@@ -105,8 +105,6 @@ Renderer::Renderer(const window::Window& window)
     : instance_{context_, window.requiredExtensions()},
       surface_{window.createVulkanSurface(instance_.instance())},
       gpuDevice_{instance_.instance(), surface_},
-      swapchain_{gpuDevice_.device(), gpuDevice_.physicalDevice(), surface_},
-      windowExtent_{static_cast<uint32_t>(window.width()), static_cast<uint32_t>(window.height())},
       commandPool_{gpuDevice_.createCommandPool()},
       cameraDescriptor_{gpuDevice_.device(), cameraDescriptorBindings},
       materialDescriptor_{gpuDevice_.device(), materialDescriptorBindings},
@@ -116,7 +114,8 @@ Renderer::Renderer(const window::Window& window)
       shadowMapImageDescriptor_{gpuDevice_.device(), shadowMapImageDescriptorBindings}
 {
     spdlog::info("Creating swapchain");
-    swapchain_.initialize(maxFramesInFlight, windowExtent_);
+    // swapchain_.initialize(maxFramesInFlight, swapchainExtent_);
+    createSwapchain();
 
     spdlog::info("Creating command buffers");
     createCommandBuffers();
@@ -149,7 +148,10 @@ Renderer::Renderer(const window::Window& window)
     createLoadingScreenPass();
 }
 
-Renderer::~Renderer() = default;
+Renderer::~Renderer()
+{
+    gpuDevice_.device().waitIdle();
+}
 
 void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
 {
@@ -209,8 +211,8 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
 
             const auto viewport = vk::Viewport(0.0f,
                                                0.0f,
-                                               static_cast<float>(windowExtent_.width),
-                                               static_cast<float>(windowExtent_.height),
+                                               static_cast<float>(swapchainExtent_.width),
+                                               static_cast<float>(swapchainExtent_.height),
                                                0.0f,
                                                1.0f);
 
@@ -285,7 +287,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                                       vk::ImageAspectFlagBits::eDepth);
             }
 
-            transitionImageLayout(swapchain_.currentImage(),
+            transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
                                   commandBuffer,
                                   vk::ImageLayout::eUndefined,
                                   vk::ImageLayout::eColorAttachmentOptimal,
@@ -294,14 +296,14 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
             // Clear image pass
             {
                 auto attachmentInfo = vk::RenderingAttachmentInfo{};
-                attachmentInfo.imageView = swapchain_.currentImageView();
+                attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
                 attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
                 attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
                 attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
                 attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
 
                 auto renderingInfo = vk::RenderingInfo{};
-                renderingInfo.renderArea = {.offset = {0, 0}, .extent = windowExtent_};
+                renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
                 renderingInfo.layerCount = 1;
                 renderingInfo.colorAttachmentCount = 1;
                 renderingInfo.pColorAttachments = &attachmentInfo;
@@ -316,13 +318,13 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                 auto skybox = resources_.skyboxes.get(info.skyboxHandle.value());
 
                 auto attachmentInfo = vk::RenderingAttachmentInfo{};
-                attachmentInfo.imageView = swapchain_.currentImageView();
+                attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
                 attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
                 attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
                 attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
 
                 auto renderingInfo = vk::RenderingInfo{};
-                renderingInfo.renderArea = {.offset = {0, 0}, .extent = windowExtent_};
+                renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
                 renderingInfo.layerCount = 1;
                 renderingInfo.colorAttachmentCount = 1;
                 renderingInfo.pColorAttachments = &attachmentInfo;
@@ -342,7 +344,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                                                  nullptr);
 
                 commandBuffer.setViewport(0, viewport);
-                commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), windowExtent_));
+                commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
                 commandBuffer.draw(36, 1, 0, 0);
                 commandBuffer.endRendering();
             }
@@ -356,7 +358,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                                       vk::ImageAspectFlagBits::eDepth);
 
                 auto attachmentInfo = vk::RenderingAttachmentInfo{};
-                attachmentInfo.imageView = swapchain_.currentImageView();
+                attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
                 attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
                 attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
                 attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
@@ -369,7 +371,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                 depthAttachmentInfo.clearValue = vk::ClearDepthStencilValue(1.0f, 0);
 
                 auto renderingInfo = vk::RenderingInfo{};
-                renderingInfo.renderArea = {.offset = {0, 0}, .extent = windowExtent_};
+                renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
                 renderingInfo.layerCount = 1;
                 renderingInfo.colorAttachmentCount = 1;
                 renderingInfo.pColorAttachments = &attachmentInfo;
@@ -397,7 +399,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                                                  nullptr);
 
                 commandBuffer.setViewport(0, viewport);
-                commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), windowExtent_));
+                commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
 
                 for (const auto& drawCommand : info.drawCommands)
                 {
@@ -428,7 +430,7 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                 commandBuffer.endRendering();
             }
 
-            transitionImageLayout(swapchain_.currentImage(),
+            transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
                                   commandBuffer,
                                   vk::ImageLayout::eColorAttachmentOptimal,
                                   vk::ImageLayout::ePresentSrcKHR,
@@ -441,21 +443,21 @@ void Renderer::renderLoadingScreen(LoadingScreenHandle loadingScreenHandle)
     renderFrame(
         [this, &loadingScreenHandle](const vk::raii::CommandBuffer& commandBuffer)
         {
-            transitionImageLayout(swapchain_.currentImage(),
+            transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
                                   commandBuffer,
                                   vk::ImageLayout::eUndefined,
                                   vk::ImageLayout::eColorAttachmentOptimal,
                                   vk::ImageAspectFlagBits::eColor);
 
             auto attachmentInfo = vk::RenderingAttachmentInfo{};
-            attachmentInfo.imageView = swapchain_.currentImageView();
+            attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
             attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
             attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
             attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
             attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
 
             auto renderingInfo = vk::RenderingInfo{};
-            renderingInfo.renderArea = {.offset = {0, 0}, .extent = windowExtent_};
+            renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
             renderingInfo.layerCount = 1;
             renderingInfo.colorAttachmentCount = 1;
             renderingInfo.pColorAttachments = &attachmentInfo;
@@ -474,17 +476,17 @@ void Renderer::renderLoadingScreen(LoadingScreenHandle loadingScreenHandle)
             commandBuffer.setViewport(0,
                                       vk::Viewport(0.0f,
                                                    0.0f,
-                                                   static_cast<float>(windowExtent_.width),
-                                                   static_cast<float>(windowExtent_.height),
+                                                   static_cast<float>(swapchainExtent_.width),
+                                                   static_cast<float>(swapchainExtent_.height),
                                                    0.0f,
                                                    1.0f));
-            commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), windowExtent_));
+            commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
 
             commandBuffer.draw(6, 1, 0, 0);
 
             commandBuffer.endRendering();
 
-            transitionImageLayout(swapchain_.currentImage(),
+            transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
                                   commandBuffer,
                                   vk::ImageLayout::eColorAttachmentOptimal,
                                   vk::ImageLayout::ePresentSrcKHR,
@@ -509,12 +511,7 @@ void Renderer::reset()
 
 void Renderer::windowResized(int width, int height)
 {
-    spdlog::info("Renderer resized {} x {}", width, height);
-
-    windowExtent_.width = static_cast<uint32_t>(width);
-    windowExtent_.height = static_cast<uint32_t>(height);
-
-    if (width == 0 && height == 0)
+    if (width == 0 || height == 0)
     {
         windowMinimized_ = true;
     }
@@ -523,7 +520,7 @@ void Renderer::windowResized(int width, int height)
         windowMinimized_ = false;
     }
 
-    swapchain_.markOutOfDate();
+    swapchainRebuildRequired_ = true;
 }
 
 LoadingScreenHandle Renderer::addLoadingScreenImage(uint32_t width, uint32_t height, std::span<const std::byte> data)
@@ -795,6 +792,102 @@ SkyboxHandle Renderer::addSkybox(const std::array<FaceData, 6>& data)
     return handle;
 }
 
+void Renderer::createSwapchain()
+{
+    const auto surfaceCapabilities = gpuDevice_.physicalDevice().getSurfaceCapabilitiesKHR(*surface_);
+
+    const auto availableSurfaceFormats = gpuDevice_.physicalDevice().getSurfaceFormatsKHR(*surface_);
+    if (availableSurfaceFormats.empty())
+    {
+        throw std::runtime_error("No available surface formats");
+    }
+
+    auto surfaceFormat = availableSurfaceFormats.at(0);
+    for (const auto& availableSurfaceFormat : availableSurfaceFormats)
+    {
+        if (availableSurfaceFormat.format == vk::Format::eB8G8R8A8Srgb
+            && availableSurfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
+        {
+            surfaceFormat = availableSurfaceFormat;
+            break;
+        }
+    }
+    surfaceFormat_ = surfaceFormat.format;
+
+    auto extent = vk::Extent2D{};
+    if (surfaceCapabilities.currentExtent.width != 0xFFFFFFFF)
+    {
+        extent = surfaceCapabilities.currentExtent;
+    }
+    else
+    {
+        extent.width = std::clamp<uint32_t>(swapchainExtent_.width,
+                                            surfaceCapabilities.minImageExtent.width,
+                                            surfaceCapabilities.maxImageExtent.width);
+        extent.height = std::clamp<uint32_t>(swapchainExtent_.height,
+                                             surfaceCapabilities.minImageExtent.height,
+                                             surfaceCapabilities.maxImageExtent.height);
+    }
+    swapchainExtent_ = extent;
+
+    auto imageCount = uint32_t{0};
+    if (surfaceCapabilities.maxImageCount == 0) // no maximum
+    {
+        imageCount = std::max(maxFramesInFlight, surfaceCapabilities.minImageCount);
+    }
+    else
+    {
+        imageCount = std::clamp(maxFramesInFlight,
+                                surfaceCapabilities.minImageCount,
+                                surfaceCapabilities.maxImageCount);
+    }
+
+    auto swapChainCreateInfo = vk::SwapchainCreateInfoKHR{};
+    swapChainCreateInfo.surface = *surface_;
+    swapChainCreateInfo.minImageCount = imageCount;
+    swapChainCreateInfo.imageFormat = surfaceFormat.format;
+    swapChainCreateInfo.imageColorSpace = surfaceFormat.colorSpace;
+    swapChainCreateInfo.imageExtent = extent;
+    swapChainCreateInfo.imageArrayLayers = 1;
+    swapChainCreateInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
+    swapChainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive;
+    swapChainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+    swapChainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+    swapChainCreateInfo.presentMode = vk::PresentModeKHR::eFifo;
+    swapChainCreateInfo.clipped = true;
+
+    swapchain_ = vk::raii::SwapchainKHR(gpuDevice_.device(), swapChainCreateInfo);
+    swapchainImages_ = swapchain_.getImages();
+
+    auto subresourceRange = vk::ImageSubresourceRange{};
+    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = 1;
+
+    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
+    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
+    imageViewCreateInfo.format = surfaceFormat.format;
+    imageViewCreateInfo.subresourceRange = subresourceRange;
+
+    for (const auto& image : swapchainImages_)
+    {
+        imageViewCreateInfo.image = image;
+        swapchainImageViews_.emplace_back(gpuDevice_.device(), imageViewCreateInfo);
+    }
+
+    for (auto i = size_t{0}; i < imageCount; ++i)
+    {
+        renderFinishedSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
+    }
+
+    for (auto i = size_t{0}; i < maxFramesInFlight; ++i)
+    {
+        presentCompleteSemaphores_.emplace_back(gpuDevice_.device(), vk::SemaphoreCreateInfo{});
+    }
+}
+
 void Renderer::createCommandBuffers()
 {
     commandBuffers_ = gpuDevice_.createCommandBuffers(commandPool_, maxFramesInFlight);
@@ -958,7 +1051,7 @@ void Renderer::createGeometryPass()
                             *shadowMapImageDescriptor_.layout()};
     pd.pushConstantRanges = {
         vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(GeometryPassPushConstants)}};
-    pd.colorAttachmentFormats = {swapchain_.imageFormat()};
+    pd.colorAttachmentFormats = {surfaceFormat_};
     pd.depthAttachmentFormat = vk::Format::eD32Sfloat;
 
     geometryPass_ = createPipeline(gpuDevice_.device(), gpuDevice_.physicalDevice(), pd);
@@ -972,7 +1065,7 @@ void Renderer::createSkyboxPass()
     pd.vertexShaderPath = core::getShaderDir() / "skybox.vert.spv";
     pd.fragmentShaderPath = core::getShaderDir() / "skybox.frag.spv";
     pd.descriptorLayouts = {*cameraDescriptor_.layout(), *skyboxDescriptor_.layout()};
-    pd.colorAttachmentFormats = {swapchain_.imageFormat()};
+    pd.colorAttachmentFormats = {surfaceFormat_};
     pd.depthWriteEnable = vk::False;
     pd.cullMode = vk::CullModeFlagBits::eNone;
 
@@ -985,7 +1078,7 @@ void Renderer::createLoadingScreenPass()
     pd.vertexShaderPath = core::getShaderDir() / "loading_screen.vert.spv";
     pd.fragmentShaderPath = core::getShaderDir() / "loading_screen.frag.spv";
     pd.descriptorLayouts = {*loadingScreenImageDescriptor_.layout()};
-    pd.colorAttachmentFormats = {swapchain_.imageFormat()};
+    pd.colorAttachmentFormats = {surfaceFormat_};
     pd.depthTestEnable = vk::False;
     pd.depthWriteEnable = vk::False;
     pd.depthCompareOp = vk::CompareOp::eNever;
@@ -994,9 +1087,31 @@ void Renderer::createLoadingScreenPass()
     loadingScreenPass_ = createPipeline(gpuDevice_.device(), gpuDevice_.physicalDevice(), pd);
 }
 
+void Renderer::recreateSwapchain()
+{
+    if (windowMinimized_)
+    {
+        return;
+    }
+
+    gpuDevice_.device().waitIdle();
+
+    swapchainImageViews_.clear();
+    swapchainImages_.clear();
+    presentCompleteSemaphores_.clear();
+    renderFinishedSemaphores_.clear();
+    swapchain_.clear();
+
+    createSwapchain();
+
+    resizeGeometryPass();
+
+    swapchainRebuildRequired_ = false;
+}
+
 void Renderer::resizeGeometryPass()
 {
-    depthTargetImage_ = gpuDevice_.createDepthImage(windowExtent_.width, windowExtent_.height);
+    depthTargetImage_ = gpuDevice_.createDepthImage(swapchainExtent_.width, swapchainExtent_.height);
     depthTargetImageMemory_ = gpuDevice_.allocateImageMemory(depthTargetImage_,
                                                              vk::MemoryPropertyFlagBits::eDeviceLocal);
     depthTargetImageView_ = gpuDevice_.createDepthImageView(depthTargetImage_);
@@ -1004,28 +1119,41 @@ void Renderer::resizeGeometryPass()
 
 void Renderer::renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands)
 {
+    if (windowMinimized_)
+    {
+        return;
+    }
+
+    if (swapchainRebuildRequired_)
+    {
+        recreateSwapchain();
+        return;
+    }
+
     if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
         != vk::Result::eSuccess)
     {
         throw std::runtime_error("Device unable to wait for fence to signal");
     }
 
-    if (windowMinimized_)
+    try
     {
-        return;
+        auto result = vk::Result{};
+
+        std::tie(result, currentSwapchainImageIndex_) = swapchain_.acquireNextImage(
+            std::numeric_limits<uint64_t>::max(),
+            presentCompleteSemaphores_.at(currentFrameIndex_),
+            nullptr);
+
+        if (result == vk::Result::eSuboptimalKHR)
+        {
+            swapchainRebuildRequired_ = true;
+        }
     }
-
-    if (swapchain_.outOfDate())
+    catch (const vk::OutOfDateKHRError&)
     {
-        gpuDevice_.device().waitIdle();
-        swapchain_.initialize(maxFramesInFlight, windowExtent_);
-
-        resizeGeometryPass();
-    }
-
-    if (!swapchain_.acquireNextImage())
-    {
-        return;
+        swapchainRebuildRequired_ = true;
+        return; // cannot continue - we did not acquire a swapchain image so try again next frame
     }
 
     auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
@@ -1036,8 +1164,8 @@ void Renderer::renderFrame(std::function<void(const vk::raii::CommandBuffer&)> r
 
     commandBuffer.end();
 
-    auto waitSemaphores = std::array{*swapchain_.currentPresentCompleteSemaphore()};
-    auto signalSemaphores = std::array{*swapchain_.currentRenderFinishedSemaphore()};
+    auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
+    auto signalSemaphores = std::array{*renderFinishedSemaphores_.at(currentSwapchainImageIndex_)};
 
     gpuDevice_.device().resetFences(*drawFences_.at(currentFrameIndex_));
     gpuDevice_.submitCommandBuffer(commandBuffer,
@@ -1046,9 +1174,25 @@ void Renderer::renderFrame(std::function<void(const vk::raii::CommandBuffer&)> r
                                    signalSemaphores,
                                    *drawFences_.at(currentFrameIndex_));
 
-    swapchain_.present(gpuDevice_.presentQueue());
+    auto presentInfo = vk::PresentInfoKHR{};
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &*renderFinishedSemaphores_.at(currentSwapchainImageIndex_);
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &*swapchain_;
+    presentInfo.pImageIndices = &currentSwapchainImageIndex_;
 
-    gpuDevice_.device().waitIdle();
+    try
+    {
+        const auto result = gpuDevice_.presentQueue().presentKHR(presentInfo);
+        if (result == vk::Result::eSuboptimalKHR)
+        {
+            swapchainRebuildRequired_ = true;
+        }
+    }
+    catch (const vk::OutOfDateKHRError&)
+    {
+        swapchainRebuildRequired_ = true;
+    }
 
     currentFrameIndex_ = (currentFrameIndex_ + 1) % maxFramesInFlight;
 }

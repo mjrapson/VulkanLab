@@ -14,7 +14,6 @@ target_sources(Renderer
         include/renderer/pipeline.h
         include/renderer/renderer.h
         include/renderer/resources.h
-        include/renderer/swapchain.h
         include/renderer/transition_barrier.h
         include/renderer/vertex_layout.h
     PRIVATE
@@ -23,7 +22,6 @@ target_sources(Renderer
         src/pipeline.cpp
         src/instance.cpp
         src/renderer.cpp
-        src/swapchain.cpp
         src/transition_barrier.cpp
 )
 

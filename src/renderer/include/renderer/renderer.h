@@ -9,7 +9,6 @@
 #include "renderer/instance.h"
 #include "renderer/pipeline.h"
 #include "renderer/resources.h"
-#include "renderer/swapchain.h"
 
 #include <core/vertex.h>
 
@@ -73,6 +72,7 @@ class Renderer
     SkyboxHandle addSkybox(const std::array<FaceData, 6>& data);
 
   private:
+    void createSwapchain();
     void createCommandBuffers();
     void createSyncObjects();
     void createSamplers();
@@ -85,6 +85,7 @@ class Renderer
     void createSkyboxPass();
     void createLoadingScreenPass();
 
+    void recreateSwapchain();
     void resizeGeometryPass();
 
     void renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands);
@@ -94,15 +95,24 @@ class Renderer
     Instance instance_;
     vk::raii::SurfaceKHR surface_;
     GpuDevice gpuDevice_;
-    Swapchain swapchain_;
 
-    vk::Extent2D windowExtent_;
+    // Swapchain
+    vk::raii::SwapchainKHR swapchain_{nullptr};
+    std::vector<vk::Image> swapchainImages_;
+    std::vector<vk::raii::ImageView> swapchainImageViews_;
+    std::vector<vk::raii::Semaphore> presentCompleteSemaphores_;
+    std::vector<vk::raii::Semaphore> renderFinishedSemaphores_;
+    vk::Format surfaceFormat_;
+    vk::Extent2D swapchainExtent_;
+
     bool windowMinimized_{false};
+    bool swapchainRebuildRequired_{false};
 
     vk::raii::CommandPool commandPool_{nullptr};
     std::vector<vk::raii::CommandBuffer> commandBuffers_;
     std::vector<vk::raii::Fence> drawFences_;
     uint32_t currentFrameIndex_{0};
+    uint32_t currentSwapchainImageIndex_{0};
 
     DescriptorSetAllocator cameraDescriptor_;
     DescriptorSetAllocator materialDescriptor_;
