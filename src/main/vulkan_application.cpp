@@ -92,6 +92,8 @@ VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer&
     : window_{window},
       renderer_{renderer}
 {
+    camera_.aspectRatio = getAspectRatio(window_.width(), window_.height());
+
     loadingScreen_ = std::make_unique<assets::LoadingScreen>(
         createImageFromPath(core::getTexturesDir() / "loading_screen.png"));
     loadingScreen_->setRenderHandle(
