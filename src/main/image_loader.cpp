@@ -29,6 +29,7 @@ std::unique_ptr<assets::ImageData> createImageFromPath(const std::filesystem::pa
 
     stbi_set_flip_vertically_on_load(true);
     auto stbiData = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+    stbi_set_flip_vertically_on_load(false);
     if (!stbiData)
     {
         throw std::runtime_error("Failed to load image: " + path.string());

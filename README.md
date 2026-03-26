@@ -1,9 +1,7 @@
-# Vulkan Demo
+# Vulkan Lab
 A modern, lightweight sandbox for learning and experimenting with Vulkan. Primarily built on Linux.
 
 ![Image showing window with checkerboard floor, a blue cube and a blue ball](demo2.png)
-
-![Image showing window with coloured triangle drawn in the middle.](screenshot.png)
 
 # Requirements
 - Vulkan SDK
