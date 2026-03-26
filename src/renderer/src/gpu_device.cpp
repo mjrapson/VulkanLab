@@ -266,7 +266,7 @@ vk::raii::Image GpuDevice::createDepthImage(uint32_t width, uint32_t height) con
     imageInfo.arrayLayers = 1;
     imageInfo.samples = vk::SampleCountFlagBits::e1;
     imageInfo.tiling = vk::ImageTiling::eOptimal;
-    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
+    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
     imageInfo.initialLayout = vk::ImageLayout::eUndefined;
 

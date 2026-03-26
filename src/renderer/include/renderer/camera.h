@@ -6,7 +6,6 @@
 #include "renderer/frustum.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
@@ -41,7 +40,6 @@ struct Camera
     {
         auto projection = glm::perspective(glm::radians(fieldOfView), aspectRatio, nearPlane, farPlane);
         projection[1][1] *= -1.0f;
-
         return projection;
     }
 
@@ -56,12 +54,12 @@ struct Camera
         const auto upDir = up();
         const auto rightDir = right();
 
-        const auto nearPlaneHeight = nearDistance * glm::tan(glm::radians(fieldOfView) / 2) * 2.0f;
-        const auto nearPlaneWidth = nearPlaneHeight * aspectRatio;
+        const auto nearPlaneWidth = nearDistance * glm::tan(glm::radians(fieldOfView) / 2) * 2.0f;
+        const auto nearPlaneHeight = nearPlaneWidth / aspectRatio;
         const auto nearPlaneMidPoint = position + frontDir * nearDistance;
 
-        const auto farPlaneHeight = farDistance * glm::tan(glm::radians(fieldOfView) / 2) * 2.0f;
-        const auto farPlaneWidth = farPlaneHeight * aspectRatio;
+        const auto farPlaneWidth = farDistance * glm::tan(glm::radians(fieldOfView) / 2) * 2.0f;
+        const auto farPlaneHeight = farPlaneWidth / aspectRatio;
         const auto farPlaneMidPoint = position + frontDir * farDistance;
 
         auto frustum = Frustum{};

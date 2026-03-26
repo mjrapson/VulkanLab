@@ -29,6 +29,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/transform.hpp>
 
 #include <spdlog/spdlog.h>
@@ -119,7 +120,6 @@ std::vector<core::Vertex> readVertices(tinygltf::Primitive& primitive, tinygltf:
         for (auto i = size_t{0}; i < vertices.size(); ++i)
         {
             vertices[i].textureUV = glm::vec2(texcoords[i * 2 + 0], texcoords[i * 2 + 1]);
-            ;
         }
     }
     // else consider generating UV from a surface projection?
@@ -137,30 +137,27 @@ void parseNode(int index,
 
     auto nodeTransform = glm::mat4{1.0f};
 
+    if (!node.translation.empty())
+    {
+        nodeTransform = glm::translate(nodeTransform,
+                                       glm::vec3(node.translation[0], node.translation[1], node.translation[2]));
+    }
+
+    if (!node.rotation.empty())
+    {
+        auto quat = glm::make_quat(node.rotation.data());
+        glm::mat4 rotation = glm::mat4_cast(quat);
+        nodeTransform *= rotation;
+    }
+
+    if (!node.scale.empty())
+    {
+        nodeTransform = glm::scale(nodeTransform, glm::vec3(node.scale[0], node.scale[1], node.scale[2]));
+    }
     if (!node.matrix.empty())
     {
-        nodeTransform = glm::make_mat4(node.matrix.data());
-    }
-    else
-    {
-        if (!node.translation.empty())
-        {
-            nodeTransform = glm::translate(nodeTransform,
-                                           glm::vec3(node.translation[0], node.translation[1], node.translation[2]));
-        }
-
-        if (!node.rotation.empty())
-        {
-            nodeTransform *= glm::mat4_cast(glm::quat(static_cast<float>(node.rotation[3]),
-                                                      static_cast<float>(node.rotation[0]),
-                                                      static_cast<float>(node.rotation[1]),
-                                                      static_cast<float>(node.rotation[2])));
-        }
-
-        if (!node.scale.empty())
-        {
-            nodeTransform = glm::scale(nodeTransform, glm::vec3(node.scale[0], node.scale[1], node.scale[2]));
-        }
+        glm::mat4 mat = glm::make_mat4(node.matrix.data());
+        nodeTransform *= mat;
     }
 
     auto nodeToPrefab = parentTransform * nodeTransform;

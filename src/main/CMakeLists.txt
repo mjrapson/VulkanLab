@@ -30,6 +30,11 @@ target_link_libraries(VulkanDemo
     spdlog
 )
 
+target_compile_definitions(VulkanDemo
+    PRIVATE
+        GLM_FORCE_DEPTH_ZERO_TO_ONE
+)
+
 set(SHADER_SRC_DIR ${CMAKE_SOURCE_DIR}/assets/shaders)
 set(SHADER_OUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders)
 

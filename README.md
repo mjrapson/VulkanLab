@@ -1,4 +1,4 @@
-# Vulkan Lab
+# Vulkan Demo
 A modern, lightweight sandbox for learning and experimenting with Vulkan. Primarily built on Linux.
 
 ![Image showing window with checkerboard floor, a blue cube and a blue ball](demo2.png)
@@ -42,3 +42,9 @@ This project makes use of the following 3rd party libraries:
 - stb
 - tinygltf
 - nlohmann (JSON parser)
+
+## Acknowledgements
+This project, and learning Vulkan in general has been helped and inspired by some of the following resources:
+- [vk_minimal_latest](https://github.com/nvpro-samples/vk_minimal_latest) - Best practice modern Vulkan development project
+- [GODOT](https://github.com/godotengine/godot) - Multi-platform engine with Vulkan driver backends
+- [3D Math Primer for Graphics and Game Development](https://gamemath.com/) - eBook written by Fletcher Dunn and Ian Parbery

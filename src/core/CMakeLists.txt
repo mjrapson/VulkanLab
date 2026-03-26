@@ -23,4 +23,9 @@ target_link_libraries(Core
         pch
 )
 
+target_compile_definitions(Core
+    PRIVATE
+        GLM_FORCE_DEPTH_ZERO_TO_ONE
+)
+
 target_precompile_headers(Core REUSE_FROM pch)

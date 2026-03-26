@@ -22,4 +22,9 @@ target_link_libraries(Scene
         pch
 )
 
+target_compile_definitions(Scene
+    PRIVATE
+        GLM_FORCE_DEPTH_ZERO_TO_ONE
+)
+
 target_precompile_headers(Scene REUSE_FROM pch)

@@ -13,6 +13,11 @@ struct Box
 {
     glm::vec3 min;
     glm::vec3 max;
+
+    glm::vec3 center() const
+    {
+        return 0.5f * (min + max);
+    }
 };
 
 inline Box enclosePoints(std::span<const glm::vec3> points)

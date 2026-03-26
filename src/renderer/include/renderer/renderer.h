@@ -75,6 +75,7 @@ class Renderer
   private:
     void createCommandBuffers();
     void createSyncObjects();
+    void createSamplers();
     void createCameraBuffers();
     void createDirectionalLightBuffers();
     void createShadowMapDescriptorSets();
@@ -126,6 +127,7 @@ class Renderer
 
     Resources resources_;
     vk::raii::Sampler imageSampler_{nullptr};
+    vk::raii::Sampler shadowSampler_{nullptr};
 
     vk::raii::Image shadowMapImage_{nullptr};
     vk::raii::DeviceMemory shadowMapImageMemory_{nullptr};
@@ -139,5 +141,8 @@ class Renderer
     Pipeline geometryPass_;
     Pipeline skyboxPass_;
     Pipeline loadingScreenPass_;
+
+    float shadowDistance_{50.0f};
+    float lightDistance_{100.0f};
 };
 } // namespace renderer

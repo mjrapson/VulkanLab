@@ -28,4 +28,9 @@ target_link_libraries(World
         pch
 )
 
+target_compile_definitions(World
+    PRIVATE
+        GLM_FORCE_DEPTH_ZERO_TO_ONE
+)
+
 target_precompile_headers(World REUSE_FROM pch)

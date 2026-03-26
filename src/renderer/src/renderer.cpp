@@ -11,7 +11,6 @@
 
 #include <spdlog/spdlog.h>
 
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
 
@@ -114,8 +113,7 @@ Renderer::Renderer(const window::Window& window)
       directionalLightDescriptor_{gpuDevice_.device(), directionalLightDescriptorBindings},
       skyboxDescriptor_{gpuDevice_.device(), skyboxDescriptorBindings},
       loadingScreenImageDescriptor_{gpuDevice_.device(), loadingScreenImageDescriptorBindings},
-      shadowMapImageDescriptor_{gpuDevice_.device(), shadowMapImageDescriptorBindings},
-      imageSampler_{gpuDevice_.createSampler()}
+      shadowMapImageDescriptor_{gpuDevice_.device(), shadowMapImageDescriptorBindings}
 {
     spdlog::info("Creating swapchain");
     swapchain_.initialize(maxFramesInFlight, windowExtent_);
@@ -125,6 +123,9 @@ Renderer::Renderer(const window::Window& window)
 
     spdlog::info("Creating sync objects");
     createSyncObjects();
+
+    spdlog::info("Creating samplers");
+    createSamplers();
 
     spdlog::info("Creating default objects");
     emptyImage_ = createImage(gpuDevice_,
@@ -140,7 +141,7 @@ Renderer::Renderer(const window::Window& window)
     spdlog::info("Creating render passes");
     createCameraBuffers();
     createDirectionalLightBuffers();
-    // createShadowMapDescriptorSets();
+    createShadowMapDescriptorSets();
 
     createShadowPass();
     createGeometryPass();
@@ -160,32 +161,48 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
             cameraBuffer.view = camera.view();
             memcpy(cameraUniformBuffersMappedMemory_[currentFrameIndex_], &cameraBuffer, sizeof(cameraBuffer));
 
-            const auto shadowDistance = 50.0f;
-            const auto cameraFrustum = camera.frustumSlice(camera.nearPlane, camera.nearPlane + shadowDistance);
-            const auto cameraFrustumMidPoint = cameraFrustum.midPoint();
+            // Create a light box based on the current camera frustum (in world space).
+            //
+            // This is the area that will we do shadow calculations for. Later this can be extended add divided into
+            // regions for cascading shadow maps, but for now its from the near plane extended to a suitable shadow
+            // distance.
+            const auto lightBox = camera.frustumSlice(camera.nearPlane, camera.nearPlane + shadowDistance_);
 
-            const auto up = std::abs(info.globalLightDirection.y) > 0.99f ? glm::vec3{0, 0, 1} : glm::vec3{0, 1, 0};
+            // Create a light view matrix. We imagine the light the light looking at the center of our light box.
+            //
+            // Note that the light does not have a position, just a global direction, so pretend that it is far
+            // away along in its direction (the actual distance doesn't matter too greatly as we'll use an orthographic
+            // projection).
+            const auto lightBoxCenter = lightBox.midPoint();
+            const auto worldUp = glm::normalize(glm::vec3{0.0f, 1.0f, 0.0f});
+            const auto lightDirection = glm::normalize(info.globalLightDirection);
+            const auto lightPosition = lightBoxCenter - lightDirection * lightDistance_;
+            const auto lightView = glm::lookAt(lightPosition, lightBoxCenter, worldUp);
 
-            // "Pretend" the directional light is far away along its -direction
-            const auto mimicLightPosition = cameraFrustumMidPoint - info.globalLightDirection * shadowDistance;
-            const auto lightRight = glm::normalize(glm::cross(info.globalLightDirection, up));
-            const auto lightUp = glm::normalize(glm::cross(info.globalLightDirection, lightRight));
+            // Create a light projection matrix. This is an orthographic projection as we don't care about perspective.
+            //
+            // We will use the world space light box transform to light space as the extent of the projection, except
+            // since -Z is a forward direction, our near and far plane values need to be adjusted to positive distances
+            // from the light (positive also as Vulkan will map to [0, 1] with GLM_FORCE_DEPTH_ZERO_TO_ONE)
+            const auto lightSpaceFrustum = viewTransform(lightBox, lightView);
+            const auto lightSpaceFrustumAABB = lightSpaceFrustum.boudingBox();
+            const auto near = -lightSpaceFrustumAABB.max.z;
+            const auto far = -lightSpaceFrustumAABB.min.z;
 
-            const auto lightViewMatrix = glm::lookAt(mimicLightPosition, cameraFrustumMidPoint, lightUp);
-            const auto lightSpaceFrustum = viewTransform(cameraFrustum, lightViewMatrix);
-            const auto frustumAABB = lightSpaceFrustum.boudingBox();
+            auto lightProjection = glm::ortho(lightSpaceFrustumAABB.min.x,
+                                              lightSpaceFrustumAABB.max.x,
+                                              lightSpaceFrustumAABB.min.y,
+                                              lightSpaceFrustumAABB.max.y,
+                                              near,
+                                              far);
 
-            // near and far plane reversed for light space
-            const auto near = -frustumAABB.max.z;
-            const auto far = -frustumAABB.min.z;
-
-            const auto lightProjectionMatrix =
-                glm::ortho(frustumAABB.min.x, frustumAABB.max.x, frustumAABB.min.y, frustumAABB.max.y, near, far);
+            // vulkan- y-flip, refactor out a central OrthoCamera to not have to remember to do this
+            lightProjection[1][1] *= -1.0f;
 
             auto directionalLightBuffer = DirectionalLightUboData{};
             directionalLightBuffer.direction = info.globalLightDirection;
-            directionalLightBuffer.lightSpaceView = lightViewMatrix;
-            directionalLightBuffer.lightSpaceProjection = lightProjectionMatrix;
+            directionalLightBuffer.lightSpaceView = lightView;
+            directionalLightBuffer.lightSpaceProjection = lightProjection;
             memcpy(directionalLightUniformBufferMappedMemory_,
                    &directionalLightBuffer,
                    sizeof(DirectionalLightUboData));
@@ -198,9 +215,9 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                                                1.0f);
 
             /*
-            The passes are here in a large block at the moment, as moving to separate classes was hiding too much.
-            The intention is to break these down to be more scalable and data driven, as they are optimised and the flow
-            of resources between passes better understood.
+                The passes are here in a large block at the moment, as moving to separate classes was hiding too much.
+                The intention is to break these down to be more scalable and data driven, as they are optimised and the
+                flow of resources between passes better understood.
             */
             // Shadow pass
             {
@@ -261,11 +278,11 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
 
                 commandBuffer.endRendering();
 
-                // transitionImageLayout(shadowMapImage_,
-                //                       commandBuffer,
-                //                       vk::ImageLayout::eDepthAttachmentOptimal,
-                //                       vk::ImageLayout::eShaderReadOnlyOptimal,
-                //                       vk::ImageAspectFlagBits::eDepth);
+                transitionImageLayout(shadowMapImage_,
+                                      commandBuffer,
+                                      vk::ImageLayout::eDepthAttachmentOptimal,
+                                      vk::ImageLayout::eShaderReadOnlyOptimal,
+                                      vk::ImageAspectFlagBits::eDepth);
             }
 
             transitionImageLayout(swapchain_.currentImage(),
@@ -371,6 +388,12 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
                                                  *geometryPass_.layout,
                                                  2,
                                                  *directionalLightDescriptorSet_,
+                                                 nullptr);
+
+                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                                 *geometryPass_.layout,
+                                                 3,
+                                                 *shadowMapDescriptorSet_,
                                                  nullptr);
 
                 commandBuffer.setViewport(0, viewport);
@@ -787,6 +810,48 @@ void Renderer::createSyncObjects()
     }
 }
 
+void Renderer::createSamplers()
+{
+    // Image sampler
+    {
+        auto samplerInfo = vk::SamplerCreateInfo{};
+        samplerInfo.magFilter = vk::Filter::eNearest;
+        samplerInfo.minFilter = vk::Filter::eNearest;
+        samplerInfo.addressModeU = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.addressModeV = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.addressModeW = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.anisotropyEnable = vk::False;
+        samplerInfo.maxAnisotropy = 16.0f;
+        samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+        samplerInfo.unnormalizedCoordinates = vk::False;
+        samplerInfo.compareEnable = vk::False;
+        samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+
+        imageSampler_ = vk::raii::Sampler(gpuDevice_.device(), samplerInfo);
+    }
+
+    // Shadow map sampler
+    // Regular sampler with comparison enabled to allow sampler comparison in shader rather than us
+    // performing depth comparisons manually
+    {
+        auto samplerInfo = vk::SamplerCreateInfo{};
+        samplerInfo.magFilter = vk::Filter::eNearest;
+        samplerInfo.minFilter = vk::Filter::eNearest;
+        samplerInfo.addressModeU = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.addressModeV = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.addressModeW = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.anisotropyEnable = vk::False;
+        samplerInfo.maxAnisotropy = 16.0f;
+        samplerInfo.borderColor = vk::BorderColor::eFloatOpaqueBlack;
+        samplerInfo.unnormalizedCoordinates = vk::False;
+        samplerInfo.compareEnable = vk::True;
+        samplerInfo.compareOp = vk::CompareOp::eGreater;
+        samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+
+        shadowSampler_ = vk::raii::Sampler(gpuDevice_.device(), samplerInfo);
+    }
+}
+
 void Renderer::createCameraBuffers()
 {
     for (auto frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex)
@@ -847,7 +912,7 @@ void Renderer::createShadowMapDescriptorSets()
 
     auto imageInfo = vk::DescriptorImageInfo{};
     imageInfo.imageView = *shadowMapImageView_;
-    imageInfo.sampler = *imageSampler_;
+    imageInfo.sampler = *shadowSampler_;
     imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
     auto textureWrite = vk::WriteDescriptorSet{};
@@ -873,8 +938,8 @@ void Renderer::createShadowPass()
         vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(ShadowPassPushConstants)}};
     pd.depthAttachmentFormat = vk::Format::eD32Sfloat;
     pd.depthBiasEnable = vk::True;
-    pd.depthBiasConstantFactor = 0.0f;
-    pd.depthBiasSlopeFactor = 0.0f;
+    pd.depthBiasConstantFactor = 1.25f;
+    pd.depthBiasSlopeFactor = 1.75f;
     pd.colourWriteMask = {};
 
     shadowPass_ = createPipeline(gpuDevice_.device(), gpuDevice_.physicalDevice(), pd);
@@ -890,7 +955,7 @@ void Renderer::createGeometryPass()
     pd.descriptorLayouts = {*cameraDescriptor_.layout(),
                             *materialDescriptor_.layout(),
                             *directionalLightDescriptor_.layout(),
-                            /**shadowMapImageDescriptor_.layout()*/};
+                            *shadowMapImageDescriptor_.layout()};
     pd.pushConstantRanges = {
         vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(GeometryPassPushConstants)}};
     pd.colorAttachmentFormats = {swapchain_.imageFormat()};
@@ -924,6 +989,7 @@ void Renderer::createLoadingScreenPass()
     pd.depthTestEnable = vk::False;
     pd.depthWriteEnable = vk::False;
     pd.depthCompareOp = vk::CompareOp::eNever;
+    pd.cullMode = vk::CullModeFlagBits::eNone;
 
     loadingScreenPass_ = createPipeline(gpuDevice_.device(), gpuDevice_.physicalDevice(), pd);
 }

@@ -29,4 +29,9 @@ target_link_libraries(Assets
         pch
 )
 
+target_compile_definitions(Assets
+    PRIVATE
+        GLM_FORCE_DEPTH_ZERO_TO_ONE
+)
+
 target_precompile_headers(Assets REUSE_FROM pch)
