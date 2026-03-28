@@ -15,6 +15,10 @@
         {
             "name": "checkerboard",
             "path": "checkerboard.glb"
+        },
+        {
+            "name": "tree",
+            "path": "tree.glb"
         }
     ],
     "skyboxes": [
@@ -36,8 +40,8 @@
             "transformComponent": {
                 "position": {
                     "x": 0.0,
-                    "y": 2.5,
-                    "z": -4.0
+                    "y": 5,
+                    "z": 99.0
                 },
                 "rotation": {
                     "x": 0.0,
@@ -59,8 +63,8 @@
             "transformComponent": {
                 "position": {
                     "x": 5.0,
-                    "y": 2.5,
-                    "z": 2.0
+                    "y": 6.0,
+                    "z": 102.0
                 },
                 "rotation": {
                     "x": 0.0,
@@ -83,7 +87,7 @@
                 "position": {
                     "x": 5.5,
                     "y": 1.0,
-                    "z": 0.0
+                    "z": 100.0
                 },
                 "rotation": {
                     "x": 0.0,
@@ -114,18 +118,92 @@
                     "z": 0.0
                 },
                 "scale": {
+                    "x": 3.0,
+                    "y": 1.0,
+                    "z": 3.0
+                }
+            },
+            "renderComponent": {
+                "prefab": "terrain1"
+            }
+        },
+        {
+            "name": "tree",
+            "transformComponent": {
+                "position": {
+                    "x": 8.0,
+                    "y": 1.0,
+                    "z": 97.0
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
                     "x": 1.0,
                     "y": 1.0,
                     "z": 1.0
                 }
             },
             "renderComponent": {
-                "prefab": "terrain1"
+                "prefab": "tree"
+            }
+        },
+        {
+            "name": "tree2",
+            "transformComponent": {
+                "position": {
+                    "x": -8.0,
+                    "y": 1.0,
+                    "z": 94.0
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                }
+            },
+            "renderComponent": {
+                "prefab": "tree"
+            }
+        },
+        {
+            "name": "tree3",
+            "transformComponent": {
+                "position": {
+                    "x": 0.0,
+                    "y": 2.0,
+                    "z": 97.0
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                }
+            },
+            "renderComponent": {
+                "prefab": "tree"
             }
         }
     ],
     "camera": {
-        "skybox": "stars"
+        "skybox": "stars",
+        "position": {
+            "x": 0.0,
+            "y": 9.0,
+            "z": 130.0
+        }
     },
     "directionalLight":{
         "direction":{

@@ -55,6 +55,7 @@ struct DirectionalLight
 struct Camera
 {
     std::string skybox;
+    glm::vec3 position{0.0f};
 };
 
 struct Scene

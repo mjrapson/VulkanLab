@@ -85,7 +85,10 @@ VulkanApplication::LoadResult loadSceneData(const std::filesystem::path& path, r
         world->setActiveSkybox(scene->skyboxes.at(0).name);
     }
 
-    return VulkanApplication::LoadResult{std::move(world)};
+    // 5. Read initial camera properties
+    const auto startPosition = scene->camera.position;
+
+    return VulkanApplication::LoadResult{.world = std::move(world), .cameraStartPosition = startPosition};
 }
 
 VulkanApplication::VulkanApplication(window::Window& window, renderer::Renderer& renderer)
@@ -141,14 +144,14 @@ void VulkanApplication::run()
             if (sceneLoadFuture_.valid()
                 && sceneLoadFuture_.wait_for(std::chrono::seconds{0}) == std::future_status::ready)
             {
-                /* Reset camera - this should really be defined by the scene where it wants to start */
-                camera_.position = glm::vec3{0.0f, 8.0f, 24.0f};
                 currentState_ = ApplicationState::SceneActive;
 
-                /* Update the active world */
                 auto result = sceneLoadFuture_.get();
+
                 activeWorld_ = std::move(result.world);
                 activeWorld_->initialize();
+
+                camera_.position = result.cameraStartPosition;
             }
             else
             {

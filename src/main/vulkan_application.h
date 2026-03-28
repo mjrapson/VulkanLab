@@ -44,6 +44,7 @@ class VulkanApplication
     struct LoadResult
     {
         std::unique_ptr<world::World> world;
+        glm::vec3 cameraStartPosition;
     };
 
     void run();

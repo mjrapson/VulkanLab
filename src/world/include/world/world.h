@@ -13,7 +13,6 @@
 
 #include <cassert>
 #include <memory>
-#include <optional>
 #include <ranges>
 #include <string_view>
 #include <tuple>

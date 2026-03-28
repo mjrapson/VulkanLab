@@ -11,7 +11,6 @@
 #include <nlohmann/json.hpp>
 
 #include <fstream>
-#include <iostream>
 
 namespace scene
 {
@@ -138,6 +137,11 @@ void loadCamera(const nlohmann::json& json, Scene& scene)
     if (json.contains(skyboxKey))
     {
         scene.camera.skybox = json[skyboxKey];
+    }
+
+    if (json.contains(positionKey))
+    {
+        scene.camera.position = loadXYZ(json[positionKey]);
     }
 }
 
