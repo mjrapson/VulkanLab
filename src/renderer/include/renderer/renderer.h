@@ -91,6 +91,11 @@ class Renderer
 
     void renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands);
 
+    void stageAndUploadImageData(const vk::raii::Image& image,
+                                 uint32_t width,
+                                 uint32_t height,
+                                 std::span<const std::byte> data);
+
   private:
     vk::raii::Context context_;
     Instance instance_;

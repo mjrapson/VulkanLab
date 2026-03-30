@@ -525,41 +525,15 @@ void Renderer::windowResized(int width, int height)
 
 LoadingScreenHandle Renderer::addLoadingScreenImage(uint32_t width, uint32_t height, std::span<const std::byte> data)
 {
-    auto commandBuffers = gpuDevice_.createCommandBuffers(commandPool_, 1);
-    auto& cmd = commandBuffers[0];
-    cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
 
     auto handle = resources_.loadingScreens.allocate();
     auto loadingScreen = resources_.loadingScreens.get(handle);
     loadingScreen->image = gpuDevice_.createImage(width, height);
     loadingScreen->memory = gpuDevice_.allocateImageMemory(loadingScreen->image,
                                                            vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    auto stagingBuffer = gpuDevice_.createStagingBuffer(data.size_bytes());
-    auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
-
-    void* mappedMemory = stagingMemory.mapMemory(0, VK_WHOLE_SIZE);
-    std::memcpy(mappedMemory, data.data(), data.size_bytes());
-    stagingMemory.unmapMemory();
-
-    transitionImageLayout(*loadingScreen->image,
-                          *cmd,
-                          vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eTransferDstOptimal,
-                          vk::ImageAspectFlagBits::eColor);
-
-    gpuDevice_.copyBufferToImage(cmd, stagingBuffer, loadingScreen->image, width, height);
-
-    transitionImageLayout(*loadingScreen->image,
-                          *cmd,
-                          vk::ImageLayout::eTransferDstOptimal,
-                          vk::ImageLayout::eShaderReadOnlyOptimal,
-                          vk::ImageAspectFlagBits::eColor);
-
     loadingScreen->view = gpuDevice_.createImageView(loadingScreen->image);
 
-    cmd.end();
-    gpuDevice_.submitCommandBuffer(cmd);
+    stageAndUploadImageData(loadingScreen->image, width, height, data);
 
     loadingScreen->descriptorSet = std::move(loadingScreenImageDescriptor_.allocateSets(1)[0]);
 
@@ -583,40 +557,13 @@ LoadingScreenHandle Renderer::addLoadingScreenImage(uint32_t width, uint32_t hei
 
 ImageHandle Renderer::addImage(uint32_t width, uint32_t height, std::span<const std::byte> data)
 {
-    auto commandBuffers = gpuDevice_.createCommandBuffers(commandPool_, 1);
-    auto& cmd = commandBuffers[0];
-    cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-
     auto handle = resources_.images.allocate();
     auto image = resources_.images.get(handle);
     image->image = gpuDevice_.createImage(width, height);
     image->memory = gpuDevice_.allocateImageMemory(image->image, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    auto stagingBuffer = gpuDevice_.createStagingBuffer(data.size_bytes());
-    auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
-
-    void* mappedMemory = stagingMemory.mapMemory(0, VK_WHOLE_SIZE);
-    std::memcpy(mappedMemory, data.data(), data.size_bytes());
-    stagingMemory.unmapMemory();
-
-    transitionImageLayout(*image->image,
-                          *cmd,
-                          vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eTransferDstOptimal,
-                          vk::ImageAspectFlagBits::eColor);
-
-    gpuDevice_.copyBufferToImage(cmd, stagingBuffer, image->image, width, height);
-
-    transitionImageLayout(*image->image,
-                          *cmd,
-                          vk::ImageLayout::eTransferDstOptimal,
-                          vk::ImageLayout::eShaderReadOnlyOptimal,
-                          vk::ImageAspectFlagBits::eColor);
-
     image->view = gpuDevice_.createImageView(image->image);
 
-    cmd.end();
-    gpuDevice_.submitCommandBuffer(cmd);
+    stageAndUploadImageData(image->image, width, height, data);
 
     return handle;
 }
@@ -1195,5 +1142,39 @@ void Renderer::renderFrame(std::function<void(const vk::raii::CommandBuffer&)> r
     }
 
     currentFrameIndex_ = (currentFrameIndex_ + 1) % maxFramesInFlight;
+}
+
+void Renderer::stageAndUploadImageData(const vk::raii::Image& image,
+                                       uint32_t width,
+                                       uint32_t height,
+                                       std::span<const std::byte> data)
+{
+    auto commandBuffers = gpuDevice_.createCommandBuffers(commandPool_, 1);
+    auto& cmd = commandBuffers[0];
+    cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+
+    auto stagingBuffer = gpuDevice_.createStagingBuffer(data.size_bytes());
+    auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
+
+    void* mappedMemory = stagingMemory.mapMemory(0, VK_WHOLE_SIZE);
+    std::memcpy(mappedMemory, data.data(), data.size_bytes());
+    stagingMemory.unmapMemory();
+
+    transitionImageLayout(*image,
+                          *cmd,
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eTransferDstOptimal,
+                          vk::ImageAspectFlagBits::eColor);
+
+    gpuDevice_.copyBufferToImage(cmd, stagingBuffer, image, width, height);
+
+    transitionImageLayout(*image,
+                          *cmd,
+                          vk::ImageLayout::eTransferDstOptimal,
+                          vk::ImageLayout::eShaderReadOnlyOptimal,
+                          vk::ImageAspectFlagBits::eColor);
+
+    cmd.end();
+    gpuDevice_.submitCommandBuffer(cmd);
 }
 } // namespace renderer
