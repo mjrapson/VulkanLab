@@ -5,10 +5,11 @@
 
 #include <glm/glm.hpp>
 
-namespace world
+namespace scene
 {
 struct DirectionalLight
 {
     glm::vec3 direction{0.0f};
+    glm::vec3 colour{1.0f};
 };
-} // namespace world
+} // namespace scene

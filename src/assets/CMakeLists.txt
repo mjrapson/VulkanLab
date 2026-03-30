@@ -2,6 +2,8 @@ add_library(Assets STATIC)
 
 target_sources(Assets
     PUBLIC
+        include/assets/loaders/image_loader.h
+        include/assets/database.h
         include/assets/image_data.h
         include/assets/image.h
         include/assets/loading_screen.h
@@ -10,6 +12,8 @@ target_sources(Assets
         include/assets/prefab.h
         include/assets/skybox.h
     PRIVATE
+        src/loaders/image_loader.cpp
+        src/database.cpp
         src/image.cpp
         src/loading_screen.cpp
         src/material.cpp
@@ -20,6 +24,7 @@ target_sources(Assets
 target_include_directories(Assets
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/third_party/stb
 )
 
 target_link_libraries(Assets

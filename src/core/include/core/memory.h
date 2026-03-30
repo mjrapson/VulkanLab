@@ -5,6 +5,8 @@
 
 #include "core/handle.h"
 
+#include <vector>
+
 namespace core
 {
 template <typename Object>

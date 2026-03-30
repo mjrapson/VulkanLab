@@ -15,12 +15,12 @@ const glm::vec3& Material::diffuseColour() const
     return diffuseColour_;
 }
 
-void Material::setDiffuseTexture(Image* image)
+void Material::setDiffuseTexture(core::Handle<Image> image)
 {
     diffuseImage_ = image;
 }
 
-Image* Material::diffuseTexture() const
+std::optional<core::Handle<Image>> Material::diffuseTexture() const
 {
     return diffuseImage_;
 }

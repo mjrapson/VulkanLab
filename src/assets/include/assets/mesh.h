@@ -13,8 +13,6 @@
 
 namespace assets
 {
-class Material;
-
 class Mesh
 {
   public:
@@ -31,9 +29,6 @@ class Mesh
     void setRenderHandle(std::optional<renderer::MeshHandle> handle);
     std::optional<renderer::MeshHandle> renderHandle() const;
 
-    void setMaterial(Material* material);
-    Material* material() const;
-
   private:
     void updateBoundingBox();
 
@@ -42,6 +37,5 @@ class Mesh
     std::vector<uint32_t> indices_;
     core::Box boundingBox_;
     std::optional<renderer::MeshHandle> renderHandle_;
-    Material* material_{nullptr};
 };
 } // namespace assets

@@ -3,28 +3,26 @@
 
 #pragma once
 
-#include "assets/image.h"
 #include "assets/material.h"
 #include "assets/mesh.h"
 
+#include <core/handle.h>
+
 #include <glm/glm.hpp>
 
-#include <memory>
+#include <optional>
 #include <vector>
 
 namespace assets
 {
 struct MeshInstance
 {
-    std::vector<Mesh*> subMeshes;
-    glm::mat4 transform;
+    core::Handle<Mesh> meshHandle;
+    std::optional<core::Handle<Material>> materialHandle;
 };
 
 struct Prefab
 {
     std::vector<MeshInstance> meshInstances;
-    std::vector<std::unique_ptr<Mesh>> meshes;
-    std::vector<std::unique_ptr<Material>> materials;
-    std::vector<std::unique_ptr<Image>> images;
 };
 } // namespace assets

@@ -19,15 +19,15 @@ class Material
     void setDiffuseColour(const glm::vec3& colour);
     const glm::vec3& diffuseColour() const;
 
-    void setDiffuseTexture(Image* image);
-    Image* diffuseTexture() const;
+    void setDiffuseTexture(core::Handle<Image> image);
+    std::optional<core::Handle<Image>> diffuseTexture() const;
 
     void setRenderHandle(std::optional<renderer::MaterialHandle> handle);
     std::optional<renderer::MaterialHandle> renderHandle() const;
 
   private:
     glm::vec3 diffuseColour_;
-    Image* diffuseImage_{nullptr};
+    std::optional<core::Handle<Image>> diffuseImage_;
     std::optional<renderer::MaterialHandle> renderHandle_;
 };
 } // namespace assets

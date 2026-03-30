@@ -23,16 +23,19 @@ struct Camera
 
     glm::vec3 front() const
     {
-        return orientation * glm::vec3{0, 0, -1};
+        // +Z forward
+        return orientation * glm::vec3{0, 0, 1};
     }
 
     glm::vec3 right() const
     {
-        return orientation * glm::vec3{1, 0, 0};
+        // -X right
+        return orientation * glm::vec3{-1, 0, 0};
     }
 
     glm::vec3 up() const
     {
+        // +Y up
         return orientation * glm::vec3{0, 1, 0};
     }
 

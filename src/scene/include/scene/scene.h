@@ -3,67 +3,17 @@
 
 #pragma once
 
-#include <optional>
-#include <string>
-#include <vector>
+#include "scene/entity_graph.h"
+
+#include <assets/database.h>
 
 #include <glm/glm.hpp>
 
 namespace scene
 {
-struct Prefab
-{
-    std::string name;
-    std::string path;
-};
-
-struct TransformComponent
-{
-    glm::vec3 position{0.0f};
-    glm::vec3 rotation{0.0f};
-    glm::vec3 scale{1.0f};
-};
-
-struct RenderComponent
-{
-    std::string prefabId;
-};
-
-struct Entity
-{
-    std::string name;
-    std::optional<TransformComponent> transformComponent;
-    std::optional<RenderComponent> renderComponent;
-};
-
-struct Skybox
-{
-    std::string name;
-    std::string pxPath;
-    std::string pyPath;
-    std::string pzPath;
-    std::string nxPath;
-    std::string nyPath;
-    std::string nzPath;
-};
-
-struct DirectionalLight
-{
-    glm::vec3 direction{0.0f};
-};
-
-struct Camera
-{
-    std::string skybox;
-    glm::vec3 position{0.0f};
-};
-
 struct Scene
 {
-    std::vector<Prefab> prefabs;
-    std::vector<Entity> entities;
-    std::vector<Skybox> skyboxes;
-    DirectionalLight directionalLight;
-    Camera camera;
+    assets::AssetDatabase assetDatabase;
+    EntityGraph entityGraph;
 };
 } // namespace scene

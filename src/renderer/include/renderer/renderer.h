@@ -14,6 +14,7 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
+#include <functional>
 #include <vector>
 
 namespace window
@@ -152,7 +153,7 @@ class Renderer
     Pipeline skyboxPass_;
     Pipeline loadingScreenPass_;
 
-    float shadowDistance_{50.0f};
+    float shadowDistance_{100.0f};
     float lightDistance_{100.0f};
 };
 } // namespace renderer

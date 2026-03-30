@@ -52,16 +52,6 @@ std::optional<renderer::MeshHandle> Mesh::renderHandle() const
     return renderHandle_;
 }
 
-void Mesh::setMaterial(Material* material)
-{
-    material_ = material;
-}
-
-Material* Mesh::material() const
-{
-    return material_;
-}
-
 void Mesh::updateBoundingBox()
 {
     // TODO...
