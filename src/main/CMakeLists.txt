@@ -7,11 +7,6 @@ target_sources(VulkanDemo
     vulkan_application.h
 )
 
-target_include_directories(VulkanDemo
-    PRIVATE
-    ${CMAKE_SOURCE_DIR}/third_party/glfw/include
-)
-
 target_link_libraries(VulkanDemo
     PRIVATE
     Core

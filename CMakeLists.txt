@@ -39,15 +39,54 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # -------------------------
 # Third-party libraries
 # -------------------------
-add_subdirectory(third_party/glfw)
-add_subdirectory(third_party/glm)
-add_subdirectory(third_party/spdlog)
+include(FetchContent)
 
+# ---- GLFW ----
+FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG        3.4
+)
+FetchContent_MakeAvailable(glfw)
+
+# ---- GLM ----
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG        1.0.3
+)
+FetchContent_MakeAvailable(glm)
+
+# ---- spdlog ----
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.15.3
+)
+FetchContent_MakeAvailable(spdlog)
+
+# ---- stb (header-only) ----
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        f1c79c02822848a9bed4315b12c8c8f3761e1296
+)
+FetchContent_GetProperties(stb)
+if(NOT stb_POPULATED)
+    FetchContent_Populate(stb)
+endif()
+
+# ---- tinygltf ----
 set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE BOOL "" FORCE)
 set(TINYGLTF_INSTALL OFF CACHE BOOL "" FORCE)
 set(TINYGLTF_INSTALL_VENDOR OFF CACHE BOOL "" FORCE)
 set(TINYGLTF_HEADER_ONLY ON CACHE BOOL "" FORCE)
-add_subdirectory(third_party/tinygltf)
+FetchContent_Declare(
+    tinygltf
+    GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
+    GIT_TAG        v3.0.0
+)
+FetchContent_MakeAvailable(tinygltf)
 
 find_package(Vulkan REQUIRED)
 find_program(SLANGC_EXECUTABLE
@@ -59,11 +98,6 @@ find_program(SLANGC_EXECUTABLE
 # Project modules
 # -------------------------
 add_subdirectory(pch)
-if (TARGET pch)
-    message(STATUS "pch target exists: YES")
-else()
-    message(FATAL_ERROR "pch target exists: NO")
-endif()
 add_subdirectory(src/core)
 add_subdirectory(src/window)
 add_subdirectory(src/renderer)

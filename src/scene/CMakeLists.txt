@@ -17,7 +17,7 @@ target_include_directories(Scene
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE
-        ${CMAKE_SOURCE_DIR}/third_party/tinygltf
+        ${tinygltf_SOURCE_DIR}
 )
 
 target_link_libraries(Scene

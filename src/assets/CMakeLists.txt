@@ -24,7 +24,7 @@ target_sources(Assets
 target_include_directories(Assets
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/third_party/stb
+        ${stb_SOURCE_DIR}
 )
 
 target_link_libraries(Assets
