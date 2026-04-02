@@ -17,14 +17,12 @@ target_include_directories(Window
 target_link_libraries(Window
     PRIVATE
         Core
+        glfw
         spdlog
         Vulkan::Vulkan
-        pch
 )
 
 target_compile_definitions(Window
     PRIVATE
         GLM_FORCE_DEPTH_ZERO_TO_ONE
 )
-
-target_precompile_headers(Window REUSE_FROM pch)

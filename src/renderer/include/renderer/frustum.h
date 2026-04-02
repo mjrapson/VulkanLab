@@ -7,6 +7,8 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
+
 namespace renderer
 {
 

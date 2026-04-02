@@ -254,7 +254,7 @@ void loadGltfScene(const std::filesystem::path& path, Scene& scene)
     auto err = std::string{};
     auto warn = std::string{};
 
-    const auto ret = loader.LoadBinaryFromFile(&model, &err, &warn, path);
+    const auto ret = loader.LoadBinaryFromFile(&model, &err, &warn, path.string().c_str());
 
     if (!warn.empty())
     {

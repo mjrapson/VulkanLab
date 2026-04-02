@@ -6,6 +6,8 @@
 #include <core/file_system.h>
 #include <core/vertex.h>
 
+#include <numeric>
+
 namespace renderer
 {
 vk::raii::ShaderModule createShaderModule(const vk::raii::Device& device, const std::filesystem::path& filePath)

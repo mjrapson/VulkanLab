@@ -29,14 +29,14 @@ struct Material
 struct MaterialUboData
 {
     glm::vec4 diffuseColor;
-    uint hasDiffuseTexture;
-    uint _padding[3];
+    uint32_t hasDiffuseTexture;
+    uint32_t _padding;
 };
 
 struct DirectionalLightUboData
 {
     glm::vec3 direction;
-    uint _padding1;
+    uint32_t _padding1;
     glm::mat4 lightSpaceView;
     glm::mat4 lightSpaceProjection;
 };

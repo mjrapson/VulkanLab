@@ -7,6 +7,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <ranges>
 
 namespace renderer
@@ -435,7 +436,7 @@ void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)
 
     physicalDevice_ = selectBestDevice(suitableDevices);
 
-    spdlog::info("Selected GPU: {}", std::string{physicalDevice_.getProperties().deviceName});
+    spdlog::info("Selected GPU: {}", std::string{physicalDevice_.getProperties().deviceName.data()});
 }
 
 void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
@@ -486,7 +487,7 @@ void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
 bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
 {
     const auto properties = device.getProperties();
-    const auto deviceName = std::string{properties.deviceName};
+    const auto deviceName = std::string{properties.deviceName.data()};
 
     if (properties.apiVersion < VK_API_VERSION_1_3)
     {

@@ -15,7 +15,9 @@ target_link_libraries(VulkanDemo
     Assets
     Scene
     glfw
+    glm
     spdlog
+    Vulkan::Vulkan
 )
 
 target_compile_definitions(VulkanDemo
@@ -24,7 +26,7 @@ target_compile_definitions(VulkanDemo
 )
 
 set(SHADER_SRC_DIR ${CMAKE_SOURCE_DIR}/assets/shaders)
-set(SHADER_OUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders)
+set(SHADER_OUT_DIR $<TARGET_FILE_DIR:VulkanDemo>/shaders)
 
 file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 
@@ -64,9 +66,9 @@ foreach(SHADER_NAME ${SHADER_FILENAMES})
 endforeach()
 
 add_custom_target(post_build ALL 
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/prefabs ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prefabs
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/scenes ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scenes
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/textures ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/textures
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/prefabs $<TARGET_FILE_DIR:VulkanDemo>/prefabs
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/scenes $<TARGET_FILE_DIR:VulkanDemo>/scenes
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/textures $<TARGET_FILE_DIR:VulkanDemo>/textures
 )
 
 add_dependencies(post_build VulkanDemo)

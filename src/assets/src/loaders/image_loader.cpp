@@ -26,7 +26,7 @@ std::unique_ptr<ImageData> createImageFromPath(const std::filesystem::path& path
     int channels;
 
     stbi_set_flip_vertically_on_load(true);
-    auto stbiData = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+    auto stbiData = stbi_load(path.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
     stbi_set_flip_vertically_on_load(false);
     if (!stbiData)
     {
@@ -54,7 +54,7 @@ std::unique_ptr<ImageData> createSkyboxImageFromPath(const std::filesystem::path
     int channels;
 
     stbi_set_flip_vertically_on_load(true);
-    auto stbiData = stbi_loadf(path.c_str(), &width, &height, &channels, 0);
+    auto stbiData = stbi_loadf(path.string().c_str(), &width, &height, &channels, 0);
     stbi_set_flip_vertically_on_load(false);
     if (!stbiData)
     {

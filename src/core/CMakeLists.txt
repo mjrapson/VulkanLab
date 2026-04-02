@@ -18,14 +18,7 @@ target_include_directories(Core
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(Core
-    PRIVATE
-        pch
-)
-
 target_compile_definitions(Core
     PRIVATE
         GLM_FORCE_DEPTH_ZERO_TO_ONE
 )
-
-target_precompile_headers(Core REUSE_FROM pch)

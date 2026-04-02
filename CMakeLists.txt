@@ -97,7 +97,6 @@ find_program(SLANGC_EXECUTABLE
 # -------------------------
 # Project modules
 # -------------------------
-add_subdirectory(pch)
 add_subdirectory(src/core)
 add_subdirectory(src/window)
 add_subdirectory(src/renderer)

@@ -25,13 +25,12 @@ target_link_libraries(Scene
         Core
         Assets
         Renderer
+        glm
         spdlog
-        pch
+        Vulkan::Vulkan
 )
 
 target_compile_definitions(Scene
     PRIVATE
         GLM_FORCE_DEPTH_ZERO_TO_ONE
 )
-
-target_precompile_headers(Scene REUSE_FROM pch)

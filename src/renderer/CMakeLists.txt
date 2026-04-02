@@ -36,14 +36,12 @@ target_link_libraries(Renderer
     PRIVATE
         Core
         Window
+        glm
         spdlog
         Vulkan::Vulkan
-        pch
 )
 
 target_compile_definitions(Renderer
     PRIVATE
         GLM_FORCE_DEPTH_ZERO_TO_ONE
 )
-
-target_precompile_headers(Renderer REUSE_FROM pch)

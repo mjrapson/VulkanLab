@@ -842,7 +842,7 @@ void Renderer::createCommandBuffers()
 
 void Renderer::createSyncObjects()
 {
-    for ([[maybe_unused]] auto _ : std::views::repeat(0, maxFramesInFlight))
+    for (auto i = 0; i < maxFramesInFlight; ++i)
     {
         auto fenceCreateInfo = vk::FenceCreateInfo{};
         fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
