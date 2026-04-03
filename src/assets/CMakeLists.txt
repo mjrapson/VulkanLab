@@ -32,7 +32,6 @@ target_link_libraries(Assets
         Core
         Renderer
         glm
-        Vulkan::Vulkan
 )
 
 target_compile_definitions(Assets

@@ -98,7 +98,8 @@ class MemoryStore
             {
                 auto& element = blocks_[blockIndex][elementIndex];
                 element.generation++;
-                element.data = {};
+
+                std::destroy_at(&element.data);
 
                 freeIds_.push_back(static_cast<uint32_t>(blockIndex * blockSize_ + elementIndex));
             }

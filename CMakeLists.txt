@@ -88,6 +88,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tinygltf)
 
+FetchContent_Declare(
+    VulkanMemoryAllocator
+    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+    GIT_TAG        v3.3.0
+)
+FetchContent_MakeAvailable(VulkanMemoryAllocator)
+
 find_package(Vulkan REQUIRED)
 find_program(SLANGC_EXECUTABLE
     NAMES slangc

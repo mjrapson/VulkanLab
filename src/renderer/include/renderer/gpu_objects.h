@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "renderer/buffer.h"
+#include "renderer/image.h"
+
 #include <core/handle.h>
 
 #include <vulkan/vulkan_raii.hpp>
@@ -11,18 +14,9 @@
 
 namespace renderer
 {
-struct Image
-{
-    vk::raii::Image image{nullptr};
-    vk::raii::ImageView view{nullptr};
-    vk::raii::DeviceMemory memory{nullptr};
-};
-
 struct Material
 {
-    vk::raii::Buffer uniformBuffer{nullptr};
-    vk::raii::DeviceMemory uniformBufferMemory{nullptr};
-    vk::DeviceSize size;
+    core::Handle<Buffer> uniformBuffer;
     vk::raii::DescriptorSet descriptorSet{nullptr};
 };
 
@@ -43,10 +37,8 @@ struct DirectionalLightUboData
 
 struct Mesh
 {
-    vk::raii::Buffer vertexBuffer{nullptr};
-    vk::raii::DeviceMemory vertexBufferMemory{nullptr};
-    vk::raii::Buffer indexBuffer{nullptr};
-    vk::raii::DeviceMemory indexBufferMemory{nullptr};
+    core::Handle<Buffer> vertexBuffer;
+    core::Handle<Buffer> indexBuffer;
     uint32_t indexCount{};
 };
 
@@ -60,9 +52,7 @@ struct Skybox
 
 struct LoadingScreen
 {
-    vk::raii::Image image{nullptr};
-    vk::raii::ImageView view{nullptr};
-    vk::raii::DeviceMemory memory{nullptr};
+    core::Handle<Image> image;
     vk::raii::DescriptorSet descriptorSet{nullptr};
 };
 } // namespace renderer

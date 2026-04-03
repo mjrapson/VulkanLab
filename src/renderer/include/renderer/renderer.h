@@ -3,9 +3,11 @@
 
 #pragma once
 
+#include "renderer/buffer.h"
 #include "renderer/descriptor_set_allocator.h"
 #include "renderer/draw_command.h"
 #include "renderer/gpu_device.h"
+#include "renderer/image.h"
 #include "renderer/instance.h"
 #include "renderer/pipeline.h"
 #include "renderer/resources.h"
@@ -36,12 +38,12 @@ class Renderer
         std::optional<ImageHandle> diffuseTexture;
     };
 
-    struct FaceData
-    {
-        uint32_t width;
-        uint32_t height;
-        std::span<const std::byte> data;
-    };
+    // struct FaceData
+    // {
+    //     uint32_t width;
+    //     uint32_t height;
+    //     std::span<const std::byte> data;
+    // };
 
     struct SceneDrawInfo
     {
@@ -70,7 +72,7 @@ class Renderer
     ImageHandle addImage(uint32_t width, uint32_t height, std::span<const std::byte> data);
     MaterialHandle addMaterial(const MaterialData& data);
     MeshHandle addMesh(std::span<const core::Vertex> vertices, std::span<const uint32_t> indices);
-    SkyboxHandle addSkybox(const std::array<FaceData, 6>& data);
+    // SkyboxHandle addSkybox(const std::array<FaceData, 6>& data);
 
   private:
     void createSwapchain();
@@ -91,10 +93,8 @@ class Renderer
 
     void renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands);
 
-    void stageAndUploadImageData(const vk::raii::Image& image,
-                                 uint32_t width,
-                                 uint32_t height,
-                                 std::span<const std::byte> data);
+    void stageAndUploadBufferData(Buffer& buffer, const void* data, size_t offset, size_t size);
+    void stageAndUploadImageData(VkImage image, uint32_t width, uint32_t height, std::span<const std::byte> data);
 
   private:
     vk::raii::Context context_;
@@ -127,31 +127,21 @@ class Renderer
     DescriptorSetAllocator loadingScreenImageDescriptor_;
     DescriptorSetAllocator shadowMapImageDescriptor_;
 
-    Image emptyImage_;
+    std::unique_ptr<Image> emptyImage_{nullptr};
+    std::unique_ptr<Image> shadowMapImage_{nullptr};
+    std::unique_ptr<Image> depthTargetImage_{nullptr};
 
-    std::vector<vk::raii::Buffer> cameraUniformBuffers_;
-    std::vector<vk::raii::DeviceMemory> cameraUniformBuffersMemory_;
-    std::vector<void*> cameraUniformBuffersMappedMemory_;
+    std::vector<Buffer> cameraUniformBuffers_;
     std::vector<vk::raii::DescriptorSet> cameraDescriptorSets_;
 
-    vk::raii::Buffer directionalLightUniformBuffer_{nullptr};
-    vk::raii::DeviceMemory directionalLightUniformBufferMemory_{nullptr};
-    void* directionalLightUniformBufferMappedMemory_{nullptr};
-    vk::raii::DescriptorSet directionalLightDescriptorSet_{nullptr};
+    std::vector<Buffer> directionalLightUniformBuffers_;
+    std::vector<vk::raii::DescriptorSet> directionalLightDescriptorSets_;
 
     vk::raii::DescriptorSet shadowMapDescriptorSet_{nullptr};
 
     Resources resources_;
     vk::raii::Sampler imageSampler_{nullptr};
     vk::raii::Sampler shadowSampler_{nullptr};
-
-    vk::raii::Image shadowMapImage_{nullptr};
-    vk::raii::DeviceMemory shadowMapImageMemory_{nullptr};
-    vk::raii::ImageView shadowMapImageView_{nullptr};
-
-    vk::raii::Image depthTargetImage_{nullptr};
-    vk::raii::DeviceMemory depthTargetImageMemory_{nullptr};
-    vk::raii::ImageView depthTargetImageView_{nullptr};
 
     Pipeline shadowPass_;
     Pipeline geometryPass_;

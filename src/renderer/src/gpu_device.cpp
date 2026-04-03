@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <stdexcept>
 
 namespace renderer
 {
@@ -68,31 +69,6 @@ uint32_t getSurfacePresentationQueueFamilyIndex(const vk::raii::PhysicalDevice& 
     return static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), itr));
 }
 
-bool matchingMemoryIndex(uint32_t memoryIndex, uint32_t filter)
-{
-    return (filter & (1 << memoryIndex));
-}
-
-uint32_t findMemoryType(const vk::raii::PhysicalDevice& device, uint32_t typeFilter, vk::MemoryPropertyFlags properties)
-{
-
-    const auto memoryProperties = device.getMemoryProperties();
-    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
-    {
-        if (!matchingMemoryIndex(i, typeFilter))
-        {
-            continue;
-        }
-
-        if ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
-        {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("No suitable memory type found");
-}
-
 GpuDevice::GpuDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface)
 {
     spdlog::info("Finding physical GPU device");
@@ -100,6 +76,23 @@ GpuDevice::GpuDevice(const vk::raii::Instance& instance, const vk::raii::Surface
 
     spdlog::info("Creating logical GPU device");
     createLogicalDevice(surface);
+
+    spdlog::info("Creating resource allocator");
+    auto allocatorInfo = VmaAllocatorCreateInfo{};
+    allocatorInfo.physicalDevice = *physicalDevice_;
+    allocatorInfo.device = *device_;
+    allocatorInfo.instance = *instance;
+    allocatorInfo.vulkanApiVersion = physicalDevice_.getProperties().apiVersion;
+
+    if (vmaCreateAllocator(&allocatorInfo, &allocator_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create VMA allocator");
+    }
+}
+
+GpuDevice::~GpuDevice()
+{
+    vmaDestroyAllocator(allocator_);
 }
 
 vk::raii::CommandPool GpuDevice::createCommandPool() const
@@ -160,231 +153,6 @@ vk::raii::ShaderModule GpuDevice::createShaderModule(const std::filesystem::path
     return vk::raii::ShaderModule{device_, createInfo};
 }
 
-vk::raii::Buffer GpuDevice::createBuffer(const vk::DeviceSize& size,
-                                         const vk::BufferUsageFlags& usage,
-                                         const vk::SharingMode& sharingMode) const
-{
-    auto bufferInfo = vk::BufferCreateInfo{};
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = sharingMode;
-
-    return vk::raii::Buffer(device_, bufferInfo);
-}
-
-vk::raii::Buffer GpuDevice::createVertexBuffer(const vk::DeviceSize& size) const
-{
-    return createBuffer(size,
-                        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                        vk::SharingMode::eExclusive);
-}
-
-vk::raii::Buffer GpuDevice::createIndexBuffer(const vk::DeviceSize& size) const
-{
-    return createBuffer(size,
-                        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                        vk::SharingMode::eExclusive);
-}
-
-vk::raii::Buffer GpuDevice::createStagingBuffer(const vk::DeviceSize& size) const
-{
-    return createBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive);
-}
-
-vk::raii::Buffer GpuDevice::createUniformBuffer(const vk::DeviceSize& size) const
-{
-    return createBuffer(size, vk::BufferUsageFlagBits::eUniformBuffer, vk::SharingMode::eExclusive);
-}
-
-void GpuDevice::copyBuffer(const vk::raii::CommandBuffer& cmd,
-                           const vk::raii::Buffer& source,
-                           const vk::raii::Buffer& destination,
-                           const vk::DeviceSize& size,
-                           const vk::DeviceSize& destinationOffset) const
-{
-    cmd.copyBuffer(*source, *destination, vk::BufferCopy(0, destinationOffset, size));
-}
-
-void GpuDevice::copyBufferToImage(const vk::raii::CommandBuffer& cmd,
-                                  const vk::raii::Buffer& source,
-                                  const vk::raii::Image& destination,
-                                  uint32_t width,
-                                  uint32_t height,
-                                  uint32_t layers) const
-{
-    auto region = vk::BufferImageCopy{};
-    region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = layers;
-    region.imageExtent = vk::Extent3D{width, height, 1};
-
-    cmd.copyBufferToImage(source, destination, vk::ImageLayout::eTransferDstOptimal, region);
-}
-
-vk::raii::Image GpuDevice::createImage(uint32_t width, uint32_t height) const
-{
-    auto imageInfo = vk::ImageCreateInfo{};
-    imageInfo.imageType = vk::ImageType::e2D;
-    imageInfo.format = vk::Format::eR8G8B8A8Srgb;
-    imageInfo.extent = vk::Extent3D{width, height, 1};
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.samples = vk::SampleCountFlagBits::e1;
-    imageInfo.tiling = vk::ImageTiling::eOptimal;
-    imageInfo.usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
-    imageInfo.sharingMode = vk::SharingMode::eExclusive;
-    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-
-    return vk::raii::Image{device_, imageInfo};
-}
-
-vk::raii::Image GpuDevice::createCubemapImage(uint32_t width, uint32_t height) const
-{
-    auto imageInfo = vk::ImageCreateInfo{};
-    imageInfo.imageType = vk::ImageType::e2D;
-    imageInfo.format = vk::Format::eR8G8B8A8Srgb;
-    imageInfo.extent = vk::Extent3D{width, height, 1};
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 6;
-    imageInfo.samples = vk::SampleCountFlagBits::e1;
-    imageInfo.tiling = vk::ImageTiling::eOptimal;
-    imageInfo.usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
-    imageInfo.sharingMode = vk::SharingMode::eExclusive;
-    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-    imageInfo.flags = vk::ImageCreateFlagBits::eCubeCompatible;
-
-    return vk::raii::Image{device_, imageInfo};
-}
-
-vk::raii::Image GpuDevice::createDepthImage(uint32_t width, uint32_t height) const
-{
-    auto imageInfo = vk::ImageCreateInfo{};
-    imageInfo.imageType = vk::ImageType::e2D;
-    imageInfo.format = vk::Format::eD32Sfloat;
-    imageInfo.extent = vk::Extent3D{width, height, 1};
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.samples = vk::SampleCountFlagBits::e1;
-    imageInfo.tiling = vk::ImageTiling::eOptimal;
-    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled;
-    imageInfo.sharingMode = vk::SharingMode::eExclusive;
-    imageInfo.initialLayout = vk::ImageLayout::eUndefined;
-
-    return vk::raii::Image{device_, imageInfo};
-}
-
-vk::raii::ImageView GpuDevice::createImageView(const vk::raii::Image& image) const
-{
-    auto subresourceRange = vk::ImageSubresourceRange{};
-    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = 1;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = 1;
-
-    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
-    imageViewCreateInfo.image = *image;
-    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
-    imageViewCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
-    imageViewCreateInfo.subresourceRange = subresourceRange;
-
-    return vk::raii::ImageView{device_, imageViewCreateInfo};
-}
-
-vk::raii::ImageView GpuDevice::createDepthImageView(const vk::raii::Image& image) const
-{
-    auto subresourceRange = vk::ImageSubresourceRange{};
-    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = 1;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = 1;
-
-    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
-    imageViewCreateInfo.image = *image;
-    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
-    imageViewCreateInfo.format = vk::Format::eD32Sfloat;
-    imageViewCreateInfo.subresourceRange = subresourceRange;
-
-    return vk::raii::ImageView{device_, imageViewCreateInfo};
-}
-
-vk::raii::ImageView GpuDevice::createCubemapImageView(const vk::raii::Image& image) const
-{
-    auto subresourceRange = vk::ImageSubresourceRange{};
-    subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = 1;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = 6;
-
-    auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
-    imageViewCreateInfo.image = *image;
-    imageViewCreateInfo.viewType = vk::ImageViewType::eCube;
-    imageViewCreateInfo.format = vk::Format::eR8G8B8A8Srgb;
-    imageViewCreateInfo.subresourceRange = subresourceRange;
-
-    return vk::raii::ImageView{device_, imageViewCreateInfo};
-}
-
-vk::raii::Sampler GpuDevice::createSampler() const
-{
-    auto samplerInfo = vk::SamplerCreateInfo{};
-    samplerInfo.magFilter = vk::Filter::eNearest;
-    samplerInfo.minFilter = vk::Filter::eNearest;
-    samplerInfo.addressModeU = vk::SamplerAddressMode::eClampToEdge;
-    samplerInfo.addressModeV = vk::SamplerAddressMode::eClampToEdge;
-    samplerInfo.addressModeW = vk::SamplerAddressMode::eClampToEdge;
-    samplerInfo.anisotropyEnable = VK_FALSE;
-    samplerInfo.maxAnisotropy = 16.0f;
-    samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
-
-    return vk::raii::Sampler(device_, samplerInfo);
-}
-
-vk::raii::DeviceMemory GpuDevice::allocateBufferMemory(const vk::raii::Buffer& buffer,
-                                                       vk::MemoryPropertyFlags properties) const
-{
-    const auto memoryRequirements = buffer.getMemoryRequirements();
-    const auto memoryAllocateInfo = vk::MemoryAllocateInfo{
-        memoryRequirements.size,
-        findMemoryType(physicalDevice_, memoryRequirements.memoryTypeBits, properties)};
-
-    auto memory = vk::raii::DeviceMemory(device_, memoryAllocateInfo);
-    buffer.bindMemory(*memory, 0);
-
-    return memory;
-}
-
-vk::raii::DeviceMemory GpuDevice::allocateDeviceBufferMemory(const vk::raii::Buffer& buffer) const
-{
-    return allocateBufferMemory(buffer, vk::MemoryPropertyFlagBits::eDeviceLocal);
-}
-
-vk::raii::DeviceMemory GpuDevice::allocateStagingBufferMemory(const vk::raii::Buffer& buffer) const
-{
-    return allocateBufferMemory(buffer,
-                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-}
-
-vk::raii::DeviceMemory GpuDevice::allocateImageMemory(const vk::raii::Image& image,
-                                                      vk::MemoryPropertyFlags properties) const
-{
-    const auto memRequirements = image.getMemoryRequirements();
-    const auto memoryAllocateInfo = vk::MemoryAllocateInfo{
-        memRequirements.size,
-        findMemoryType(physicalDevice_, memRequirements.memoryTypeBits, properties)};
-
-    auto memory = vk::raii::DeviceMemory{device_, memoryAllocateInfo};
-    image.bindMemory(*memory, 0);
-
-    return memory;
-}
-
 vk::DeviceSize GpuDevice::calculateAlignedUboStride(size_t uboSize) const
 {
     const auto alignment = physicalDevice_.getProperties().limits.minUniformBufferOffsetAlignment;
@@ -397,7 +165,7 @@ vk::DeviceSize GpuDevice::calculateAlignedUboStride(size_t uboSize) const
     return uboSize + (alignment - (uboSize % alignment));
 }
 
-const vk::raii::Device& GpuDevice::device() const
+vk::raii::Device& GpuDevice::device()
 {
     return device_;
 }
@@ -410,6 +178,11 @@ const vk::raii::PhysicalDevice& GpuDevice::physicalDevice() const
 const vk::raii::Queue& GpuDevice::presentQueue() const
 {
     return presentQueue_;
+}
+
+VmaAllocator GpuDevice::allocator() const
+{
+    return allocator_;
 }
 
 void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)

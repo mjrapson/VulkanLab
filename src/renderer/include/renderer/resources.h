@@ -3,8 +3,9 @@
 
 #pragma once
 
+#include "renderer/buffer.h"
 #include "renderer/gpu_objects.h"
-#include "renderer/handles.h"
+#include "renderer/image.h"
 
 #include <core/memory.h>
 
@@ -12,7 +13,7 @@ namespace renderer
 {
 struct Resources
 {
-    ImageHandle emptyImage;
+    core::MemoryStore<Buffer> buffers{128};
     core::MemoryStore<Mesh> meshes{64};
     core::MemoryStore<Material> materials{128};
     core::MemoryStore<Image> images{64};

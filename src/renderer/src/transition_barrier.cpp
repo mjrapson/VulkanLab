@@ -50,7 +50,7 @@ vk::AccessFlags2 requiredAccessMaskForLayout(vk::ImageLayout layout)
     }
 }
 
-void transitionImageLayout(const vk::Image& image,
+void transitionImageLayout(vk::Image image,
                            const vk::CommandBuffer& commandBuffer,
                            vk::ImageLayout oldLayout,
                            vk::ImageLayout newLayout,

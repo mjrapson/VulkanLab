@@ -2,7 +2,7 @@ add_library(Renderer STATIC)
 
 target_sources(Renderer
     PUBLIC
-        include/renderer/buffer_object.h
+        include/renderer/buffer.h
         include/renderer/camera.h
         include/renderer/descriptor_set_allocator.h
         include/renderer/draw_command.h
@@ -10,6 +10,7 @@ target_sources(Renderer
         include/renderer/gpu_device.h
         include/renderer/gpu_objects.h
         include/renderer/handles.h
+        include/renderer/image.h
         include/renderer/instance.h
         include/renderer/pipeline.h
         include/renderer/renderer.h
@@ -17,12 +18,15 @@ target_sources(Renderer
         include/renderer/transition_barrier.h
         include/renderer/vertex_layout.h
     PRIVATE
+        src/buffer.cpp
         src/descriptor_set_allocator.cpp
         src/gpu_device.cpp
+        src/image.cpp
         src/pipeline.cpp
         src/instance.cpp
         src/renderer.cpp
         src/transition_barrier.cpp
+        src/vma.cpp
 )
 
 target_include_directories(Renderer
@@ -33,12 +37,14 @@ target_include_directories(Renderer
 )
 
 target_link_libraries(Renderer
+    PUBLIC
+        glm
+        VulkanMemoryAllocator
+        Vulkan::Vulkan
     PRIVATE
         Core
         Window
-        glm
         spdlog
-        Vulkan::Vulkan
 )
 
 target_compile_definitions(Renderer

@@ -6,6 +6,7 @@
 #include <core/handle.h>
 
 #include "renderer/gpu_objects.h"
+#include "renderer/image.h"
 
 namespace renderer
 {
