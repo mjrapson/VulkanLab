@@ -39,6 +39,7 @@ This project makes use of the following 3rd party libraries:
 - spdlog
 - stb
 - tinygltf
+- VulkanMemoryAllocator
 
 ## Acknowledgements
 This project, and learning Vulkan in general has been helped and inspired by some of the following resources:
