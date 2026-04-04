@@ -11,8 +11,20 @@ namespace renderer
 class Image
 {
   public:
+    enum class ImageType
+    {
+        Colour2D,
+        Depth2D,
+        ColourCube,
+    };
+
     Image() = delete;
-    Image(VkDevice device, VmaAllocator allocator, vk::Extent3D extent, vk::Format format);
+    Image(VkDevice device,
+          VmaAllocator allocator,
+          vk::Extent3D extent,
+          vk::Format format,
+          uint32_t arrayLayers,
+          ImageType type);
     ~Image();
 
     Image(const Image&) = delete;

@@ -5,40 +5,88 @@
 
 namespace renderer
 {
-bool isDepthFormat(vk::Format format)
+vk::ImageUsageFlags usageFlagsForType(Image::ImageType type)
 {
-    static constexpr auto depthFormats = std::array{vk::Format::eD16Unorm,
-                                                    vk::Format::eD32Sfloat,
-                                                    vk::Format::eD16UnormS8Uint,
-                                                    vk::Format::eD24UnormS8Uint,
-                                                    vk::Format::eD32SfloatS8Uint};
-
-    return std::find(depthFormats.begin(), depthFormats.end(), format) != depthFormats.end();
+    switch (type)
+    {
+        case Image::ImageType::Colour2D:
+        case Image::ImageType::ColourCube:
+            return vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
+        case Image::ImageType::Depth2D:
+            return vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled
+                   | vk::ImageUsageFlagBits::eDepthStencilAttachment;
+        default:
+            return {};
+    }
 }
 
-Image::Image(VkDevice device, VmaAllocator allocator, vk::Extent3D extent, vk::Format format)
+vk::ImageAspectFlags aspectFlagsForType(Image::ImageType type)
+{
+    switch (type)
+    {
+        case Image::ImageType::Colour2D:
+        case Image::ImageType::ColourCube:
+            return vk::ImageAspectFlagBits::eColor;
+        case Image::ImageType::Depth2D:
+            return vk::ImageAspectFlagBits::eDepth;
+        default:
+            return {};
+    }
+}
+
+vk::ImageCreateFlags imageCreateFlagsForType(Image::ImageType type)
+{
+    switch (type)
+    {
+        case Image::ImageType::ColourCube:
+            return vk::ImageCreateFlagBits::eCubeCompatible;
+        case Image::ImageType::Colour2D:
+        case Image::ImageType::Depth2D:
+        default:
+            return {};
+    }
+}
+
+vk::ImageViewType viewTypeForType(Image::ImageType type)
+{
+    switch (type)
+    {
+        case Image::ImageType::ColourCube:
+            return vk::ImageViewType::eCube;
+        case Image::ImageType::Colour2D:
+        case Image::ImageType::Depth2D:
+            return vk::ImageViewType::e2D;
+        default:
+            return {};
+    }
+}
+
+Image::Image(VkDevice device,
+             VmaAllocator allocator,
+             vk::Extent3D extent,
+             vk::Format format,
+             uint32_t arrayLayers,
+             ImageType type)
     : device_{device},
       allocator_(allocator)
 {
-    auto usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
-    if (isDepthFormat(format))
-    {
-        usage |= vk::ImageUsageFlagBits::eDepthStencilAttachment;
-    }
-
-    auto aspect = isDepthFormat(format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor;
+    const auto usage = usageFlagsForType(type);
+    const auto aspect = aspectFlagsForType(type);
+    const auto createFlags = imageCreateFlagsForType(type);
+    const auto viewType = viewTypeForType(type);
 
     auto imageInfo = vk::ImageCreateInfo{};
     imageInfo.imageType = vk::ImageType::e2D;
     imageInfo.format = format;
     imageInfo.extent = extent;
     imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
+    imageInfo.arrayLayers = arrayLayers;
     imageInfo.samples = vk::SampleCountFlagBits::e1;
     imageInfo.tiling = vk::ImageTiling::eOptimal;
     imageInfo.usage = usage;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
     imageInfo.initialLayout = vk::ImageLayout::eUndefined;
+    imageInfo.flags = createFlags;
 
     auto createInfo = VmaAllocationCreateInfo{};
     createInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -50,13 +98,13 @@ Image::Image(VkDevice device, VmaAllocator allocator, vk::Extent3D extent, vk::F
 
     auto imageViewCreateInfo = vk::ImageViewCreateInfo{};
     imageViewCreateInfo.image = image_;
-    imageViewCreateInfo.viewType = vk::ImageViewType::e2D;
+    imageViewCreateInfo.viewType = viewType;
     imageViewCreateInfo.format = format;
     imageViewCreateInfo.subresourceRange.aspectMask = aspect;
     imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
     imageViewCreateInfo.subresourceRange.levelCount = 1;
     imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    imageViewCreateInfo.subresourceRange.layerCount = 1;
+    imageViewCreateInfo.subresourceRange.layerCount = arrayLayers;
 
     if (vkCreateImageView(device_, imageViewCreateInfo, nullptr, &view_) != VK_SUCCESS)
     {

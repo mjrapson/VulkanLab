@@ -70,6 +70,9 @@ constexpr auto loadingScreenImageDescriptorBindings = std::array{
 constexpr auto shadowMapImageDescriptorBindings = std::array{
     vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 };
+constexpr auto skyboxPreProcessDescriptorBindings = std::array{
+    vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eCompute},
+};
 
 Renderer::Renderer(const window::Window& window)
     : instance_{context_, window.requiredExtensions()},
@@ -81,7 +84,8 @@ Renderer::Renderer(const window::Window& window)
       directionalLightDescriptor_{gpuDevice_.device(), directionalLightDescriptorBindings},
       skyboxDescriptor_{gpuDevice_.device(), skyboxDescriptorBindings},
       loadingScreenImageDescriptor_{gpuDevice_.device(), loadingScreenImageDescriptorBindings},
-      shadowMapImageDescriptor_{gpuDevice_.device(), shadowMapImageDescriptorBindings}
+      shadowMapImageDescriptor_{gpuDevice_.device(), shadowMapImageDescriptorBindings},
+      skyboxPreProcessDescriptor_(gpuDevice_.device(), skyboxPreProcessDescriptorBindings)
 {
     spdlog::info("Creating swapchain");
     createSwapchain();
@@ -99,7 +103,9 @@ Renderer::Renderer(const window::Window& window)
     emptyImage_ = std::make_unique<Image>(*gpuDevice_.device(),
                                           gpuDevice_.allocator(),
                                           vk::Extent3D{1, 1, 1},
-                                          vk::Format::eR8G8B8A8Srgb);
+                                          vk::Format::eR8G8B8A8Srgb,
+                                          1,
+                                          Image::ImageType::Colour2D);
 
     stageAndUploadImageData(emptyImage_->image(),
                             1,
@@ -109,13 +115,16 @@ Renderer::Renderer(const window::Window& window)
     shadowMapImage_ = std::make_unique<Image>(*gpuDevice_.device(),
                                               gpuDevice_.allocator(),
                                               vk::Extent3D{shadowMapSize, shadowMapSize, 1},
-                                              vk::Format::eD32Sfloat);
+                                              vk::Format::eD32Sfloat,
+                                              1,
+                                              Image::ImageType::Depth2D);
 
     spdlog::info("Creating render passes");
     createCameraBuffers();
     createDirectionalLightBuffers();
     createShadowMapDescriptorSets();
 
+    createSkyboxPreProcessPass();
     createShadowPass();
     createGeometryPass();
     createSkyboxPass();
@@ -295,6 +304,14 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
             if (info.skyboxHandle)
             {
                 auto skybox = resources_.skyboxes.get(info.skyboxHandle.value());
+
+                auto skyboxImage = resources_.images.get(skybox->cubemapImage);
+                transitionImageLayout(skyboxImage->image(),
+                                      commandBuffer,
+                                      vk::ImageLayout::eUndefined,
+                                      vk::ImageLayout::eShaderReadOnlyOptimal,
+                                      vk::ImageAspectFlagBits::eColor,
+                                      6);
 
                 auto attachmentInfo = vk::RenderingAttachmentInfo{};
                 attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
@@ -490,6 +507,7 @@ void Renderer::reset()
     // Reset pools for per scene data
     materialDescriptor_.clear();
     skyboxDescriptor_.clear();
+    skyboxPreProcessDescriptor_.clear();
 }
 
 void Renderer::windowResized(int width, int height)
@@ -514,7 +532,9 @@ LoadingScreenHandle Renderer::addLoadingScreenImage(uint32_t width, uint32_t hei
     loadingScreen->image = resources_.images.allocate(*gpuDevice_.device(),
                                                       gpuDevice_.allocator(),
                                                       vk::Extent3D{width, height, 1},
-                                                      vk::Format::eR8G8B8A8Srgb);
+                                                      vk::Format::eR8G8B8A8Srgb,
+                                                      1,
+                                                      Image::ImageType::Colour2D);
 
     auto image = resources_.images.get(loadingScreen->image);
     stageAndUploadImageData(image->image(), width, height, data);
@@ -544,7 +564,9 @@ ImageHandle Renderer::addImage(uint32_t width, uint32_t height, std::span<const 
     auto handle = resources_.images.allocate(*gpuDevice_.device(),
                                              gpuDevice_.allocator(),
                                              vk::Extent3D{width, height, 1},
-                                             vk::Format::eR8G8B8A8Srgb);
+                                             vk::Format::eR8G8B8A8Srgb,
+                                             1,
+                                             Image::ImageType::Colour2D);
 
     auto image = resources_.images.get(handle);
     stageAndUploadImageData(image->image(), width, height, data);
@@ -637,35 +659,65 @@ MeshHandle Renderer::addMesh(std::span<const core::Vertex> vertices, std::span<c
 
 SkyboxHandle Renderer::addSkybox(uint32_t width, uint32_t height, std::span<const std::byte> data)
 {
-    auto imageHandle = resources_.images.allocate(*gpuDevice_.device(),
-                                                  gpuDevice_.allocator(),
-                                                  vk::Extent3D{width, height, 1},
-                                                  vk::Format::eR8G8B8A8Srgb);
-
-    auto image = resources_.images.get(imageHandle);
-    stageAndUploadImageData(image->image(), width, height, data);
-
     auto skyboxHandle = resources_.skyboxes.allocate();
     auto skybox = resources_.skyboxes.get(skyboxHandle);
 
-    skybox->image = imageHandle;
+    // Create and upload the original HDR equirectangular image
+    skybox->hdrImage = resources_.images.allocate(*gpuDevice_.device(),
+                                                  gpuDevice_.allocator(),
+                                                  vk::Extent3D{width, height, 1},
+                                                  vk::Format::eR8G8B8A8Srgb,
+                                                  1,
+                                                  Image::ImageType::Colour2D);
+
+    auto hdrImage = resources_.images.get(skybox->hdrImage);
+    stageAndUploadImageData(hdrImage->image(), width, height, data);
+
+    skybox->preProcessDescriptorSet = std::move(skyboxPreProcessDescriptor_.allocateSets(1)[0]);
+    {
+        auto imageInfo = vk::DescriptorImageInfo{};
+        imageInfo.imageView = hdrImage->view();
+        imageInfo.sampler = imageSampler_;
+        imageInfo.imageLayout = vk::ImageLayout::eGeneral;
+
+        auto textureWrite = vk::WriteDescriptorSet{};
+        textureWrite.dstSet = skybox->preProcessDescriptorSet;
+        textureWrite.dstBinding = 0;
+        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        textureWrite.descriptorCount = 1;
+        textureWrite.pImageInfo = &imageInfo;
+
+        std::array writes{textureWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+    }
+
+    // Create the cubemap image we will convert to
+    skybox->cubemapImage = resources_.images.allocate(*gpuDevice_.device(),
+                                                      gpuDevice_.allocator(),
+                                                      vk::Extent3D{width / 4, width / 4, 1},
+                                                      vk::Format::eR8G8B8A8Srgb,
+                                                      6,
+                                                      Image::ImageType::ColourCube);
+
+    auto cubemapImage = resources_.images.get(skybox->cubemapImage);
 
     skybox->descriptorSet = std::move(skyboxDescriptor_.allocateSets(1)[0]);
+    {
+        auto imageInfo = vk::DescriptorImageInfo{};
+        imageInfo.imageView = cubemapImage->view();
+        imageInfo.sampler = imageSampler_;
+        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
-    auto imageInfo = vk::DescriptorImageInfo{};
-    imageInfo.imageView = image->view();
-    imageInfo.sampler = imageSampler_;
-    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+        auto textureWrite = vk::WriteDescriptorSet{};
+        textureWrite.dstSet = skybox->descriptorSet;
+        textureWrite.dstBinding = 0;
+        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        textureWrite.descriptorCount = 1;
+        textureWrite.pImageInfo = &imageInfo;
 
-    auto textureWrite = vk::WriteDescriptorSet{};
-    textureWrite.dstSet = skybox->descriptorSet;
-    textureWrite.dstBinding = 0;
-    textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-    textureWrite.descriptorCount = 1;
-    textureWrite.pImageInfo = &imageInfo;
-
-    std::array writes{textureWrite};
-    gpuDevice_.device().updateDescriptorSets(writes, {});
+        std::array writes{textureWrite};
+        gpuDevice_.device().updateDescriptorSets(writes, {});
+    }
 
     return skyboxHandle;
 }
@@ -904,6 +956,13 @@ void Renderer::createShadowMapDescriptorSets()
     gpuDevice_.device().updateDescriptorSets(writes, {});
 }
 
+void Renderer::createSkyboxPreProcessPass()
+{
+    skyboxPreProcessPass_ = createComputePipeline(gpuDevice_.device(),
+                                                  core::getShaderDir() / "skybox_preprocess.compute.spv",
+                                                  {*skyboxPreProcessDescriptor_.layout()});
+}
+
 void Renderer::createShadowPass()
 {
     auto pd = PipelineDesc{};
@@ -999,7 +1058,9 @@ void Renderer::resizeGeometryPass()
     depthTargetImage_ = std::make_unique<Image>(*gpuDevice_.device(),
                                                 gpuDevice_.allocator(),
                                                 vk::Extent3D{swapchainExtent_, 1},
-                                                vk::Format::eD32Sfloat);
+                                                vk::Format::eD32Sfloat,
+                                                1,
+                                                Image::ImageType::Depth2D);
 }
 
 void Renderer::renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands)
