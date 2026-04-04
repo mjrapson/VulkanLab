@@ -907,8 +907,8 @@ void Renderer::createShadowMapDescriptorSets()
 void Renderer::createShadowPass()
 {
     auto pd = PipelineDesc{};
-    pd.vertexShaderPath = core::getShaderDir() / "shadowmap.vert.spv";
-    pd.fragmentShaderPath = core::getShaderDir() / "shadowmap.frag.spv";
+    pd.vertexShaderPath = core::getShaderDir() / "shadowmap.vertex.spv";
+    pd.fragmentShaderPath = core::getShaderDir() / "shadowmap.fragment.spv";
     pd.vertexBindingDescriptions = {vertexBindingDescription};
     pd.vertexAttributeDescriptions = {vertexPositionAttribute};
     pd.descriptorLayouts = {*directionalLightDescriptor_.layout()};
@@ -926,8 +926,8 @@ void Renderer::createShadowPass()
 void Renderer::createGeometryPass()
 {
     auto pd = PipelineDesc{};
-    pd.vertexShaderPath = core::getShaderDir() / "basic.vert.spv";
-    pd.fragmentShaderPath = core::getShaderDir() / "basic.frag.spv";
+    pd.vertexShaderPath = core::getShaderDir() / "basic.vertex.spv";
+    pd.fragmentShaderPath = core::getShaderDir() / "basic.fragment.spv";
     pd.vertexBindingDescriptions = {vertexBindingDescription};
     pd.vertexAttributeDescriptions = {vertexPositionAttribute, vertexNormalAttribute, vertexTextureUVAttribute};
     pd.descriptorLayouts = {*cameraDescriptor_.layout(),
@@ -947,8 +947,8 @@ void Renderer::createGeometryPass()
 void Renderer::createSkyboxPass()
 {
     auto pd = PipelineDesc{};
-    pd.vertexShaderPath = core::getShaderDir() / "skybox.vert.spv";
-    pd.fragmentShaderPath = core::getShaderDir() / "skybox.frag.spv";
+    pd.vertexShaderPath = core::getShaderDir() / "skybox.vertex.spv";
+    pd.fragmentShaderPath = core::getShaderDir() / "skybox.fragment.spv";
     pd.descriptorLayouts = {*cameraDescriptor_.layout(), *skyboxDescriptor_.layout()};
     pd.colorAttachmentFormats = {surfaceFormat_};
     pd.depthWriteEnable = vk::False;
@@ -960,8 +960,8 @@ void Renderer::createSkyboxPass()
 void Renderer::createLoadingScreenPass()
 {
     auto pd = PipelineDesc{};
-    pd.vertexShaderPath = core::getShaderDir() / "loading_screen.vert.spv";
-    pd.fragmentShaderPath = core::getShaderDir() / "loading_screen.frag.spv";
+    pd.vertexShaderPath = core::getShaderDir() / "loading_screen.vertex.spv";
+    pd.fragmentShaderPath = core::getShaderDir() / "loading_screen.fragment.spv";
     pd.descriptorLayouts = {*loadingScreenImageDescriptor_.layout()};
     pd.colorAttachmentFormats = {surfaceFormat_};
     pd.depthTestEnable = vk::False;

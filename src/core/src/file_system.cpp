@@ -71,7 +71,7 @@ std::vector<char> readBinaryFile(const std::filesystem::path& filepath)
 
     if (!file.is_open())
     {
-        throw std::runtime_error("failed to open file!");
+        throw std::runtime_error("failed to open file!" + filepath.string());
     }
 
     std::vector<char> buffer(file.tellg());

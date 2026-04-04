@@ -104,6 +104,8 @@ find_program(SLANGC_EXECUTABLE
 # -------------------------
 # Project modules
 # -------------------------
+include(cmake/shader.cmake)
+
 add_subdirectory(src/core)
 add_subdirectory(src/window)
 add_subdirectory(src/renderer)

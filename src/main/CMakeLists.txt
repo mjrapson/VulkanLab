@@ -27,43 +27,12 @@ target_compile_definitions(VulkanDemo
 
 set(SHADER_SRC_DIR ${CMAKE_SOURCE_DIR}/assets/shaders)
 set(SHADER_OUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders)
-
 file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 
-set(SHADER_FILENAMES
-    basic
-    shadowmap
-    skybox
-    loading_screen
-)
-
-function(add_shader SHADER_NAME)
-    set(SHADER_SOURCE ${SHADER_SRC_DIR}/${SHADER_NAME}.slang)
-    set(VERT_OUT ${SHADER_OUT_DIR}/${SHADER_NAME}.vert.spv)
-    set(FRAG_OUT ${SHADER_OUT_DIR}/${SHADER_NAME}.frag.spv)
-    set(SLANGC_ARGS -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name)
-
-    add_custom_command(
-        OUTPUT ${VERT_OUT} 
-        COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCE} -entry vertMain ${SLANGC_ARGS} -o ${VERT_OUT} 
-        DEPENDS ${SHADER_SOURCE} 
-        VERBATIM
-    )
-
-    add_custom_command(
-        OUTPUT ${FRAG_OUT} 
-        COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCE} -entry fragMain ${SLANGC_ARGS} -o ${FRAG_OUT} 
-        DEPENDS ${SHADER_SOURCE} 
-        VERBATIM
-    )
-
-    add_custom_target(shader_${SHADER_NAME} DEPENDS ${VERT_OUT} ${FRAG_OUT})
-endfunction()
-
-foreach(SHADER_NAME ${SHADER_FILENAMES})
-    add_shader(${SHADER_NAME})
-    add_dependencies(VulkanDemo shader_${SHADER_NAME})
-endforeach()
+add_shader(VulkanDemo basic VERTEX_ENTRY vertMain FRAGMENT_ENTRY fragMain OUTPUT_DIR ${SHADER_OUT_DIR})
+add_shader(VulkanDemo shadowmap VERTEX_ENTRY vertMain FRAGMENT_ENTRY fragMain OUTPUT_DIR ${SHADER_OUT_DIR})
+add_shader(VulkanDemo skybox VERTEX_ENTRY vertMain FRAGMENT_ENTRY fragMain OUTPUT_DIR ${SHADER_OUT_DIR})
+add_shader(VulkanDemo loading_screen VERTEX_ENTRY vertMain FRAGMENT_ENTRY fragMain OUTPUT_DIR ${SHADER_OUT_DIR})
 
 add_custom_target(post_build ALL 
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/prefabs ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prefabs

@@ -137,4 +137,31 @@ Pipeline createPipeline(const vk::raii::Device& device,
 
     return Pipeline{std::move(pipeline), std::move(pipelineLayout)};
 }
+
+Pipeline createComputePipeline(const vk::raii::Device& device,
+                               std::filesystem::path computeShaderPath,
+                               std::vector<vk::DescriptorSetLayout> descriptorLayouts)
+{
+    auto module = createShaderModule(device, computeShaderPath);
+
+    auto stageInfo = vk::PipelineShaderStageCreateInfo{};
+    stageInfo.stage = vk::ShaderStageFlagBits::eCompute;
+    stageInfo.module = *module;
+    stageInfo.pName = "compMain";
+
+    auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo{};
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(descriptorLayouts.size());
+    pipelineLayoutInfo.pSetLayouts = descriptorLayouts.data();
+
+    auto pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+
+    auto pipelineInfo = vk::ComputePipelineCreateInfo{};
+    pipelineInfo.sType = vk::StructureType::eComputePipelineCreateInfo;
+    pipelineInfo.layout = *pipelineLayout;
+    pipelineInfo.stage = stageInfo;
+
+    auto pipeline = vk::raii::Pipeline{device, nullptr, pipelineInfo};
+
+    return Pipeline{std::move(pipeline), std::move(pipelineLayout)};
+}
 } // namespace renderer

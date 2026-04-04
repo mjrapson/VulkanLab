@@ -40,4 +40,8 @@ struct PipelineDesc
 Pipeline createPipeline(const vk::raii::Device& device,
                         const vk::raii::PhysicalDevice& physicalDevice,
                         const PipelineDesc& desc);
+
+Pipeline createComputePipeline(const vk::raii::Device& device,
+                               std::filesystem::path computeShaderPath,
+                               std::vector<vk::DescriptorSetLayout> descriptorLayouts);
 } // namespace renderer
