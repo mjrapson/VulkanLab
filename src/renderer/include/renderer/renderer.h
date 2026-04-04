@@ -27,7 +27,6 @@ class Window;
 namespace renderer
 {
 struct Camera;
-class GpuDevice;
 
 class Renderer
 {

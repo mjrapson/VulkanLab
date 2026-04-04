@@ -3,56 +3,34 @@
 
 #pragma once
 
-#include "renderer/buffer.h"
-#include "renderer/image.h"
-
-#include <core/handle.h>
+#include "renderer/handles.h"
 
 #include <vulkan/vulkan_raii.hpp>
-
-#include <glm/glm.hpp>
 
 namespace renderer
 {
 struct Material
 {
-    core::Handle<Buffer> uniformBuffer;
+    BufferHandle uniformBuffer;
     vk::raii::DescriptorSet descriptorSet{nullptr};
-};
-
-struct MaterialUboData
-{
-    glm::vec4 diffuseColor;
-    uint32_t hasDiffuseTexture;
-    uint32_t _padding;
-};
-
-struct DirectionalLightUboData
-{
-    glm::vec3 direction;
-    uint32_t _padding1;
-    glm::mat4 lightSpaceView;
-    glm::mat4 lightSpaceProjection;
 };
 
 struct Mesh
 {
-    core::Handle<Buffer> vertexBuffer;
-    core::Handle<Buffer> indexBuffer;
+    BufferHandle vertexBuffer;
+    BufferHandle indexBuffer;
     uint32_t indexCount{};
 };
 
 struct Skybox
 {
-    vk::raii::Image image{nullptr};
-    vk::raii::ImageView view{nullptr};
-    vk::raii::DeviceMemory memory{nullptr};
+    ImageHandle image;
     vk::raii::DescriptorSet descriptorSet{nullptr};
 };
 
 struct LoadingScreen
 {
-    core::Handle<Image> image;
+    ImageHandle image;
     vk::raii::DescriptorSet descriptorSet{nullptr};
 };
 } // namespace renderer

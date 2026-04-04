@@ -22,6 +22,21 @@ struct CameraBufferObject
     glm::mat4 projection;
 };
 
+struct MaterialUboData
+{
+    glm::vec4 diffuseColor;
+    uint32_t hasDiffuseTexture;
+    uint32_t _padding;
+};
+
+struct DirectionalLightUboData
+{
+    glm::vec3 direction;
+    uint32_t _padding1;
+    glm::mat4 lightSpaceView;
+    glm::mat4 lightSpaceProjection;
+};
+
 struct ShadowPassPushConstants
 {
     glm::mat4 modelTransform;

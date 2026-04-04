@@ -7,6 +7,7 @@
 
 #include <renderer/handles.h>
 
+#include <memory>
 #include <optional>
 #include <stdint.h>
 #include <vector>

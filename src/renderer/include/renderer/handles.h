@@ -5,11 +5,16 @@
 
 #include <core/handle.h>
 
-#include "renderer/gpu_objects.h"
-#include "renderer/image.h"
-
 namespace renderer
 {
+class Buffer;
+struct Material;
+struct Mesh;
+class Image;
+struct Skybox;
+struct LoadingScreen;
+
+using BufferHandle = core::Handle<Buffer>;
 using MaterialHandle = core::Handle<Material>;
 using MeshHandle = core::Handle<Mesh>;
 using ImageHandle = core::Handle<Image>;
