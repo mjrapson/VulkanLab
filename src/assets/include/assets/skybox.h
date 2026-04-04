@@ -7,24 +7,25 @@
 
 #include <renderer/handles.h>
 
-#include <array>
 #include <memory>
 #include <optional>
 
 namespace assets
 {
+class Image;
+
 class Skybox
 {
   public:
-    explicit Skybox(std::array<std::unique_ptr<ImageData>, 6>&& cubemapImages);
+    explicit Skybox(std::unique_ptr<ImageData> imageData);
 
-    const std::array<std::unique_ptr<ImageData>, 6>& images() const;
+    const Image& image() const;
 
     void setRenderHandle(std::optional<renderer::SkyboxHandle> handle);
     std::optional<renderer::SkyboxHandle> renderHandle();
 
   private:
-    std::array<std::unique_ptr<ImageData>, 6> images_;
+    std::unique_ptr<Image> image_{nullptr};
     std::optional<renderer::SkyboxHandle> renderHandle_;
 };
 } // namespace assets

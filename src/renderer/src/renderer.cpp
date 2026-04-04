@@ -635,73 +635,40 @@ MeshHandle Renderer::addMesh(std::span<const core::Vertex> vertices, std::span<c
     return handle;
 }
 
-// SkyboxHandle Renderer::addSkybox(const std::array<FaceData, 6>& data)
-// {
-//     auto handle = resources_.skyboxes.allocate();
-//     auto skybox = resources_.skyboxes.get(handle);
+SkyboxHandle Renderer::addSkybox(uint32_t width, uint32_t height, std::span<const std::byte> data)
+{
+    auto imageHandle = resources_.images.allocate(*gpuDevice_.device(),
+                                                  gpuDevice_.allocator(),
+                                                  vk::Extent3D{width, height, 1},
+                                                  vk::Format::eR8G8B8A8Srgb);
 
-//     auto commandBuffers = gpuDevice_.createCommandBuffers(commandPool_, 1);
-//     auto& cmd = commandBuffers[0];
-//     cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    auto image = resources_.images.get(imageHandle);
+    stageAndUploadImageData(image->image(), width, height, data);
 
-//     const auto width = data.at(0).width;
-//     const auto height = data.at(0).height;
-//     const auto imageSize = data.at(0).data.size_bytes();
+    auto skyboxHandle = resources_.skyboxes.allocate();
+    auto skybox = resources_.skyboxes.get(skyboxHandle);
 
-//     skybox->image = gpuDevice_.createCubemapImage(width, height);
-//     skybox->memory = gpuDevice_.allocateImageMemory(skybox->image, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    skybox->image = imageHandle;
 
-//     auto stagingBuffer = gpuDevice_.createStagingBuffer(imageSize * 6);
-//     auto stagingMemory = gpuDevice_.allocateStagingBufferMemory(stagingBuffer);
+    skybox->descriptorSet = std::move(skyboxDescriptor_.allocateSets(1)[0]);
 
-//     transitionImageLayout(*skybox->image,
-//                           *cmd,
-//                           vk::ImageLayout::eUndefined,
-//                           vk::ImageLayout::eTransferDstOptimal,
-//                           vk::ImageAspectFlagBits::eColor,
-//                           6);
+    auto imageInfo = vk::DescriptorImageInfo{};
+    imageInfo.imageView = image->view();
+    imageInfo.sampler = imageSampler_;
+    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
-//     void* mappedMemory = stagingMemory.mapMemory(0, VK_WHOLE_SIZE);
-//     for (auto face = size_t{0}; face < 6; ++face)
-//     {
-//         auto dst = static_cast<uint8_t*>(mappedMemory) + (face * imageSize);
-//         std::memcpy(dst, data.at(face).data.data(), imageSize);
-//     }
-//     stagingMemory.unmapMemory();
+    auto textureWrite = vk::WriteDescriptorSet{};
+    textureWrite.dstSet = skybox->descriptorSet;
+    textureWrite.dstBinding = 0;
+    textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    textureWrite.descriptorCount = 1;
+    textureWrite.pImageInfo = &imageInfo;
 
-//     gpuDevice_.copyBufferToImage(cmd, stagingBuffer, skybox->image, width, height, 6);
+    std::array writes{textureWrite};
+    gpuDevice_.device().updateDescriptorSets(writes, {});
 
-//     transitionImageLayout(*skybox->image,
-//                           *cmd,
-//                           vk::ImageLayout::eTransferDstOptimal,
-//                           vk::ImageLayout::eShaderReadOnlyOptimal,
-//                           vk::ImageAspectFlagBits::eColor,
-//                           6);
-
-//     skybox->view = gpuDevice_.createCubemapImageView(skybox->image);
-
-//     cmd.end();
-//     gpuDevice_.submitCommandBuffer(cmd);
-
-//     skybox->descriptorSet = std::move(skyboxDescriptor_.allocateSets(1)[0]);
-
-//     auto imageInfo = vk::DescriptorImageInfo{};
-//     imageInfo.imageView = skybox->view;
-//     imageInfo.sampler = imageSampler_;
-//     imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-//     auto textureWrite = vk::WriteDescriptorSet{};
-//     textureWrite.dstSet = skybox->descriptorSet;
-//     textureWrite.dstBinding = 0;
-//     textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-//     textureWrite.descriptorCount = 1;
-//     textureWrite.pImageInfo = &imageInfo;
-
-//     std::array writes{textureWrite};
-//     gpuDevice_.device().updateDescriptorSets(writes, {});
-
-//     return handle;
-// }
+    return skyboxHandle;
+}
 
 void Renderer::createSwapchain()
 {

@@ -3,16 +3,18 @@
 
 #include "assets/skybox.h"
 
+#include "assets/image.h"
+
 namespace assets
 {
-Skybox::Skybox(std::array<std::unique_ptr<ImageData>, 6>&& cubemapImages)
-    : images_{std::move(cubemapImages)}
+Skybox::Skybox(std::unique_ptr<ImageData> imageData)
+    : image_{std::make_unique<Image>(std::move(imageData))}
 {
 }
 
-const std::array<std::unique_ptr<ImageData>, 6>& Skybox::images() const
+const Image& Skybox::image() const
 {
-    return images_;
+    return *image_;
 }
 
 void Skybox::setRenderHandle(std::optional<renderer::SkyboxHandle> handle)

@@ -26,6 +26,16 @@ void RenderSystem::initialize(scene::Scene& scene)
 {
     renderer_.reset();
 
+    if (scene.environment.skybox)
+    {
+        auto skybox = scene.assetDatabase.skybox(*scene.environment.skybox);
+        if (skybox && !skybox->renderHandle())
+        {
+            const auto& skyboxImage = skybox->image();
+            skybox->setRenderHandle(renderer_.addSkybox(skyboxImage.width(), skyboxImage.height(), skyboxImage.data()));
+        }
+    }
+
     scene.entityGraph.visit(
         [&database = scene.assetDatabase, this](Entity& entity)
         {
@@ -84,32 +94,19 @@ void RenderSystem::initialize(scene::Scene& scene)
                 }
             }
         });
-
-    // for (const auto& entity : scene.entities)
-    // {
-    //     initEntity(entity, scene.assetDatabase);
-    // }
-
-    // for (auto& skybox : world_.skyboxes())
-    // {
-    //     auto data = std::array<renderer::Renderer::FaceData, 6>{};
-    //     for (auto i = size_t{0}; i < skybox->images().size(); ++i)
-    //     {
-    //         auto faceData = renderer::Renderer::FaceData{};
-    //         faceData.width = skybox->images().at(i)->width;
-    //         faceData.height = skybox->images().at(i)->height;
-    //         faceData.data = skybox->images().at(i)->data;
-
-    //         data[i] = faceData;
-    //     }
-
-    //     skybox->setRenderHandle(renderer_.addSkybox(data));
-    // }
 }
 
 void RenderSystem::update(Scene& scene, const renderer::Camera& camera)
 {
     auto drawInfo = renderer::Renderer::SceneDrawInfo{};
+
+    if (scene.environment.skybox)
+    {
+        if (auto skybox = scene.assetDatabase.skybox(*scene.environment.skybox))
+        {
+            drawInfo.skyboxHandle = skybox->renderHandle();
+        }
+    }
 
     // Currenty walk the tree twice - need to improve this to walk once
     // Collect lighting
@@ -173,15 +170,4 @@ void RenderSystem::update(Scene& scene, const renderer::Camera& camera)
 
     renderer_.renderScene(camera, drawInfo);
 }
-// if (world_.environment().skybox)
-// {
-//     drawInfo.skyboxHandle = world_.environment().skybox->renderHandle();
-// }
-// drawInfo.globalLightDirection = scene.directionalLight.direction;
-
-// for (const auto& entity : scene.entities)
-// {
-//     drawEntity(entity, scene.assetDatabase, drawInfo);
-// }
-//}
 } // namespace scene

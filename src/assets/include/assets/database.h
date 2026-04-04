@@ -7,6 +7,7 @@
 #include "assets/material.h"
 #include "assets/mesh.h"
 #include "assets/prefab.h"
+#include "assets/skybox.h"
 
 #include <core/memory.h>
 
@@ -23,19 +24,19 @@ class AssetDatabase
     core::Handle<Material> createMaterial();
     core::Handle<Mesh> createMesh();
     core::Handle<Prefab> createPrefab();
-    core::Handle<Image> createSkybox(std::unique_ptr<ImageData> imageData);
+    core::Handle<Skybox> createSkybox(std::unique_ptr<ImageData> imageData);
 
     Image* image(core::Handle<Image> handle);
     Material* material(core::Handle<Material> handle);
     Mesh* mesh(core::Handle<Mesh> handle);
     Prefab* prefab(core::Handle<Prefab> handle);
-    Image* skybox(core::Handle<Image> handle);
+    Skybox* skybox(core::Handle<Skybox> handle);
 
   private:
     core::MemoryStore<Image> images_{64};
     core::MemoryStore<Material> materials_{128};
     core::MemoryStore<Mesh> meshes_{64};
     core::MemoryStore<Prefab> prefabs_{256};
-    core::MemoryStore<Image> skyboxes_{8};
+    core::MemoryStore<Skybox> skyboxes_{8};
 };
 } // namespace assets

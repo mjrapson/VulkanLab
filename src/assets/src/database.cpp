@@ -25,7 +25,7 @@ core::Handle<Prefab> AssetDatabase::createPrefab()
     return prefabs_.allocate();
 }
 
-core::Handle<Image> AssetDatabase::createSkybox(std::unique_ptr<ImageData> imageData)
+core::Handle<Skybox> AssetDatabase::createSkybox(std::unique_ptr<ImageData> imageData)
 {
     return skyboxes_.allocate(std::move(imageData));
 }
@@ -50,7 +50,7 @@ Prefab* AssetDatabase::prefab(core::Handle<Prefab> handle)
     return prefabs_.get(handle);
 }
 
-Image* AssetDatabase::skybox(core::Handle<Image> handle)
+Skybox* AssetDatabase::skybox(core::Handle<Skybox> handle)
 {
     return skyboxes_.get(handle);
 }

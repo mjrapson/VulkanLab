@@ -37,13 +37,6 @@ class Renderer
         std::optional<ImageHandle> diffuseTexture;
     };
 
-    // struct FaceData
-    // {
-    //     uint32_t width;
-    //     uint32_t height;
-    //     std::span<const std::byte> data;
-    // };
-
     struct SceneDrawInfo
     {
         std::vector<DrawCommand> drawCommands;
@@ -71,7 +64,7 @@ class Renderer
     ImageHandle addImage(uint32_t width, uint32_t height, std::span<const std::byte> data);
     MaterialHandle addMaterial(const MaterialData& data);
     MeshHandle addMesh(std::span<const core::Vertex> vertices, std::span<const uint32_t> indices);
-    // SkyboxHandle addSkybox(const std::array<FaceData, 6>& data);
+    SkyboxHandle addSkybox(uint32_t width, uint32_t height, std::span<const std::byte> data);
 
   private:
     void createSwapchain();

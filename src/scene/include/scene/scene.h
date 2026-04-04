@@ -11,9 +11,15 @@
 
 namespace scene
 {
+struct Environment
+{
+    std::optional<core::Handle<assets::Skybox>> skybox;
+};
+
 struct Scene
 {
     assets::AssetDatabase assetDatabase;
     EntityGraph entityGraph;
+    Environment environment;
 };
 } // namespace scene

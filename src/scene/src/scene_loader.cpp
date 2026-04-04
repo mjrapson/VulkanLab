@@ -5,6 +5,8 @@
 
 #include "scene/scene_gltf_loader.h"
 
+#include <assets/loaders/image_loader.h>
+
 #include <spdlog/spdlog.h>
 
 namespace scene
@@ -39,6 +41,20 @@ std::unique_ptr<Scene> loadSceneFromFolder(const std::filesystem::path& path)
     }
 
     // If skybox file exists, also load that (optional)
+    const auto skyboxFile = path / "skybox.hdr";
+    if (std::filesystem::exists(skyboxFile))
+    {
+        spdlog::debug("Loading skybox {}", skyboxFile.string());
+        try
+        {
+            scene->environment.skybox = scene->assetDatabase.createSkybox(
+                assets::createSkyboxImageFromPath(skyboxFile));
+        }
+        catch (const std::exception& e)
+        {
+            spdlog::error("skybox.hdr file exists, but failed to load: {}", e.what());
+        }
+    }
 
     return scene;
 }
