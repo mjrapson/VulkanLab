@@ -44,10 +44,10 @@ class GpuDevice
     VmaAllocator allocator() const;
 
   private:
-    void pickPhysicalDevice(const vk::raii::Instance& instance);
+    void pickPhysicalDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface);
     void createLogicalDevice(const vk::raii::SurfaceKHR& surface);
 
-    bool isDeviceSuitable(vk::raii::PhysicalDevice device) const;
+    bool isDeviceSuitable(vk::raii::PhysicalDevice device, const vk::raii::SurfaceKHR& surface) const;
     vk::raii::PhysicalDevice selectBestDevice(const std::vector<vk::raii::PhysicalDevice>& devices) const;
 
   private:
@@ -55,7 +55,10 @@ class GpuDevice
     vk::raii::PhysicalDevice physicalDevice_{nullptr};
     vk::raii::Queue graphicsQueue_{nullptr};
     vk::raii::Queue presentQueue_{nullptr};
+    vk::raii::Queue computeQueue_{nullptr};
     uint32_t graphicsQueueFamilyIndex_;
+    uint32_t presentQueueFamilyIndex_;
+    uint32_t computeQueueFamilyIndex_;
     VmaAllocator allocator_{nullptr};
 };
 } // namespace renderer

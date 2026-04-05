@@ -20,59 +20,54 @@ bool isDiscreteGpu(const vk::raii::PhysicalDevice& device)
     return device.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
 }
 
-bool supportsGraphicsQueue(const vk::QueueFamilyProperties& properties)
+struct QueueIndices
 {
-    return (properties.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0);
-}
+    std::optional<uint32_t> graphicsQueueIndex;
+    std::optional<uint32_t> presentQueueIndex;
+    std::optional<uint32_t> computeQueueIndex;
+};
 
-bool supportsSurfacePresentation(uint32_t index,
-                                 const vk::raii::PhysicalDevice& device,
-                                 const vk::raii::SurfaceKHR& surface)
+QueueIndices getAvailableQueueFamilyIndicesForDevice(const vk::raii::PhysicalDevice& physicalDevice,
+                                                     const vk::raii::SurfaceKHR& surface)
 {
-    return (device.getSurfaceSupportKHR(index, *surface) == VK_TRUE);
-}
+    auto indices = QueueIndices{};
 
-uint32_t getGraphicsQueueFamilyIndex(const vk::raii::PhysicalDevice& device)
-{
-    const auto& queueFamilyProperties = device.getQueueFamilyProperties();
+    const auto& queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
 
-    const auto itr = std::ranges::find_if(queueFamilyProperties, supportsGraphicsQueue);
-
-    if (itr == queueFamilyProperties.end())
+    // This might select the same index for different queues which is valid but not optimal. This can be refactored
+    // later to select unique indices if its possible to do so
+    for (auto index = uint32_t{0}; index < queueFamilyProperties.size(); ++index)
     {
-        throw std::runtime_error("Device does not support graphics queue family");
-    }
+        const auto& properties = queueFamilyProperties.at(index);
 
-    return static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), itr));
-}
-
-uint32_t getSurfacePresentationQueueFamilyIndex(const vk::raii::PhysicalDevice& device,
-                                                const vk::raii::SurfaceKHR& surface)
-{
-    const auto& queueFamilyProperties = device.getQueueFamilyProperties();
-
-    const auto itr = std::ranges::find_if(
-        queueFamilyProperties,
-        [&device, &surface, idx = uint32_t{0}](const auto&) mutable
+        if (!indices.graphicsQueueIndex && (properties.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlags{})
         {
-            const auto validQueueFamilyProperty = supportsSurfacePresentation(idx, device, surface);
+            indices.graphicsQueueIndex = index;
+        }
 
-            ++idx;
-            return validQueueFamilyProperty;
-        });
+        if (!indices.presentQueueIndex && physicalDevice.getSurfaceSupportKHR(index, *surface))
+        {
+            indices.presentQueueIndex = index;
+        }
 
-    if (itr == queueFamilyProperties.end())
-    {
-        throw std::runtime_error("Device does not support surface presentation queue family");
+        if (!indices.computeQueueIndex && (properties.queueFlags & vk::QueueFlagBits::eCompute) != vk::QueueFlags{})
+        {
+            indices.computeQueueIndex = index;
+        }
+
+        if (indices.graphicsQueueIndex && indices.presentQueueIndex && indices.computeQueueIndex)
+        {
+            break;
+        }
     }
 
-    return static_cast<uint32_t>(std::distance(queueFamilyProperties.begin(), itr));
+    return indices;
 }
 
 GpuDevice::GpuDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface)
 {
     spdlog::info("Finding physical GPU device");
-    pickPhysicalDevice(instance);
+    pickPhysicalDevice(instance, surface);
 
     spdlog::info("Creating logical GPU device");
     createLogicalDevice(surface);
@@ -185,7 +180,7 @@ VmaAllocator GpuDevice::allocator() const
     return allocator_;
 }
 
-void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)
+void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface)
 {
     const auto devices = instance.enumeratePhysicalDevices();
     if (devices.empty())
@@ -196,7 +191,7 @@ void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)
     auto suitableDevices = std::vector<vk::raii::PhysicalDevice>{};
     for (const auto& device : devices)
     {
-        if (isDeviceSuitable(device))
+        if (isDeviceSuitable(device, surface))
         {
             suitableDevices.push_back(device);
         }
@@ -214,9 +209,34 @@ void GpuDevice::pickPhysicalDevice(const vk::raii::Instance& instance)
 
 void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
 {
-    graphicsQueueFamilyIndex_ = getGraphicsQueueFamilyIndex(physicalDevice_);
+    const auto queueFamilyIndices = getAvailableQueueFamilyIndicesForDevice(physicalDevice_, surface);
 
-    const auto surfacePresentationQueueFamilyIndex = getSurfacePresentationQueueFamilyIndex(physicalDevice_, surface);
+    if (queueFamilyIndices.graphicsQueueIndex)
+    {
+        graphicsQueueFamilyIndex_ = queueFamilyIndices.graphicsQueueIndex.value();
+    }
+    else
+    {
+        throw std::runtime_error("Device does not support graphics queue family");
+    }
+
+    if (queueFamilyIndices.presentQueueIndex)
+    {
+        presentQueueFamilyIndex_ = queueFamilyIndices.presentQueueIndex.value();
+    }
+    else
+    {
+        throw std::runtime_error("Device does not support presentation queue family");
+    }
+
+    if (queueFamilyIndices.computeQueueIndex)
+    {
+        computeQueueFamilyIndex_ = queueFamilyIndices.computeQueueIndex.value();
+    }
+    else
+    {
+        throw std::runtime_error("Device does not support compute queue family");
+    }
 
     auto queuePriority = 0.5f;
     auto deviceQueueCreateInfo = vk::DeviceQueueCreateInfo{};
@@ -254,10 +274,11 @@ void GpuDevice::createLogicalDevice(const vk::raii::SurfaceKHR& surface)
 
     device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
     graphicsQueue_ = vk::raii::Queue(device_, graphicsQueueFamilyIndex_, 0);
-    presentQueue_ = vk::raii::Queue(device_, surfacePresentationQueueFamilyIndex, 0);
+    presentQueue_ = vk::raii::Queue(device_, presentQueueFamilyIndex_, 0);
+    computeQueue_ = vk::raii::Queue(device_, computeQueueFamilyIndex_, 0);
 }
 
-bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
+bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device, const vk::raii::SurfaceKHR& surface) const
 {
     const auto properties = device.getProperties();
     const auto deviceName = std::string{properties.deviceName.data()};
@@ -268,9 +289,11 @@ bool GpuDevice::isDeviceSuitable(vk::raii::PhysicalDevice device) const
         return false;
     }
 
-    if (std::ranges::none_of(device.getQueueFamilyProperties(), supportsGraphicsQueue))
+    // Not ideal to call this twice (here and when creating the logical device) - we could look to cache the indices
+    const auto indices = getAvailableQueueFamilyIndicesForDevice(device, surface);
+    if (!indices.graphicsQueueIndex || !indices.presentQueueIndex || !indices.computeQueueIndex)
     {
-        spdlog::info("Skipping {} - Does not support graphics queue family", deviceName);
+        spdlog::info("Skipping {} - Does not support required queue families", deviceName);
         return false;
     }
 
