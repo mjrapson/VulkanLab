@@ -30,10 +30,4 @@ struct Skybox
     vk::raii::DescriptorSet descriptorSet{nullptr};
     vk::raii::DescriptorSet preProcessDescriptorSet{nullptr};
 };
-
-struct LoadingScreen
-{
-    ImageHandle image;
-    vk::raii::DescriptorSet descriptorSet{nullptr};
-};
 } // namespace renderer

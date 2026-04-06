@@ -32,7 +32,6 @@ file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 add_shader(VulkanDemo basic VERTEX_ENTRY vertMain FRAGMENT_ENTRY fragMain OUTPUT_DIR ${SHADER_OUT_DIR})
 add_shader(VulkanDemo shadowmap VERTEX_ENTRY vertMain FRAGMENT_ENTRY fragMain OUTPUT_DIR ${SHADER_OUT_DIR})
 add_shader(VulkanDemo skybox VERTEX_ENTRY vertMain FRAGMENT_ENTRY fragMain OUTPUT_DIR ${SHADER_OUT_DIR})
-add_shader(VulkanDemo loading_screen VERTEX_ENTRY vertMain FRAGMENT_ENTRY fragMain OUTPUT_DIR ${SHADER_OUT_DIR})
 add_shader(VulkanDemo skybox_preprocess COMPUTE_ENTRY compMain OUTPUT_DIR ${SHADER_OUT_DIR})
 
 add_custom_target(post_build ALL 

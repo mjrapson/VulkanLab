@@ -15,7 +15,6 @@ target_sources(Renderer
         include/renderer/pipeline.h
         include/renderer/renderer.h
         include/renderer/resources.h
-        include/renderer/transition_barrier.h
         include/renderer/vertex_layout.h
     PRIVATE
         src/buffer.cpp
@@ -25,7 +24,6 @@ target_sources(Renderer
         src/pipeline.cpp
         src/instance.cpp
         src/renderer.cpp
-        src/transition_barrier.cpp
         src/vma.cpp
 )
 

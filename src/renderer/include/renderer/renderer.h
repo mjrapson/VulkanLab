@@ -16,7 +16,6 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
-#include <functional>
 #include <vector>
 
 namespace window
@@ -40,7 +39,7 @@ class Renderer
     struct SceneDrawInfo
     {
         std::vector<DrawCommand> drawCommands;
-        std::optional<renderer::SkyboxHandle> skyboxHandle;
+        std::optional<SkyboxHandle> skyboxHandle;
         glm::vec3 globalLightDirection;
     };
 
@@ -54,13 +53,11 @@ class Renderer
     Renderer& operator=(Renderer&& other) = delete;
 
     void renderScene(const Camera& camera, const SceneDrawInfo& info);
-    void renderLoadingScreen(LoadingScreenHandle loadingScreenHandle);
 
     void reset();
 
     void windowResized(int width, int height);
 
-    LoadingScreenHandle addLoadingScreenImage(uint32_t width, uint32_t height, std::span<const std::byte> data);
     ImageHandle addImage(uint32_t width, uint32_t height, std::span<const std::byte> data);
     MaterialHandle addMaterial(const MaterialData& data);
     MeshHandle addMesh(std::span<const core::Vertex> vertices, std::span<const uint32_t> indices);
@@ -79,7 +76,6 @@ class Renderer
     void createShadowPass();
     void createGeometryPass();
     void createSkyboxPass();
-    void createLoadingScreenPass();
 
     void recreateSwapchain();
     void resizeGeometryPass();
@@ -88,6 +84,16 @@ class Renderer
 
     void stageAndUploadBufferData(Buffer& buffer, const void* data, size_t offset, size_t size);
     void stageAndUploadImageData(VkImage image, uint32_t width, uint32_t height, std::span<const std::byte> data);
+    void transitionImageLayout(vk::Image image,
+                               const vk::CommandBuffer& commandBuffer,
+                               vk::ImageLayout oldLayout,
+                               vk::ImageLayout newLayout,
+                               vk::PipelineStageFlags2 srcStageFlags,
+                               vk::PipelineStageFlags2 dstStageFlags,
+                               vk::AccessFlags2 srcAccessFlags,
+                               vk::AccessFlags2 dstAccessFlags,
+                               const vk::ImageAspectFlags& aspectFlags,
+                               uint32_t layerCount = 1);
 
   private:
     vk::raii::Context context_;
@@ -117,7 +123,6 @@ class Renderer
     DescriptorSetAllocator materialDescriptor_;
     DescriptorSetAllocator directionalLightDescriptor_;
     DescriptorSetAllocator skyboxDescriptor_;
-    DescriptorSetAllocator loadingScreenImageDescriptor_;
     DescriptorSetAllocator shadowMapImageDescriptor_;
     DescriptorSetAllocator skyboxPreProcessDescriptor_;
 
@@ -142,7 +147,6 @@ class Renderer
     Pipeline shadowPass_;
     Pipeline geometryPass_;
     Pipeline skyboxPass_;
-    Pipeline loadingScreenPass_;
 
     float shadowDistance_{100.0f};
     float lightDistance_{100.0f};

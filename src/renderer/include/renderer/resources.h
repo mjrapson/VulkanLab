@@ -18,6 +18,5 @@ struct Resources
     core::MemoryStore<Material> materials{128};
     core::MemoryStore<Image> images{64};
     core::MemoryStore<Skybox> skyboxes{32};
-    core::MemoryStore<LoadingScreen> loadingScreens{32};
 };
 } // namespace renderer

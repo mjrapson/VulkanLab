@@ -1,8 +1,6 @@
 #include "renderer/renderer.h"
 
 #include "renderer/camera.h"
-#include "renderer/pipeline.h"
-#include "renderer/transition_barrier.h"
 #include "renderer/vertex_layout.h"
 
 #include <core/box.h>
@@ -64,9 +62,6 @@ constexpr auto directionalLightDescriptorBindings = std::array{
 constexpr auto skyboxDescriptorBindings = std::array{
     vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 };
-constexpr auto loadingScreenImageDescriptorBindings = std::array{
-    vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
-};
 constexpr auto shadowMapImageDescriptorBindings = std::array{
     vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 };
@@ -83,7 +78,6 @@ Renderer::Renderer(const window::Window& window)
       materialDescriptor_{gpuDevice_.device(), materialDescriptorBindings},
       directionalLightDescriptor_{gpuDevice_.device(), directionalLightDescriptorBindings},
       skyboxDescriptor_{gpuDevice_.device(), skyboxDescriptorBindings},
-      loadingScreenImageDescriptor_{gpuDevice_.device(), loadingScreenImageDescriptorBindings},
       shadowMapImageDescriptor_{gpuDevice_.device(), shadowMapImageDescriptorBindings},
       skyboxPreProcessDescriptor_(gpuDevice_.device(), skyboxPreProcessDescriptorBindings)
 {
@@ -128,7 +122,6 @@ Renderer::Renderer(const window::Window& window)
     createShadowPass();
     createGeometryPass();
     createSkyboxPass();
-    createLoadingScreenPass();
 }
 
 Renderer::~Renderer()
@@ -138,359 +131,396 @@ Renderer::~Renderer()
 
 void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
 {
-    renderFrame(
-        [this, &camera, &info](const vk::raii::CommandBuffer& commandBuffer)
+    if (windowMinimized_)
+    {
+        return;
+    }
+
+    if (swapchainRebuildRequired_)
+    {
+        recreateSwapchain();
+        return;
+    }
+
+    if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
+        != vk::Result::eSuccess)
+    {
+        throw std::runtime_error("Device unable to wait for fence to signal");
+    }
+
+    try
+    {
+        auto result = vk::Result{};
+
+        std::tie(result, currentSwapchainImageIndex_) = swapchain_.acquireNextImage(
+            std::numeric_limits<uint64_t>::max(),
+            presentCompleteSemaphores_.at(currentFrameIndex_),
+            nullptr);
+
+        if (result == vk::Result::eSuboptimalKHR)
         {
-            auto cameraBuffer = CameraBufferObject{};
-            cameraBuffer.projection = camera.projection();
-            cameraBuffer.view = camera.view();
-            cameraUniformBuffers_[currentFrameIndex_].write(&cameraBuffer, 0, sizeof(cameraBuffer));
+            swapchainRebuildRequired_ = true;
+        }
+    }
+    catch (const vk::OutOfDateKHRError&)
+    {
+        swapchainRebuildRequired_ = true;
+        return; // cannot continue - we did not acquire a swapchain image so try again next frame
+    }
 
-            // Create a light box based on the current camera frustum (in world space).
-            //
-            // This is the area that will we do shadow calculations for. Later this can be extended add divided into
-            // regions for cascading shadow maps, but for now its from the near plane extended to a suitable shadow
-            // distance.
-            const auto lightBox = camera.frustumSlice(camera.nearPlane, camera.nearPlane + shadowDistance_);
+    auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
+    commandBuffer.reset();
+    commandBuffer.begin({});
 
-            // Create a light view matrix. We imagine the light the light looking at the center of our light box.
-            //
-            // Note that the light does not have a position, just a global direction, so pretend that it is far
-            // away along in its direction (the actual distance doesn't matter too greatly as we'll use an
-            // orthographic projection).
-            const auto lightBoxCenter = lightBox.midPoint();
-            const auto worldUp = glm::normalize(glm::vec3{0.0f, 1.0f, 0.0f});
-            const auto lightDirection = glm::normalize(info.globalLightDirection);
-            const auto lightPosition = lightBoxCenter - lightDirection * lightDistance_;
-            const auto lightView = glm::lookAt(lightPosition, lightBoxCenter, worldUp);
+    auto cameraBuffer = CameraBufferObject{};
+    cameraBuffer.projection = camera.projection();
+    cameraBuffer.view = camera.view();
+    cameraUniformBuffers_[currentFrameIndex_].write(&cameraBuffer, 0, sizeof(cameraBuffer));
 
-            // Create a light projection matrix. This is an orthographic projection as we don't care about
-            // perspective.
-            //
-            // We will use the world space light box transform to light space as the extent of the projection,
-            // except since -Z is a forward direction, our near and far plane values need to be adjusted to positive
-            // distances from the light (positive also as Vulkan will map to [0, 1] with
-            // GLM_FORCE_DEPTH_ZERO_TO_ONE)
-            const auto lightSpaceFrustum = viewTransform(lightBox, lightView);
-            const auto lightSpaceFrustumAABB = lightSpaceFrustum.boudingBox();
-            const auto near = -lightSpaceFrustumAABB.max.z;
-            const auto far = -lightSpaceFrustumAABB.min.z;
+    // Create a light box based on the current camera frustum (in world space).
+    //
+    // This is the area that will we do shadow calculations for. Later this can be extended add divided into
+    // regions for cascading shadow maps, but for now its from the near plane extended to a suitable shadow
+    // distance.
+    const auto lightBox = camera.frustumSlice(camera.nearPlane, camera.nearPlane + shadowDistance_);
 
-            auto lightProjection = glm::ortho(lightSpaceFrustumAABB.min.x,
-                                              lightSpaceFrustumAABB.max.x,
-                                              lightSpaceFrustumAABB.min.y,
-                                              lightSpaceFrustumAABB.max.y,
-                                              near,
-                                              far);
+    // Create a light view matrix. We imagine the light the light looking at the center of our light box.
+    //
+    // Note that the light does not have a position, just a global direction, so pretend that it is far
+    // away along in its direction (the actual distance doesn't matter too greatly as we'll use an
+    // orthographic projection).
+    const auto lightBoxCenter = lightBox.midPoint();
+    const auto worldUp = glm::normalize(glm::vec3{0.0f, 1.0f, 0.0f});
+    const auto lightDirection = glm::normalize(info.globalLightDirection);
+    const auto lightPosition = lightBoxCenter - lightDirection * lightDistance_;
+    const auto lightView = glm::lookAt(lightPosition, lightBoxCenter, worldUp);
 
-            // vulkan- y-flip, refactor out a central OrthoCamera to not have to remember to do this
-            lightProjection[1][1] *= -1.0f;
+    // Create a light projection matrix. This is an orthographic projection as we don't care about
+    // perspective.
+    //
+    // We will use the world space light box transform to light space as the extent of the projection,
+    // except since -Z is a forward direction, our near and far plane values need to be adjusted to positive
+    // distances from the light (positive also as Vulkan will map to [0, 1] with
+    // GLM_FORCE_DEPTH_ZERO_TO_ONE)
+    const auto lightSpaceFrustum = viewTransform(lightBox, lightView);
+    const auto lightSpaceFrustumAABB = lightSpaceFrustum.boudingBox();
+    const auto near = -lightSpaceFrustumAABB.max.z;
+    const auto far = -lightSpaceFrustumAABB.min.z;
 
-            auto directionalLightBuffer = DirectionalLightUboData{};
-            directionalLightBuffer.direction = info.globalLightDirection;
-            directionalLightBuffer.lightSpaceView = lightView;
-            directionalLightBuffer.lightSpaceProjection = lightProjection;
+    auto lightProjection = glm::ortho(lightSpaceFrustumAABB.min.x,
+                                      lightSpaceFrustumAABB.max.x,
+                                      lightSpaceFrustumAABB.min.y,
+                                      lightSpaceFrustumAABB.max.y,
+                                      near,
+                                      far);
 
-            directionalLightUniformBuffers_.at(currentFrameIndex_)
-                .write(&directionalLightBuffer, 0, sizeof(DirectionalLightUboData));
+    // vulkan- y-flip, refactor out a central OrthoCamera to not have to remember to do this
+    lightProjection[1][1] *= -1.0f;
 
-            const auto viewport = vk::Viewport(0.0f,
-                                               0.0f,
-                                               static_cast<float>(swapchainExtent_.width),
-                                               static_cast<float>(swapchainExtent_.height),
-                                               0.0f,
-                                               1.0f);
+    auto directionalLightBuffer = DirectionalLightUboData{};
+    directionalLightBuffer.direction = info.globalLightDirection;
+    directionalLightBuffer.lightSpaceView = lightView;
+    directionalLightBuffer.lightSpaceProjection = lightProjection;
 
-            /*
-                The passes are here in a large block at the moment, as moving to separate classes was hiding too
-               much. The intention is to break these down to be more scalable and data driven, as they are optimised
-               and the flow of resources between passes better understood.
-            */
-            // Shadow pass
-            {
+    directionalLightUniformBuffers_.at(currentFrameIndex_)
+        .write(&directionalLightBuffer, 0, sizeof(DirectionalLightUboData));
 
-                transitionImageLayout(shadowMapImage_->image(),
-                                      commandBuffer,
-                                      vk::ImageLayout::eUndefined,
-                                      vk::ImageLayout::eDepthAttachmentOptimal,
-                                      vk::ImageAspectFlagBits::eDepth);
+    const auto viewport = vk::Viewport(0.0f,
+                                       0.0f,
+                                       static_cast<float>(swapchainExtent_.width),
+                                       static_cast<float>(swapchainExtent_.height),
+                                       0.0f,
+                                       1.0f);
 
-                auto depthAttachmentInfo = vk::RenderingAttachmentInfo{};
-                depthAttachmentInfo.imageView = shadowMapImage_->view();
-                depthAttachmentInfo.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
-                depthAttachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
-                depthAttachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-                depthAttachmentInfo.clearValue = vk::ClearDepthStencilValue(1.0f, 0);
+    /*
+        The passes are here in a large block at the moment, as moving to separate classes was hiding too
+       much. The intention is to break these down to be more scalable and data driven, as they are optimised
+       and the flow of resources between passes better understood.
+    */
 
-                auto renderingInfo = vk::RenderingInfo{};
-                renderingInfo.renderArea = {.offset = {0, 0}, .extent = vk::Extent2D{shadowMapSize, shadowMapSize}};
-                renderingInfo.layerCount = 1;
-                renderingInfo.pDepthAttachment = &depthAttachmentInfo;
+    // Swapchain preparation and clear colour
+    {
+        transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
+                              commandBuffer,
+                              vk::ImageLayout::eUndefined,
+                              vk::ImageLayout::eColorAttachmentOptimal,
+                              vk::PipelineStageFlagBits2::eTopOfPipe,
+                              vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                              vk::AccessFlagBits2::eNone,
+                              vk::AccessFlagBits2::eColorAttachmentWrite,
+                              vk::ImageAspectFlagBits::eColor);
 
-                commandBuffer.beginRendering(renderingInfo);
-                commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipeline);
+        auto attachmentInfo = vk::RenderingAttachmentInfo{};
+        attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
+        attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+        attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
+        attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
+        attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
 
-                commandBuffer.setViewport(0,
-                                          vk::Viewport(0.0f,
-                                                       0.0f,
-                                                       static_cast<float>(shadowMapSize),
-                                                       static_cast<float>(shadowMapSize),
-                                                       0.0f,
-                                                       1.0f));
-                commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), vk::Extent2D{shadowMapSize, shadowMapSize}));
+        auto renderingInfo = vk::RenderingInfo{};
+        renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
+        renderingInfo.layerCount = 1;
+        renderingInfo.colorAttachmentCount = 1;
+        renderingInfo.pColorAttachments = &attachmentInfo;
 
-                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                 *shadowPass_.layout,
-                                                 0,
-                                                 *directionalLightDescriptorSets_.at(currentFrameIndex_),
-                                                 nullptr);
+        commandBuffer.beginRendering(renderingInfo);
+        commandBuffer.endRendering();
+    }
 
-                for (const auto& drawCommand : info.drawCommands)
-                {
-                    auto mesh = resources_.meshes.get(drawCommand.meshHandle);
+    // Shadow pass
+    {
+        transitionImageLayout(shadowMapImage_->image(),
+                              commandBuffer,
+                              vk::ImageLayout::eUndefined,
+                              vk::ImageLayout::eDepthAttachmentOptimal,
+                              vk::PipelineStageFlagBits2::eTopOfPipe,
+                              vk::PipelineStageFlagBits2::eEarlyFragmentTests
+                                  | vk::PipelineStageFlagBits2::eLateFragmentTests,
+                              vk::AccessFlagBits2::eNone,
+                              vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+                              vk::ImageAspectFlagBits::eDepth);
 
-                    auto vertexBuffer = resources_.buffers.get(mesh->vertexBuffer);
-                    auto indexBuffer = resources_.buffers.get(mesh->indexBuffer);
+        auto depthAttachmentInfo = vk::RenderingAttachmentInfo{};
+        depthAttachmentInfo.imageView = shadowMapImage_->view();
+        depthAttachmentInfo.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
+        depthAttachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
+        depthAttachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
+        depthAttachmentInfo.clearValue = vk::ClearDepthStencilValue(1.0f, 0);
 
-                    commandBuffer.bindVertexBuffers(0, {vertexBuffer->buffer()}, {0});
-                    commandBuffer.bindIndexBuffer(indexBuffer->buffer(), 0, vk::IndexType::eUint32);
+        auto renderingInfo = vk::RenderingInfo{};
+        renderingInfo.renderArea = {.offset = {0, 0}, .extent = vk::Extent2D{shadowMapSize, shadowMapSize}};
+        renderingInfo.layerCount = 1;
+        renderingInfo.pDepthAttachment = &depthAttachmentInfo;
 
-                    auto pushConstants = ShadowPassPushConstants{};
-                    pushConstants.modelTransform = drawCommand.transform;
+        commandBuffer.beginRendering(renderingInfo);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *shadowPass_.pipeline);
 
-                    commandBuffer.pushConstants(shadowPass_.layout,
-                                                vk::ShaderStageFlagBits::eVertex,
-                                                0,
-                                                vk::ArrayProxy<const ShadowPassPushConstants>{pushConstants});
+        commandBuffer.setViewport(
+            0,
+            vk::Viewport(0.0f, 0.0f, static_cast<float>(shadowMapSize), static_cast<float>(shadowMapSize), 0.0f, 1.0f));
+        commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), vk::Extent2D{shadowMapSize, shadowMapSize}));
 
-                    commandBuffer.drawIndexed(mesh->indexCount, 1, 0, 0, 0);
-                }
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         *shadowPass_.layout,
+                                         0,
+                                         *directionalLightDescriptorSets_.at(currentFrameIndex_),
+                                         nullptr);
 
-                commandBuffer.endRendering();
-
-                transitionImageLayout(shadowMapImage_->image(),
-                                      commandBuffer,
-                                      vk::ImageLayout::eDepthAttachmentOptimal,
-                                      vk::ImageLayout::eShaderReadOnlyOptimal,
-                                      vk::ImageAspectFlagBits::eDepth);
-            }
-
-            transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
-                                  commandBuffer,
-                                  vk::ImageLayout::eUndefined,
-                                  vk::ImageLayout::eColorAttachmentOptimal,
-                                  vk::ImageAspectFlagBits::eColor);
-
-            // Clear image pass
-            {
-                auto attachmentInfo = vk::RenderingAttachmentInfo{};
-                attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
-                attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-                attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
-                attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-                attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
-
-                auto renderingInfo = vk::RenderingInfo{};
-                renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
-                renderingInfo.layerCount = 1;
-                renderingInfo.colorAttachmentCount = 1;
-                renderingInfo.pColorAttachments = &attachmentInfo;
-
-                commandBuffer.beginRendering(renderingInfo);
-                commandBuffer.endRendering();
-            }
-
-            // Skybox pass (optional)
-            if (info.skyboxHandle)
-            {
-                auto skybox = resources_.skyboxes.get(info.skyboxHandle.value());
-
-                auto skyboxImage = resources_.images.get(skybox->cubemapImage);
-                transitionImageLayout(skyboxImage->image(),
-                                      commandBuffer,
-                                      vk::ImageLayout::eUndefined,
-                                      vk::ImageLayout::eShaderReadOnlyOptimal,
-                                      vk::ImageAspectFlagBits::eColor,
-                                      6);
-
-                auto attachmentInfo = vk::RenderingAttachmentInfo{};
-                attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
-                attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-                attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
-                attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-
-                auto renderingInfo = vk::RenderingInfo{};
-                renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
-                renderingInfo.layerCount = 1;
-                renderingInfo.colorAttachmentCount = 1;
-                renderingInfo.pColorAttachments = &attachmentInfo;
-
-                commandBuffer.beginRendering(renderingInfo);
-                commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *skyboxPass_.pipeline);
-                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                 skyboxPass_.layout,
-                                                 0,
-                                                 *cameraDescriptorSets_.at(currentFrameIndex_),
-                                                 nullptr);
-
-                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                 skyboxPass_.layout,
-                                                 1,
-                                                 *skybox->descriptorSet,
-                                                 nullptr);
-
-                commandBuffer.setViewport(0, viewport);
-                commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
-                commandBuffer.draw(36, 1, 0, 0);
-                commandBuffer.endRendering();
-            }
-
-            // Geometry pass
-            {
-                transitionImageLayout(depthTargetImage_->image(),
-                                      commandBuffer,
-                                      vk::ImageLayout::eUndefined,
-                                      vk::ImageLayout::eDepthAttachmentOptimal,
-                                      vk::ImageAspectFlagBits::eDepth);
-
-                auto attachmentInfo = vk::RenderingAttachmentInfo{};
-                attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
-                attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-                attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
-                attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-
-                auto depthAttachmentInfo = vk::RenderingAttachmentInfo{};
-                depthAttachmentInfo.imageView = depthTargetImage_->view();
-                depthAttachmentInfo.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
-                depthAttachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
-                depthAttachmentInfo.storeOp = vk::AttachmentStoreOp::eDontCare;
-                depthAttachmentInfo.clearValue = vk::ClearDepthStencilValue(1.0f, 0);
-
-                auto renderingInfo = vk::RenderingInfo{};
-                renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
-                renderingInfo.layerCount = 1;
-                renderingInfo.colorAttachmentCount = 1;
-                renderingInfo.pColorAttachments = &attachmentInfo;
-                renderingInfo.pDepthAttachment = &depthAttachmentInfo;
-
-                commandBuffer.beginRendering(renderingInfo);
-                commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *geometryPass_.pipeline);
-
-                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                 geometryPass_.layout,
-                                                 0,
-                                                 *cameraDescriptorSets_.at(currentFrameIndex_),
-                                                 nullptr);
-
-                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                 *geometryPass_.layout,
-                                                 2,
-                                                 *directionalLightDescriptorSets_.at(currentFrameIndex_),
-                                                 nullptr);
-
-                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                 *geometryPass_.layout,
-                                                 3,
-                                                 *shadowMapDescriptorSet_,
-                                                 nullptr);
-
-                commandBuffer.setViewport(0, viewport);
-                commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
-
-                for (const auto& drawCommand : info.drawCommands)
-                {
-                    auto mesh = resources_.meshes.get(drawCommand.meshHandle);
-                    auto material = resources_.materials.get(drawCommand.materialHandle);
-
-                    auto vertexBuffer = resources_.buffers.get(mesh->vertexBuffer);
-                    auto indexBuffer = resources_.buffers.get(mesh->indexBuffer);
-
-                    commandBuffer.bindVertexBuffers(0, {vertexBuffer->buffer()}, {0});
-                    commandBuffer.bindIndexBuffer(indexBuffer->buffer(), 0, vk::IndexType::eUint32);
-
-                    auto pushConstants = GeometryPassPushConstants{};
-                    pushConstants.modelTransform = drawCommand.transform;
-                    pushConstants.normalMatrix = glm::transpose(glm::inverse(glm::mat3(drawCommand.transform)));
-
-                    commandBuffer.pushConstants(geometryPass_.layout,
-                                                vk::ShaderStageFlagBits::eVertex,
-                                                0,
-                                                vk::ArrayProxy<const GeometryPassPushConstants>{pushConstants});
-
-                    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                                     geometryPass_.layout,
-                                                     1,
-                                                     *material->descriptorSet,
-                                                     nullptr);
-
-                    commandBuffer.drawIndexed(mesh->indexCount, 1, 0, 0, 0);
-                }
-
-                commandBuffer.endRendering();
-            }
-
-            transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
-                                  commandBuffer,
-                                  vk::ImageLayout::eColorAttachmentOptimal,
-                                  vk::ImageLayout::ePresentSrcKHR,
-                                  vk::ImageAspectFlagBits::eColor);
-        });
-}
-
-void Renderer::renderLoadingScreen(LoadingScreenHandle loadingScreenHandle)
-{
-    renderFrame(
-        [this, &loadingScreenHandle](const vk::raii::CommandBuffer& commandBuffer)
+        for (const auto& drawCommand : info.drawCommands)
         {
-            transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
-                                  commandBuffer,
-                                  vk::ImageLayout::eUndefined,
-                                  vk::ImageLayout::eColorAttachmentOptimal,
-                                  vk::ImageAspectFlagBits::eColor);
+            auto mesh = resources_.meshes.get(drawCommand.meshHandle);
 
-            auto attachmentInfo = vk::RenderingAttachmentInfo{};
-            attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
-            attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-            attachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
-            attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
-            attachmentInfo.clearValue = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
+            auto vertexBuffer = resources_.buffers.get(mesh->vertexBuffer);
+            auto indexBuffer = resources_.buffers.get(mesh->indexBuffer);
 
-            auto renderingInfo = vk::RenderingInfo{};
-            renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
-            renderingInfo.layerCount = 1;
-            renderingInfo.colorAttachmentCount = 1;
-            renderingInfo.pColorAttachments = &attachmentInfo;
+            commandBuffer.bindVertexBuffers(0, {vertexBuffer->buffer()}, {0});
+            commandBuffer.bindIndexBuffer(indexBuffer->buffer(), 0, vk::IndexType::eUint32);
 
-            commandBuffer.beginRendering(renderingInfo);
+            auto pushConstants = ShadowPassPushConstants{};
+            pushConstants.modelTransform = drawCommand.transform;
 
-            auto loadingScreen = resources_.loadingScreens.get(loadingScreenHandle);
+            commandBuffer.pushConstants(shadowPass_.layout,
+                                        vk::ShaderStageFlagBits::eVertex,
+                                        0,
+                                        vk::ArrayProxy<const ShadowPassPushConstants>{pushConstants});
 
-            commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *loadingScreenPass_.pipeline);
+            commandBuffer.drawIndexed(mesh->indexCount, 1, 0, 0, 0);
+        }
+
+        commandBuffer.endRendering();
+
+        transitionImageLayout(shadowMapImage_->image(),
+                              commandBuffer,
+                              vk::ImageLayout::eDepthAttachmentOptimal,
+                              vk::ImageLayout::eShaderReadOnlyOptimal,
+                              vk::PipelineStageFlagBits2::eEarlyFragmentTests
+                                  | vk::PipelineStageFlagBits2::eLateFragmentTests,
+                              vk::PipelineStageFlagBits2::eFragmentShader,
+                              vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+                              vk::AccessFlagBits2::eShaderRead,
+                              vk::ImageAspectFlagBits::eDepth);
+    }
+
+    // Skybox pass (optional)
+    // if (info.skyboxHandle)
+    // {
+    //     auto skybox = resources_.skyboxes.get(info.skyboxHandle.value());
+
+    //     auto image = resources_.images.get(skybox->cubemapImage);
+    //     transitionImageLayout(image->image(),
+    //                           commandBuffer,
+    //                           vk::ImageLayout::eUndefined,
+    //                           vk::ImageLayout::eShaderReadOnlyOptimal,
+    //                           vk::PipelineStageFlagBits2::eTopOfPipe,
+    //                           vk::PipelineStageFlagBits2::eFragmentShader,
+    //                           vk::AccessFlagBits2::eNone,
+    //                           vk::AccessFlagBits2::eShaderRead,
+    //                           vk::ImageAspectFlagBits::eColor);
+
+    //     auto attachmentInfo = vk::RenderingAttachmentInfo{};
+    //     attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
+    //     attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    //     attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
+    //     attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
+
+    //     auto renderingInfo = vk::RenderingInfo{};
+    //     renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
+    //     renderingInfo.layerCount = 1;
+    //     renderingInfo.colorAttachmentCount = 1;
+    //     renderingInfo.pColorAttachments = &attachmentInfo;
+
+    //     commandBuffer.beginRendering(renderingInfo);
+    //     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *skyboxPass_.pipeline);
+    //     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+    //                                      skyboxPass_.layout,
+    //                                      0,
+    //                                      *cameraDescriptorSets_.at(currentFrameIndex_),
+    //                                      nullptr);
+
+    //     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+    //                                      skyboxPass_.layout,
+    //                                      1,
+    //                                      *skybox->descriptorSet,
+    //                                      nullptr);
+
+    //     commandBuffer.setViewport(0, viewport);
+    //     commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
+    //     commandBuffer.draw(36, 1, 0, 0);
+    //     commandBuffer.endRendering();
+    // }
+
+    // Geometry pass
+    {
+        transitionImageLayout(depthTargetImage_->image(),
+                              commandBuffer,
+                              vk::ImageLayout::eUndefined,
+                              vk::ImageLayout::eDepthAttachmentOptimal,
+                              vk::PipelineStageFlagBits2::eTopOfPipe,
+                              vk::PipelineStageFlagBits2::eEarlyFragmentTests
+                                  | vk::PipelineStageFlagBits2::eLateFragmentTests,
+                              vk::AccessFlagBits2::eNone,
+                              vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+                              vk::ImageAspectFlagBits::eDepth);
+
+        auto attachmentInfo = vk::RenderingAttachmentInfo{};
+        attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
+        attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+        attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
+        attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
+
+        auto depthAttachmentInfo = vk::RenderingAttachmentInfo{};
+        depthAttachmentInfo.imageView = depthTargetImage_->view();
+        depthAttachmentInfo.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
+        depthAttachmentInfo.loadOp = vk::AttachmentLoadOp::eClear;
+        depthAttachmentInfo.storeOp = vk::AttachmentStoreOp::eDontCare;
+        depthAttachmentInfo.clearValue = vk::ClearDepthStencilValue(1.0f, 0);
+
+        auto renderingInfo = vk::RenderingInfo{};
+        renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
+        renderingInfo.layerCount = 1;
+        renderingInfo.colorAttachmentCount = 1;
+        renderingInfo.pColorAttachments = &attachmentInfo;
+        renderingInfo.pDepthAttachment = &depthAttachmentInfo;
+
+        commandBuffer.beginRendering(renderingInfo);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *geometryPass_.pipeline);
+
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         geometryPass_.layout,
+                                         0,
+                                         *cameraDescriptorSets_.at(currentFrameIndex_),
+                                         nullptr);
+
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         *geometryPass_.layout,
+                                         2,
+                                         *directionalLightDescriptorSets_.at(currentFrameIndex_),
+                                         nullptr);
+
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         *geometryPass_.layout,
+                                         3,
+                                         *shadowMapDescriptorSet_,
+                                         nullptr);
+
+        commandBuffer.setViewport(0, viewport);
+        commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
+
+        for (const auto& drawCommand : info.drawCommands)
+        {
+            auto mesh = resources_.meshes.get(drawCommand.meshHandle);
+            auto material = resources_.materials.get(drawCommand.materialHandle);
+
+            auto vertexBuffer = resources_.buffers.get(mesh->vertexBuffer);
+            auto indexBuffer = resources_.buffers.get(mesh->indexBuffer);
+
+            commandBuffer.bindVertexBuffers(0, {vertexBuffer->buffer()}, {0});
+            commandBuffer.bindIndexBuffer(indexBuffer->buffer(), 0, vk::IndexType::eUint32);
+
+            auto pushConstants = GeometryPassPushConstants{};
+            pushConstants.modelTransform = drawCommand.transform;
+            pushConstants.normalMatrix = glm::transpose(glm::inverse(glm::mat3(drawCommand.transform)));
+
+            commandBuffer.pushConstants(geometryPass_.layout,
+                                        vk::ShaderStageFlagBits::eVertex,
+                                        0,
+                                        vk::ArrayProxy<const GeometryPassPushConstants>{pushConstants});
+
             commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                             loadingScreenPass_.layout,
-                                             0,
-                                             *loadingScreen->descriptorSet,
+                                             geometryPass_.layout,
+                                             1,
+                                             *material->descriptorSet,
                                              nullptr);
 
-            commandBuffer.setViewport(0,
-                                      vk::Viewport(0.0f,
-                                                   0.0f,
-                                                   static_cast<float>(swapchainExtent_.width),
-                                                   static_cast<float>(swapchainExtent_.height),
-                                                   0.0f,
-                                                   1.0f));
-            commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
+            commandBuffer.drawIndexed(mesh->indexCount, 1, 0, 0, 0);
+        }
 
-            commandBuffer.draw(6, 1, 0, 0);
+        commandBuffer.endRendering();
+    }
 
-            commandBuffer.endRendering();
+    transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
+                          commandBuffer,
+                          vk::ImageLayout::eColorAttachmentOptimal,
+                          vk::ImageLayout::ePresentSrcKHR,
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                          vk::PipelineStageFlagBits2::eBottomOfPipe,
+                          vk::AccessFlagBits2::eColorAttachmentWrite,
+                          vk::AccessFlagBits2::eNone,
+                          vk::ImageAspectFlagBits::eColor);
 
-            transitionImageLayout(swapchainImages_.at(currentSwapchainImageIndex_),
-                                  commandBuffer,
-                                  vk::ImageLayout::eColorAttachmentOptimal,
-                                  vk::ImageLayout::ePresentSrcKHR,
-                                  vk::ImageAspectFlagBits::eColor);
-        });
+    commandBuffer.end();
+
+    auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
+    auto signalSemaphores = std::array{*renderFinishedSemaphores_.at(currentSwapchainImageIndex_)};
+
+    gpuDevice_.device().resetFences(*drawFences_.at(currentFrameIndex_));
+    gpuDevice_.submitCommandBuffer(commandBuffer,
+                                   waitSemaphores,
+                                   vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput),
+                                   signalSemaphores,
+                                   *drawFences_.at(currentFrameIndex_));
+
+    auto presentInfo = vk::PresentInfoKHR{};
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &*renderFinishedSemaphores_.at(currentSwapchainImageIndex_);
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &*swapchain_;
+    presentInfo.pImageIndices = &currentSwapchainImageIndex_;
+
+    try
+    {
+        const auto result = gpuDevice_.presentQueue().presentKHR(presentInfo);
+        if (result == vk::Result::eSuboptimalKHR)
+        {
+            swapchainRebuildRequired_ = true;
+        }
+    }
+    catch (const vk::OutOfDateKHRError&)
+    {
+        swapchainRebuildRequired_ = true;
+    }
+
+    currentFrameIndex_ = (currentFrameIndex_ + 1) % maxFramesInFlight;
 }
 
 void Renderer::reset()
@@ -522,41 +552,6 @@ void Renderer::windowResized(int width, int height)
     }
 
     swapchainRebuildRequired_ = true;
-}
-
-LoadingScreenHandle Renderer::addLoadingScreenImage(uint32_t width, uint32_t height, std::span<const std::byte> data)
-{
-
-    auto handle = resources_.loadingScreens.allocate();
-    auto loadingScreen = resources_.loadingScreens.get(handle);
-    loadingScreen->image = resources_.images.allocate(*gpuDevice_.device(),
-                                                      gpuDevice_.allocator(),
-                                                      vk::Extent3D{width, height, 1},
-                                                      vk::Format::eR8G8B8A8Srgb,
-                                                      1,
-                                                      Image::ImageType::Colour2D);
-
-    auto image = resources_.images.get(loadingScreen->image);
-    stageAndUploadImageData(image->image(), width, height, data);
-
-    loadingScreen->descriptorSet = std::move(loadingScreenImageDescriptor_.allocateSets(1)[0]);
-
-    auto imageInfo = vk::DescriptorImageInfo{};
-    imageInfo.imageView = image->view();
-    imageInfo.sampler = imageSampler_;
-    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-    auto imageWrite = vk::WriteDescriptorSet{};
-    imageWrite.dstSet = loadingScreen->descriptorSet;
-    imageWrite.dstBinding = 0;
-    imageWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-    imageWrite.descriptorCount = 1;
-    imageWrite.pImageInfo = &imageInfo;
-
-    auto writes = std::array{imageWrite};
-    gpuDevice_.device().updateDescriptorSets(writes, {});
-
-    return handle;
 }
 
 ImageHandle Renderer::addImage(uint32_t width, uint32_t height, std::span<const std::byte> data)
@@ -1016,21 +1011,6 @@ void Renderer::createSkyboxPass()
     skyboxPass_ = createPipeline(gpuDevice_.device(), gpuDevice_.physicalDevice(), pd);
 }
 
-void Renderer::createLoadingScreenPass()
-{
-    auto pd = PipelineDesc{};
-    pd.vertexShaderPath = core::getShaderDir() / "loading_screen.vertex.spv";
-    pd.fragmentShaderPath = core::getShaderDir() / "loading_screen.fragment.spv";
-    pd.descriptorLayouts = {*loadingScreenImageDescriptor_.layout()};
-    pd.colorAttachmentFormats = {surfaceFormat_};
-    pd.depthTestEnable = vk::False;
-    pd.depthWriteEnable = vk::False;
-    pd.depthCompareOp = vk::CompareOp::eNever;
-    pd.cullMode = vk::CullModeFlagBits::eNone;
-
-    loadingScreenPass_ = createPipeline(gpuDevice_.device(), gpuDevice_.physicalDevice(), pd);
-}
-
 void Renderer::recreateSwapchain()
 {
     if (windowMinimized_)
@@ -1061,86 +1041,6 @@ void Renderer::resizeGeometryPass()
                                                 vk::Format::eD32Sfloat,
                                                 1,
                                                 Image::ImageType::Depth2D);
-}
-
-void Renderer::renderFrame(std::function<void(const vk::raii::CommandBuffer&)> recordCommands)
-{
-    if (windowMinimized_)
-    {
-        return;
-    }
-
-    if (swapchainRebuildRequired_)
-    {
-        recreateSwapchain();
-        return;
-    }
-
-    if (gpuDevice_.device().waitForFences(*drawFences_.at(currentFrameIndex_), vk::True, UINT64_MAX)
-        != vk::Result::eSuccess)
-    {
-        throw std::runtime_error("Device unable to wait for fence to signal");
-    }
-
-    try
-    {
-        auto result = vk::Result{};
-
-        std::tie(result, currentSwapchainImageIndex_) = swapchain_.acquireNextImage(
-            std::numeric_limits<uint64_t>::max(),
-            presentCompleteSemaphores_.at(currentFrameIndex_),
-            nullptr);
-
-        if (result == vk::Result::eSuboptimalKHR)
-        {
-            swapchainRebuildRequired_ = true;
-        }
-    }
-    catch (const vk::OutOfDateKHRError&)
-    {
-        swapchainRebuildRequired_ = true;
-        return; // cannot continue - we did not acquire a swapchain image so try again next frame
-    }
-
-    auto& commandBuffer = commandBuffers_.at(currentFrameIndex_);
-    commandBuffer.reset();
-    commandBuffer.begin({});
-
-    recordCommands(commandBuffer);
-
-    commandBuffer.end();
-
-    auto waitSemaphores = std::array{*presentCompleteSemaphores_.at(currentFrameIndex_)};
-    auto signalSemaphores = std::array{*renderFinishedSemaphores_.at(currentSwapchainImageIndex_)};
-
-    gpuDevice_.device().resetFences(*drawFences_.at(currentFrameIndex_));
-    gpuDevice_.submitCommandBuffer(commandBuffer,
-                                   waitSemaphores,
-                                   vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput),
-                                   signalSemaphores,
-                                   *drawFences_.at(currentFrameIndex_));
-
-    auto presentInfo = vk::PresentInfoKHR{};
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &*renderFinishedSemaphores_.at(currentSwapchainImageIndex_);
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &*swapchain_;
-    presentInfo.pImageIndices = &currentSwapchainImageIndex_;
-
-    try
-    {
-        const auto result = gpuDevice_.presentQueue().presentKHR(presentInfo);
-        if (result == vk::Result::eSuboptimalKHR)
-        {
-            swapchainRebuildRequired_ = true;
-        }
-    }
-    catch (const vk::OutOfDateKHRError&)
-    {
-        swapchainRebuildRequired_ = true;
-    }
-
-    currentFrameIndex_ = (currentFrameIndex_ + 1) % maxFramesInFlight;
 }
 
 void Renderer::stageAndUploadBufferData(Buffer& buffer, const void* data, size_t offset, size_t size)
@@ -1181,6 +1081,10 @@ void Renderer::stageAndUploadImageData(VkImage image, uint32_t width, uint32_t h
                           *cmd,
                           vk::ImageLayout::eUndefined,
                           vk::ImageLayout::eTransferDstOptimal,
+                          vk::PipelineStageFlagBits2::eTopOfPipe,
+                          vk::PipelineStageFlagBits2::eTransfer,
+                          vk::AccessFlagBits2::eNone,
+                          vk::AccessFlagBits2::eTransferWrite,
                           vk::ImageAspectFlagBits::eColor);
 
     auto region = vk::BufferImageCopy{};
@@ -1196,9 +1100,47 @@ void Renderer::stageAndUploadImageData(VkImage image, uint32_t width, uint32_t h
                           *cmd,
                           vk::ImageLayout::eTransferDstOptimal,
                           vk::ImageLayout::eShaderReadOnlyOptimal,
+                          vk::PipelineStageFlagBits2::eTransfer,
+                          vk::PipelineStageFlagBits2::eFragmentShader,
+                          vk::AccessFlagBits2::eTransferWrite,
+                          vk::AccessFlagBits2::eShaderRead,
                           vk::ImageAspectFlagBits::eColor);
 
     cmd.end();
     gpuDevice_.submitCommandBuffer(cmd);
+}
+
+void Renderer::transitionImageLayout(vk::Image image,
+                                     const vk::CommandBuffer& commandBuffer,
+                                     vk::ImageLayout oldLayout,
+                                     vk::ImageLayout newLayout,
+                                     vk::PipelineStageFlags2 srcStageFlags,
+                                     vk::PipelineStageFlags2 dstStageFlags,
+                                     vk::AccessFlags2 srcAccessFlags,
+                                     vk::AccessFlags2 dstAccessFlags,
+                                     const vk::ImageAspectFlags& aspectFlags,
+                                     uint32_t layerCount)
+{
+    auto barrier = vk::ImageMemoryBarrier2{};
+    barrier.srcStageMask = srcStageFlags;
+    barrier.dstStageMask = dstStageFlags;
+    barrier.srcAccessMask = srcAccessFlags;
+    barrier.dstAccessMask = dstAccessFlags;
+    barrier.oldLayout = oldLayout;
+    barrier.newLayout = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = aspectFlags;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = layerCount;
+
+    auto dependencyInfo = vk::DependencyInfo{};
+    dependencyInfo.imageMemoryBarrierCount = 1;
+    dependencyInfo.pImageMemoryBarriers = &barrier;
+
+    commandBuffer.pipelineBarrier2(dependencyInfo);
 }
 } // namespace renderer

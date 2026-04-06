@@ -6,7 +6,6 @@ target_sources(Assets
         include/assets/database.h
         include/assets/image_data.h
         include/assets/image.h
-        include/assets/loading_screen.h
         include/assets/material.h
         include/assets/mesh.h
         include/assets/prefab.h
@@ -15,7 +14,6 @@ target_sources(Assets
         src/loaders/image_loader.cpp
         src/database.cpp
         src/image.cpp
-        src/loading_screen.cpp
         src/material.cpp
         src/mesh.cpp
         src/skybox.cpp
