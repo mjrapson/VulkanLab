@@ -25,9 +25,6 @@ struct Mesh
 struct Skybox
 {
     ImageHandle hdrImage;
-    ImageHandle cubemapImage;
-    bool initialized{false};
     vk::raii::DescriptorSet descriptorSet{nullptr};
-    vk::raii::DescriptorSet preProcessDescriptorSet{nullptr};
 };
 } // namespace renderer

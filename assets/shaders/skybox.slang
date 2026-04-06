@@ -8,7 +8,7 @@ struct CameraData
 ConstantBuffer<CameraData> camera;
 
 [[vk::binding(0, 1)]]
-SamplerCube sampler;
+Sampler2D skyboxTexture;
 
 static const float3 vertices[8] =
 {
@@ -51,8 +51,24 @@ VertexOutput vertMain(uint vertexId : SV_VertexID)
     return output;
 }
 
+static const float PI = 3.14159265359;
+
+float2 directionToEquirectUV(float3 dir)
+{
+    dir = normalize(dir);
+
+    float u = atan2(dir.z, dir.x) / (2.0 * PI) + 0.5;
+    float v = asin(clamp(dir.y, -1.0, 1.0)) / PI + 0.5;
+
+    return float2(u, v);
+}
+
 [shader("fragment")]
 float4 fragMain(VertexOutput inVert) : SV_Target
 {
-    return sampler.Sample(inVert.direction);
+    float3 dir = normalize(inVert.direction);
+
+    float2 uv = directionToEquirectUV(dir);
+
+    return skyboxTexture.Sample(uv);
 }

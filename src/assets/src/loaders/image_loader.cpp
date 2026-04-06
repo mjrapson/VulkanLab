@@ -54,7 +54,7 @@ std::unique_ptr<ImageData> createSkyboxImageFromPath(const std::filesystem::path
     int channels;
 
     stbi_set_flip_vertically_on_load(true);
-    auto stbiData = stbi_loadf(path.string().c_str(), &width, &height, &channels, 0);
+    auto stbiData = stbi_loadf(path.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
     stbi_set_flip_vertically_on_load(false);
     if (!stbiData)
     {
@@ -66,9 +66,9 @@ std::unique_ptr<ImageData> createSkyboxImageFromPath(const std::filesystem::path
     imageData->height = static_cast<uint32_t>(height);
     imageData->components = static_cast<uint32_t>(STBI_rgb_alpha);
 
-    const auto imageSize = width * height * STBI_rgb_alpha;
-    imageData->data = std::vector<std::byte>(static_cast<size_t>(imageSize));
-    std::memcpy(imageData->data.data(), stbiData, static_cast<size_t>(imageSize));
+    const auto imageSize = static_cast<size_t>(width * height * STBI_rgb_alpha) * sizeof(float);
+    imageData->data = std::vector<std::byte>(imageSize);
+    std::memcpy(imageData->data.data(), stbiData, imageSize);
 
     stbi_image_free(stbiData);
 

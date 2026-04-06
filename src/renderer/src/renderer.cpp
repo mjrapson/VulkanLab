@@ -65,9 +65,6 @@ constexpr auto skyboxDescriptorBindings = std::array{
 constexpr auto shadowMapImageDescriptorBindings = std::array{
     vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 };
-constexpr auto skyboxPreProcessDescriptorBindings = std::array{
-    vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eCompute},
-};
 
 Renderer::Renderer(const window::Window& window)
     : instance_{context_, window.requiredExtensions()},
@@ -78,8 +75,7 @@ Renderer::Renderer(const window::Window& window)
       materialDescriptor_{gpuDevice_.device(), materialDescriptorBindings},
       directionalLightDescriptor_{gpuDevice_.device(), directionalLightDescriptorBindings},
       skyboxDescriptor_{gpuDevice_.device(), skyboxDescriptorBindings},
-      shadowMapImageDescriptor_{gpuDevice_.device(), shadowMapImageDescriptorBindings},
-      skyboxPreProcessDescriptor_(gpuDevice_.device(), skyboxPreProcessDescriptorBindings)
+      shadowMapImageDescriptor_{gpuDevice_.device(), shadowMapImageDescriptorBindings}
 {
     spdlog::info("Creating swapchain");
     createSwapchain();
@@ -118,7 +114,6 @@ Renderer::Renderer(const window::Window& window)
     createDirectionalLightBuffers();
     createShadowMapDescriptorSets();
 
-    createSkyboxPreProcessPass();
     createShadowPass();
     createGeometryPass();
     createSkyboxPass();
@@ -342,52 +337,41 @@ void Renderer::renderScene(const Camera& camera, const SceneDrawInfo& info)
     }
 
     // Skybox pass (optional)
-    // if (info.skyboxHandle)
-    // {
-    //     auto skybox = resources_.skyboxes.get(info.skyboxHandle.value());
+    if (info.skyboxHandle)
+    {
+        auto skybox = resources_.skyboxes.get(info.skyboxHandle.value());
 
-    //     auto image = resources_.images.get(skybox->cubemapImage);
-    //     transitionImageLayout(image->image(),
-    //                           commandBuffer,
-    //                           vk::ImageLayout::eUndefined,
-    //                           vk::ImageLayout::eShaderReadOnlyOptimal,
-    //                           vk::PipelineStageFlagBits2::eTopOfPipe,
-    //                           vk::PipelineStageFlagBits2::eFragmentShader,
-    //                           vk::AccessFlagBits2::eNone,
-    //                           vk::AccessFlagBits2::eShaderRead,
-    //                           vk::ImageAspectFlagBits::eColor);
+        auto attachmentInfo = vk::RenderingAttachmentInfo{};
+        attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
+        attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+        attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
+        attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
 
-    //     auto attachmentInfo = vk::RenderingAttachmentInfo{};
-    //     attachmentInfo.imageView = swapchainImageViews_.at(currentSwapchainImageIndex_);
-    //     attachmentInfo.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-    //     attachmentInfo.loadOp = vk::AttachmentLoadOp::eLoad;
-    //     attachmentInfo.storeOp = vk::AttachmentStoreOp::eStore;
+        auto renderingInfo = vk::RenderingInfo{};
+        renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
+        renderingInfo.layerCount = 1;
+        renderingInfo.colorAttachmentCount = 1;
+        renderingInfo.pColorAttachments = &attachmentInfo;
 
-    //     auto renderingInfo = vk::RenderingInfo{};
-    //     renderingInfo.renderArea = {.offset = {0, 0}, .extent = swapchainExtent_};
-    //     renderingInfo.layerCount = 1;
-    //     renderingInfo.colorAttachmentCount = 1;
-    //     renderingInfo.pColorAttachments = &attachmentInfo;
+        commandBuffer.beginRendering(renderingInfo);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *skyboxPass_.pipeline);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         skyboxPass_.layout,
+                                         0,
+                                         *cameraDescriptorSets_.at(currentFrameIndex_),
+                                         nullptr);
 
-    //     commandBuffer.beginRendering(renderingInfo);
-    //     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *skyboxPass_.pipeline);
-    //     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-    //                                      skyboxPass_.layout,
-    //                                      0,
-    //                                      *cameraDescriptorSets_.at(currentFrameIndex_),
-    //                                      nullptr);
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                         skyboxPass_.layout,
+                                         1,
+                                         *skybox->descriptorSet,
+                                         nullptr);
 
-    //     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-    //                                      skyboxPass_.layout,
-    //                                      1,
-    //                                      *skybox->descriptorSet,
-    //                                      nullptr);
-
-    //     commandBuffer.setViewport(0, viewport);
-    //     commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
-    //     commandBuffer.draw(36, 1, 0, 0);
-    //     commandBuffer.endRendering();
-    // }
+        commandBuffer.setViewport(0, viewport);
+        commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
+        commandBuffer.draw(36, 1, 0, 0);
+        commandBuffer.endRendering();
+    }
 
     // Geometry pass
     {
@@ -537,7 +521,6 @@ void Renderer::reset()
     // Reset pools for per scene data
     materialDescriptor_.clear();
     skyboxDescriptor_.clear();
-    skyboxPreProcessDescriptor_.clear();
 }
 
 void Renderer::windowResized(int width, int height)
@@ -661,58 +644,29 @@ SkyboxHandle Renderer::addSkybox(uint32_t width, uint32_t height, std::span<cons
     skybox->hdrImage = resources_.images.allocate(*gpuDevice_.device(),
                                                   gpuDevice_.allocator(),
                                                   vk::Extent3D{width, height, 1},
-                                                  vk::Format::eR8G8B8A8Srgb,
+                                                  vk::Format::eR32G32B32A32Sfloat,
                                                   1,
                                                   Image::ImageType::Colour2D);
 
     auto hdrImage = resources_.images.get(skybox->hdrImage);
     stageAndUploadImageData(hdrImage->image(), width, height, data);
 
-    skybox->preProcessDescriptorSet = std::move(skyboxPreProcessDescriptor_.allocateSets(1)[0]);
-    {
-        auto imageInfo = vk::DescriptorImageInfo{};
-        imageInfo.imageView = hdrImage->view();
-        imageInfo.sampler = imageSampler_;
-        imageInfo.imageLayout = vk::ImageLayout::eGeneral;
-
-        auto textureWrite = vk::WriteDescriptorSet{};
-        textureWrite.dstSet = skybox->preProcessDescriptorSet;
-        textureWrite.dstBinding = 0;
-        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        textureWrite.descriptorCount = 1;
-        textureWrite.pImageInfo = &imageInfo;
-
-        std::array writes{textureWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
-    }
-
-    // Create the cubemap image we will convert to
-    skybox->cubemapImage = resources_.images.allocate(*gpuDevice_.device(),
-                                                      gpuDevice_.allocator(),
-                                                      vk::Extent3D{width / 4, width / 4, 1},
-                                                      vk::Format::eR8G8B8A8Srgb,
-                                                      6,
-                                                      Image::ImageType::ColourCube);
-
-    auto cubemapImage = resources_.images.get(skybox->cubemapImage);
-
     skybox->descriptorSet = std::move(skyboxDescriptor_.allocateSets(1)[0]);
-    {
-        auto imageInfo = vk::DescriptorImageInfo{};
-        imageInfo.imageView = cubemapImage->view();
-        imageInfo.sampler = imageSampler_;
-        imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
-        auto textureWrite = vk::WriteDescriptorSet{};
-        textureWrite.dstSet = skybox->descriptorSet;
-        textureWrite.dstBinding = 0;
-        textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        textureWrite.descriptorCount = 1;
-        textureWrite.pImageInfo = &imageInfo;
+    auto imageInfo = vk::DescriptorImageInfo{};
+    imageInfo.imageView = hdrImage->view();
+    imageInfo.sampler = equiRectSampler_;
+    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
-        std::array writes{textureWrite};
-        gpuDevice_.device().updateDescriptorSets(writes, {});
-    }
+    auto textureWrite = vk::WriteDescriptorSet{};
+    textureWrite.dstSet = skybox->descriptorSet;
+    textureWrite.dstBinding = 0;
+    textureWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    textureWrite.descriptorCount = 1;
+    textureWrite.pImageInfo = &imageInfo;
+
+    std::array writes{textureWrite};
+    gpuDevice_.device().updateDescriptorSets(writes, {});
 
     return skyboxHandle;
 }
@@ -868,6 +822,25 @@ void Renderer::createSamplers()
 
         shadowSampler_ = vk::raii::Sampler(gpuDevice_.device(), samplerInfo);
     }
+
+    // Equirectangular sampler
+    {
+        auto samplerInfo = vk::SamplerCreateInfo{};
+        samplerInfo.magFilter = vk::Filter::eLinear;
+        samplerInfo.minFilter = vk::Filter::eLinear;
+        samplerInfo.addressModeU = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.addressModeV = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.addressModeW = vk::SamplerAddressMode::eClampToEdge;
+        samplerInfo.anisotropyEnable = vk::False;
+        samplerInfo.maxAnisotropy = 16.0f;
+        samplerInfo.borderColor = vk::BorderColor::eFloatOpaqueBlack;
+        samplerInfo.unnormalizedCoordinates = vk::False;
+        samplerInfo.compareEnable = vk::True;
+        samplerInfo.compareOp = vk::CompareOp::eGreater;
+        samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+
+        equiRectSampler_ = vk::raii::Sampler(gpuDevice_.device(), samplerInfo);
+    }
 }
 
 void Renderer::createCameraBuffers()
@@ -949,13 +922,6 @@ void Renderer::createShadowMapDescriptorSets()
 
     auto writes = std::array{textureWrite};
     gpuDevice_.device().updateDescriptorSets(writes, {});
-}
-
-void Renderer::createSkyboxPreProcessPass()
-{
-    skyboxPreProcessPass_ = createComputePipeline(gpuDevice_.device(),
-                                                  core::getShaderDir() / "skybox_preprocess.compute.spv",
-                                                  {*skyboxPreProcessDescriptor_.layout()});
 }
 
 void Renderer::createShadowPass()

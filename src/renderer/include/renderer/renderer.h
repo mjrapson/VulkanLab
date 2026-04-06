@@ -72,7 +72,6 @@ class Renderer
     void createDirectionalLightBuffers();
     void createShadowMapDescriptorSets();
 
-    void createSkyboxPreProcessPass();
     void createShadowPass();
     void createGeometryPass();
     void createSkyboxPass();
@@ -124,7 +123,6 @@ class Renderer
     DescriptorSetAllocator directionalLightDescriptor_;
     DescriptorSetAllocator skyboxDescriptor_;
     DescriptorSetAllocator shadowMapImageDescriptor_;
-    DescriptorSetAllocator skyboxPreProcessDescriptor_;
 
     std::unique_ptr<Image> emptyImage_{nullptr};
     std::unique_ptr<Image> shadowMapImage_{nullptr};
@@ -136,14 +134,13 @@ class Renderer
     std::vector<Buffer> directionalLightUniformBuffers_;
     std::vector<vk::raii::DescriptorSet> directionalLightDescriptorSets_;
 
-    vk::raii::DescriptorSet skyboxPreProcessDescriptorSet_{nullptr};
     vk::raii::DescriptorSet shadowMapDescriptorSet_{nullptr};
 
     Resources resources_;
     vk::raii::Sampler imageSampler_{nullptr};
     vk::raii::Sampler shadowSampler_{nullptr};
+    vk::raii::Sampler equiRectSampler_{nullptr};
 
-    Pipeline skyboxPreProcessPass_;
     Pipeline shadowPass_;
     Pipeline geometryPass_;
     Pipeline skyboxPass_;
