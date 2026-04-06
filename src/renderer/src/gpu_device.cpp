@@ -99,6 +99,15 @@ vk::raii::CommandPool GpuDevice::createCommandPool() const
     return vk::raii::CommandPool(device_, poolInfo);
 }
 
+vk::raii::CommandPool GpuDevice::createComputeCommandPool() const
+{
+    auto poolInfo = vk::CommandPoolCreateInfo{};
+    poolInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+    poolInfo.queueFamilyIndex = computeQueueFamilyIndex_;
+
+    return vk::raii::CommandPool(device_, poolInfo);
+}
+
 vk::raii::CommandBuffers GpuDevice::createCommandBuffers(const vk::raii::CommandPool& pool, uint32_t count) const
 {
     auto allocInfo = vk::CommandBufferAllocateInfo{};

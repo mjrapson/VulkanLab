@@ -25,6 +25,7 @@ class GpuDevice
     GpuDevice& operator=(GpuDevice&& other) = delete;
 
     vk::raii::CommandPool createCommandPool() const;
+    vk::raii::CommandPool createComputeCommandPool() const;
 
     vk::raii::CommandBuffers createCommandBuffers(const vk::raii::CommandPool& pool, uint32_t count) const;
     void submitCommandBuffer(const vk::CommandBuffer& cmd) const;
